@@ -1,0 +1,87 @@
+# ===== OS / Editor =====
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+
+# ===== Flutter / Dart =====
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+*.g.dart.tmp
+
+# Android (Flutter 프로젝트 내부)
+**/android/.gradle/
+**/android/captures/
+**/android/local.properties
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/android/**/GeneratedPluginRegistrant.java
+**/android/gradlew
+**/android/gradlew.bat
+**/android/gradle/wrapper/gradle-wrapper.jar
+*.apk
+*.aab
+
+# iOS 생성물 (P0 대상 아님, 생성 시 대비)
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# ===== 로컬 환경변수 =====
+.env
+.env.*
+!.env.example
+
+# ===== 인증키 / 서비스 계정 / Firebase =====
+*service-account*.json
+*serviceAccount*.json
+*-credentials.json
+credentials.json
+google-services.json
+GoogleService-Info.plist
+# flutterfire configure 로 각자 생성 (Firebase 프로젝트 식별 정보 포함)
+**/lib/firebase_options.dart
+.firebase/
+firebase-debug.log
+firestore-debug.log
+*.pem
+*.p12
+*.key
+
+# ===== 서명키 =====
+*.jks
+*.keystore
+key.properties
+**/android/key.properties
+
+# ===== 로그 =====
+*.log
