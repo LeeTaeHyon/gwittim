@@ -43,14 +43,48 @@ class RepositoryException implements Exception {
   String toString() => 'RepositoryException(${kind.name})';
 }
 
+/// 공통 사전(contracts/dictionaries 사본, assets/dictionaries/). 샘플·실제 구현이 함께 쓴다.
+class AssetDictionaries {
+  AssetDictionaries({AssetBundle? bundle}) : _bundle = bundle ?? rootBundle;
+
+  final AssetBundle _bundle;
+  final Map<String, List<DictionaryItem>> _cache = {};
+
+  static const names = ['categories', 'majors', 'interests', 'roles'];
+
+  Future<void> preload() async {
+    for (final name in names) {
+      await load(name);
+    }
+  }
+
+  Future<List<DictionaryItem>> load(String name) async {
+    final cached = _cache[name];
+    if (cached != null) return cached;
+    try {
+      final dict = jsonDecode(await _bundle.loadString('assets/dictionaries/$name.json')) as Map<String, dynamic>;
+      return _cache[name] = [
+        for (final i in dict['items'] as List) DictionaryItem(i['id'] as String, i['name_ko'] as String),
+      ];
+    } on FlutterError {
+      throw const RepositoryException(RepositoryErrorKind.unavailable);
+    }
+  }
+
+  Future<Map<String, String>> categoryNames() async => {for (final i in await load('categories')) i.id: i.name};
+}
+
 /// assets/sample/ 의 합성 자료로 동작한다. 자료는 tools/export_mobile_sample.py 로 만든다.
 ///
 /// 추천 결과는 서버(추천 함수)가 미리 계산한 두 가지 샘플 중 하나를 고른다. 앱은 점수를 계산하지 않는다.
 /// 프로필·저장은 메모리에만 둔다 (앱을 다시 켜면 초기화).
 class SampleNoticeRepository implements NoticeRepository {
-  SampleNoticeRepository({AssetBundle? bundle, this.personalized = true}) : _bundle = bundle ?? rootBundle;
+  SampleNoticeRepository({AssetBundle? bundle, this.personalized = true})
+    : _bundle = bundle ?? rootBundle,
+      _dictionaries = AssetDictionaries(bundle: bundle);
 
   final AssetBundle _bundle;
+  final AssetDictionaries _dictionaries;
 
   /// true면 합성 프로필이 입력된 상태로 시작한다.
   final bool personalized;
@@ -59,10 +93,6 @@ class SampleNoticeRepository implements NoticeRepository {
     'recommendations_personalized.json',
     'recommendations_latest.json',
     'notices.json',
-    'categories.json',
-    'majors.json',
-    'interests.json',
-    'roles.json',
     'profile.json',
   ];
 
@@ -76,6 +106,7 @@ class SampleNoticeRepository implements NoticeRepository {
     for (final name in _files) {
       await _json(name);
     }
+    await _dictionaries.preload();
   }
 
   Future<Map<String, dynamic>> _json(String name) async {
@@ -124,13 +155,10 @@ class SampleNoticeRepository implements NoticeRepository {
   }
 
   @override
-  Future<Map<String, String>> categoryNames() async => {for (final i in await dictionary('categories')) i.id: i.name};
+  Future<Map<String, String>> categoryNames() => _dictionaries.categoryNames();
 
   @override
-  Future<List<DictionaryItem>> dictionary(String name) async {
-    final dict = await _json('$name.json');
-    return [for (final i in dict['items'] as List) DictionaryItem(i['id'] as String, i['name_ko'] as String)];
-  }
+  Future<List<DictionaryItem>> dictionary(String name) => _dictionaries.load(name);
 
   @override
   Future<List<SavedEntry>> listSaved() async {
