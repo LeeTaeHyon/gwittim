@@ -4,11 +4,14 @@ version = "0.1.0"
 description = "귀띔 백엔드 (수집 파이프라인·분석·추천)와 공통 계약 검증 도구"
 requires-python = "==3.12.*"
 dependencies = [
+    "fastapi>=0.115",
     "jsonschema>=4.23",
+    "uvicorn>=0.32",
 ]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28",
     "pytest>=8.3",
 ]
 
