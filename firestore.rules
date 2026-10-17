@@ -1,0 +1,32 @@
+rules_version = '2';
+
+// 귀띔 Firestore 보안 규칙 (SPEC §10, W4)
+// - 공개 공고: 로그인 사용자 읽기만. 앱 클라이언트 쓰기 금지 (서버 관리자 권한으로만 씀)
+// - 프로필·저장: 본인만 읽기. 쓰기는 인증된 서버 API(W13)가 처리
+// - 원문 수집 자료·검토 대기·실패 기록 등 그 외 전부: 클라이언트 접근 금지
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /notices/{noticeId} {
+      allow read: if signedIn() && resource.data.publication_status == 'published';
+      allow write: if false;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+
+      match /saved/{noticeId} {
+        allow read: if signedIn() && request.auth.uid == uid;
+        allow write: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
