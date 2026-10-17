@@ -88,3 +88,6 @@ key.properties
 
 # ===== 로컬 배치 데이터 (수집 원문·분석 결과) =====
 data/
+
+# ===== Node =====
+node_modules/
