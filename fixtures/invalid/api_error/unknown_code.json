@@ -1,0 +1,12 @@
+{
+  "_expect": {
+    "keyword": "enum",
+    "path": "error/code"
+  },
+  "data": {
+    "error": {
+      "code": "internal",
+      "message": "오류"
+    }
+  }
+}

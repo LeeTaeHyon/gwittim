@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/api_error.schema.json",
+  "title": "API 오류 응답",
+  "description": "message는 사용자 표시용. 스택 추적·내부 정보·비밀값을 넣지 않음. SPEC §7, D-005 #10.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["error"],
+  "properties": {
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "enum": ["unauthenticated", "permission_denied", "invalid_argument", "not_found", "unavailable"]
+        },
+        "message": { "type": "string", "minLength": 1, "maxLength": 200 }
+      }
+    }
+  }
+}
