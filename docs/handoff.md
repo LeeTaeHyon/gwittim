@@ -59,14 +59,16 @@
 
 다음 단계: 팀원 확인을 받아 `확정`으로 바꾸고, T2(첫 출처 확인·신청)·T3(개발환경·인증·서버)를 진행합니다.
 
+**T3 진행 상태 (2026-10-17):** [D-004](decisions.md)에 팀장 결정을 기록했습니다(팀원 확인 전). Flutter 3.47.7/Dart 3.13.5, Python 3.12 + uv, Google 로그인, Cloud Run(API), 팀장 PC 로컬 배치 + Ollama 평가, Firebase dev/prod 분리, 에뮬레이터 개발 + 실기기 시연입니다. 클라우드 리소스는 생성하지 않았습니다. 팀장 PC의 Flutter 업그레이드(현재 3.47.2)와 Android 라이선스 수락은 아직 실행하지 않았습니다. 수집 운영값은 T2 후 10/24까지 공동으로 정합니다.
+
 이 브랜치(`docs/development-preparation-spec`)는 아직 병합되지 않은 `docs/github-setup-handoff`(8051262) 위에서 시작했습니다. 해당 PR을 먼저 병합하거나 이 PR에 함께 포함됨을 확인해야 합니다.
 
 | 작업 | 담당 | 목표일 |
 |---|---|---|
 | SPEC.md 검토·합의 | 공동 | 10/18 |
 | 첫 출처 선정, 수집·재사용 조건 확인·신청, 실패 시 대체 출처 | 팀장 | 10/18 |
-| Flutter·Dart·Python 버전과 의존성 고정 | 공동 | 10/18 |
-| 인증 방식·서버 실행 환경(Cloud Run / Cloud Functions) 결정 | 팀장 | 10/18 |
+| Flutter·Dart·Python 버전과 의존성 고정 (D-004 팀장 결정) | 공동 | 10/18 |
+| 인증 방식·서버 실행 환경 결정 (D-004: Google 로그인, Cloud Run) | 팀장 | 10/18 |
 | 공통 ID·태그·학과/직무 사전, `contracts/` JSON Schema 작성 | 팀장, 팀원 검토 | 10/18 |
 | 샘플 JSON(`fixtures/`) 작성, 역할 경계 합의 | 공동 | 10/18 |
 | `docs/decisions.md`에 위 결정 기록 (D-001~003 팀장 결정 완료, 팀원 확인 전) | 팀장 | 결정 시 |
