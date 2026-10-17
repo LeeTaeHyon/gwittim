@@ -59,3 +59,12 @@ String conditionFieldLabel(String field) => switch (field) {
   'enrollment_status' => '재학 상태',
   _ => field,
 };
+
+/// D-006: 원문 마지막 확인이 24시간을 넘으면 안내한다. 정상이면 null.
+String? staleNotice(DateTime? lastVerifiedAt, DateTime now) {
+  if (lastVerifiedAt == null) return '원문 확인 시각을 알 수 없어요. 지원 전에 원문을 확인해 주세요.';
+  final hours = now.difference(lastVerifiedAt).inHours;
+  if (hours < 24) return null;
+  final ago = hours < 48 ? '$hours시간' : '${hours ~/ 24}일';
+  return '마지막 확인 $ago 전이에요. 내용이 바뀌었을 수 있어요.';
+}

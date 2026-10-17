@@ -91,3 +91,72 @@ def test_recollect_is_unchanged_and_flows_into_analysis():
 
 def test_only_notice_board_active_in_p0():
     assert [b.source_id for b in BOARDS.values() if b.active] == ["mjc_www_notice"]
+
+
+# ---------- D-006 재시도 ----------
+
+class _FakeResponse:
+    def __init__(self, body: str):
+        self.body = body.encode("utf-8")
+
+    def read(self):
+        return self.body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _http_error(code):
+    import urllib.error
+
+    return urllib.error.HTTPError("https://x", code, "err", {}, None)
+
+
+def test_retries_transient_errors_then_succeeds(monkeypatch):
+    import urllib.error
+
+    from backend.collectors.mjc_www import adapter
+
+    outcomes = [urllib.error.URLError("down"), _http_error(503), _FakeResponse("ok")]
+    monkeypatch.setattr(adapter.urllib.request, "urlopen", lambda req, timeout: _pop(outcomes))
+    waits = []
+    assert adapter.http_fetch("https://x", sleep=waits.append) == "ok"
+    assert waits == [5.0, 15.0]
+
+
+def test_gives_up_after_two_retries(monkeypatch):
+    from backend.collectors.mjc_www import adapter
+
+    outcomes = [_http_error(500), _http_error(502), _http_error(503)]
+    monkeypatch.setattr(adapter.urllib.request, "urlopen", lambda req, timeout: _pop(outcomes))
+    waits = []
+    try:
+        adapter.http_fetch("https://x", sleep=waits.append)
+        raise AssertionError("should raise")
+    except Exception as e:
+        assert getattr(e, "code", None) == 503
+    assert waits == [5.0, 15.0]
+
+
+def test_no_retry_on_404_or_403(monkeypatch):
+    from backend.collectors.mjc_www import adapter
+
+    for code in (403, 404):
+        outcomes = [_http_error(code)]
+        monkeypatch.setattr(adapter.urllib.request, "urlopen", lambda req, timeout: _pop(outcomes))
+        waits = []
+        try:
+            adapter.http_fetch("https://x", sleep=waits.append)
+        except Exception as e:
+            assert e.code == code
+        assert waits == []
+
+
+def _pop(outcomes):
+    item = outcomes.pop(0)
+    if isinstance(item, Exception):
+        raise item
+    return item
