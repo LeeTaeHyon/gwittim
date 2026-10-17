@@ -51,7 +51,7 @@ def ingest(raw: dict, store: PipelineStore) -> Result:
         outcome = Outcome.NEW
     elif existing.content_hash == expected:
         record = RawRecord(key, existing.raw, expected, existing.notice_version, existing.first_collected_at, raw["collected_at"])
-        outcome = Outcome.UNCHANGED
+        outcome = Outcome.UNCHANGED  # 다시 보였으므로 삭제 확인 횟수는 초기화
     else:
         record = RawRecord(key, raw, expected, existing.notice_version + 1, existing.first_collected_at, raw["collected_at"])
         outcome = Outcome.CHANGED
@@ -62,6 +62,26 @@ def ingest(raw: dict, store: PipelineStore) -> Result:
         store.add_failure(Failure(at=raw["collected_at"], source_id=source_id, stage="store", reason=type(e).__name__, key=key))
         return Result(Outcome.REJECTED, key, None, (type(e).__name__,))
     return Result(outcome, key, record.notice_version)
+
+
+REMOVAL_THRESHOLD = 3  # D-006
+
+
+def record_probe(store: PipelineStore, key: str, result: str) -> bool:
+    """목록에서 사라진 공고의 원문 확인 결과를 기록한다. 삭제가 확정되면 True.
+
+    result: "found" | "not_found" | "error". 일시 오류("error")는 횟수를 바꾸지 않는다 (단일 실패로 삭제 확정 금지).
+    """
+    record = store.get(key)
+    if record is None or record.removed:
+        return False
+    if result == "found":
+        record.consecutive_not_found = 0
+    elif result == "not_found":
+        record.consecutive_not_found += 1
+        record.removed = record.consecutive_not_found >= REMOVAL_THRESHOLD
+    store.put(record)
+    return record.removed
 
 
 def ingest_batch(raws: list[dict], store: PipelineStore) -> list[Result]:

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -67,6 +68,22 @@ def http_fetch(url: str, *, waits: tuple[float, ...] = RETRY_WAITS, sleep=time.s
                 raise
             sleep(waits[attempt])
     raise AssertionError("unreachable")
+
+
+def probe(url: str, *, opener=urllib.request.urlopen) -> str:
+    """원문이 아직 있는지 확인한다: "found" | "not_found" | "error".
+
+    학교 사이트는 없는 글을 404가 아니라 /error 로 리다이렉트한다 (2026-10-18 확인).
+    """
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        with opener(req, timeout=30) as resp:
+            final = urllib.parse.urlsplit(resp.geturl()).path
+            return "not_found" if final.startswith("/error") else "found"
+    except urllib.error.HTTPError as e:
+        return "not_found" if e.code in (404, 410) else "error"
+    except Exception:
+        return "error"
 
 
 def list_url(board: Board, page: int) -> str:
