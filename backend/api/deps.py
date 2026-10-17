@@ -64,6 +64,32 @@ class InMemoryNotices:
         return [n for n in self.notices.values() if n["publication_status"] == "published"]
 
 
+class CachedNoticeReader:
+    """공개 공고 목록을 짧게 캐시한다. 공고는 3시간마다 바뀌므로(D-006) 요청마다 전체를 읽지 않는다.
+
+    list_recommendations가 매번 공개 공고 전체를 읽으면 Firestore 무료 읽기(일 5만)를 쉽게 넘는다
+    (docs/cost-estimate.md). 단건 조회(get)는 캐시하지 않는다.
+    """
+
+    def __init__(self, inner: NoticeReader, ttl_seconds: float = 300.0, clock=None):
+        import time
+
+        self.inner = inner
+        self.ttl = ttl_seconds
+        self._now = clock or time.monotonic
+        self._cached: list[dict] | None = None
+        self._at = 0.0
+
+    def get(self, notice_id):
+        return self.inner.get(notice_id)
+
+    def list_published(self):
+        if self._cached is None or self._now() - self._at >= self.ttl:
+            self._cached = self.inner.list_published()
+            self._at = self._now()
+        return self._cached
+
+
 @dataclass
 class InMemoryProfiles:
     profiles: dict[str, dict] = field(default_factory=dict)

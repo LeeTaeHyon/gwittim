@@ -8,14 +8,14 @@ import os
 from backend.firebase_store import FirebaseTokenVerifier, FirestoreNotices, FirestoreProfiles, FirestoreSaved, init_app
 
 from .app import create_app
-from .deps import Deps
+from .deps import CachedNoticeReader, Deps
 
 _firebase = init_app(os.environ["GWITTIM_FIREBASE_PROJECT_ID"])
 
 app = create_app(
     Deps(
         verifier=FirebaseTokenVerifier(_firebase),
-        notices=FirestoreNotices(_firebase),
+        notices=CachedNoticeReader(FirestoreNotices(_firebase)),  # Firestore 읽기 비용 (docs/cost-estimate.md)
         profiles=FirestoreProfiles(_firebase),
         saved=FirestoreSaved(_firebase),
     )

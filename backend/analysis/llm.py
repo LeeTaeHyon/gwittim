@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import re
 import urllib.request
+from datetime import date
 
 from backend.dictionaries import codes
 from backend.sources import SourceConfig
@@ -23,6 +24,11 @@ from .rules import RuleBasedAnalyzer
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _PHONE = re.compile(r"(?:\+?82[-\s]?)?0\d{1,2}[-\s.)]?\d{3,4}[-\s.]?\d{4}")
 _NUMBER = re.compile(r"\d+")
+# 요약·원문 속 날짜: "10월 30일(금)" 또는 "2026.10.30.(금)" / "10.30.(금)"
+_KO_DATE = re.compile(r"(?P<m>\d{1,2})\s*월\s*(?P<d>\d{1,2})\s*일\s*(?:\(\s*(?P<wd>[월화수목금토일])\s*\))?")
+_DOT_DATE = re.compile(r"(?:(?P<y>20\d{2})\s*[.\-/]\s*)?(?P<m>\d{1,2})\s*[.\-/]\s*(?P<d>\d{1,2})\s*\.?\s*(?:\(\s*(?P<wd>[월화수목금토일])\s*\))")
+_WEEKDAYS = "월화수목금토일"
+_VAGUE = re.compile(r"(\d{1,2})\s*월\s*(초순|중순|하순|초|중|말)")  # "12월 말" 같은 모호한 시기
 _FIELDS = {"university_id", "major_id", "grade", "enrollment_status"}
 
 SYSTEM_PROMPT = (
@@ -88,6 +94,7 @@ class OllamaAnalyzer:
         payload = {
             "model": self.model,
             "stream": False,
+            "think": False,  # 추출에는 추론 과정이 필요 없다. 생각하는 모델(qwen3.5 등)의 지연을 줄인다
             "format": RESPONSE_SCHEMA,
             "options": {"temperature": 0},
             "messages": [
@@ -169,7 +176,9 @@ class OllamaAnalyzer:
         if elig["unresolved_conditions"]:
             elig["extraction_complete"] = False  # LLM은 완전성을 올리지 않고 내리기만 한다
 
-        fields["summary"] = self._checked_summary(out.get("summary"), source_text)
+        year = int(raw["published"]["date"][:4]) if raw.get("published") else None
+        lines = [title, *raw["body_text"].splitlines()]
+        fields["summary"] = self._checked_summary(out.get("summary"), source_text, year, lines)
         return fields
 
     @staticmethod
@@ -186,13 +195,42 @@ class OllamaAnalyzer:
         dictionary = "universities" if field == "university_id" else "majors"
         return all(isinstance(v, str) and v in codes(dictionary) for v in values)
 
-    def _checked_summary(self, summary, source_text: str) -> str | None:
-        """요약 속 숫자(날짜·인원·금액)는 모두 원문에 있어야 한다. 길이 제한 200자."""
+    def _checked_summary(self, summary, source_text: str, year: int | None = None, lines: list[str] = ()) -> str | None:
+        """요약 검증: 숫자는 모두 원문에 있고, 월·일은 원문에 있는 날짜이며, 붙은 요일은 실제 달력과 같아야 한다. 200자 이내."""
         if not isinstance(summary, str) or not summary.strip():
             return None
         summary = summary.strip()
         source_numbers = {int(n) for n in _NUMBER.findall(source_text)}  # 05 와 5 는 같은 값
-        if len(summary) > 200 or any(int(n) not in source_numbers for n in _NUMBER.findall(summary)):
-            self.rejected.append(f"요약 검증 실패: {summary[:40]}")
+        source_days = {(int(m["m"]), int(m["d"])) for p in (_KO_DATE, _DOT_DATE) for m in p.finditer(source_text)}
+        source_days |= {(p.day.month, p.day.day) for line in lines for p in parse_line(line) if p}  # 요일 없는 날짜·범위 끝
+        problems = []
+        if len(summary) > 200:
+            problems.append("길이")
+        if any(int(n) not in source_numbers for n in _NUMBER.findall(summary)):
+            problems.append("원문에 없는 숫자")
+        compact_source = re.sub(r"\s+", "", source_text)
+        for m in _VAGUE.finditer(summary):
+            if f"{int(m[1])}월{m[2]}" not in compact_source:
+                problems.append(f"원문에 없는 시기 {m[0]}")
+        for pattern in (_KO_DATE, _DOT_DATE):
+            for m in pattern.finditer(summary):
+                month, day = int(m["m"]), int(m["d"])
+                if (month, day) not in source_days:
+                    problems.append(f"원문에 없는 날짜 {month}/{day}")
+                elif m["wd"] and year and not self._weekday_ok(year, month, day, m["wd"]):
+                    problems.append(f"요일 불일치 {month}/{day}({m['wd']})")
+        if problems:
+            self.rejected.append(f"요약 검증 실패({', '.join(problems)}): {summary[:40]}")
             return None
         return summary
+
+    @staticmethod
+    def _weekday_ok(year: int, month: int, day: int, weekday: str) -> bool:
+        """게시 연도와 다음 해 중 하나라도 맞으면 통과 (12월 공지의 1월 일정)."""
+        for y in (year, year + 1):
+            try:
+                if _WEEKDAYS[date(y, month, day).weekday()] == weekday:
+                    return True
+            except ValueError:
+                continue
+        return False
