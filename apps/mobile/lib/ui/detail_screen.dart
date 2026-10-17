@@ -27,6 +27,39 @@ class DetailScreen extends StatefulWidget {
 
 class _DetailScreenState extends State<DetailScreen> {
   late Future<Notice?> _future = widget.repository.getNotice(widget.noticeId);
+  bool? _saved;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSaved();
+  }
+
+  Future<void> _loadSaved() async {
+    try {
+      final saved = await widget.repository.listSaved();
+      if (mounted) setState(() => _saved = saved.any((e) => e.notice.noticeId == widget.noticeId));
+    } catch (_) {
+      // 저장 상태를 못 읽어도 상세는 보여준다.
+    }
+  }
+
+  Future<void> _toggleSave() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final wasSaved = _saved == true;
+    try {
+      if (wasSaved) {
+        await widget.repository.deleteSaved(widget.noticeId);
+      } else {
+        await widget.repository.saveNotice(widget.noticeId);
+      }
+      if (!mounted) return;
+      setState(() => _saved = !wasSaved);
+      messenger.showSnackBar(SnackBar(content: Text(wasSaved ? '저장을 취소했어요.' : '저장했어요.')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(errorMessage(e))));
+    }
+  }
 
   Future<void> _open(Notice notice) async {
     final ok = await widget.openUrl(Uri.parse(notice.summary.sourceUrl));
@@ -38,7 +71,17 @@ class _DetailScreenState extends State<DetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('공고 상세')),
+      appBar: AppBar(
+        title: const Text('공고 상세'),
+        actions: [
+          if (_saved != null)
+            IconButton(
+              tooltip: _saved! ? '저장 취소' : '저장',
+              icon: Icon(_saved! ? Icons.bookmark : Icons.bookmark_border),
+              onPressed: _toggleSave,
+            ),
+        ],
+      ),
       body: FutureBuilder(
         future: _future,
         builder: (context, snapshot) {
@@ -84,29 +127,26 @@ class _DetailBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Wrap(spacing: 6, children: [
-          StatusChip(label: lifecycleLabel(n.lifecycleStatus), warning: n.lifecycleStatus != 'open'),
-          if (recommendation != null)
-            StatusChip(
-              label: eligibilityLabel(recommendation!.eligibilityStatus),
-              warning: recommendation!.eligibilityStatus != 'met',
-            ),
-        ]),
+        Wrap(
+          spacing: 6,
+          children: [
+            StatusChip(label: lifecycleLabel(n.lifecycleStatus), warning: n.lifecycleStatus != 'open'),
+            if (recommendation != null)
+              StatusChip(
+                label: eligibilityLabel(recommendation!.eligibilityStatus),
+                warning: recommendation!.eligibilityStatus != 'met',
+              ),
+          ],
+        ),
         const SizedBox(height: 8),
         Text(n.title, style: text.titleLarge),
-        if (notice.description != null) ...[
-          const SizedBox(height: 8),
-          Text(notice.description!),
-        ],
+        if (notice.description != null) ...[const SizedBox(height: 8), Text(notice.description!)],
         const Divider(height: 32),
         _Row(label: '마감', value: deadlineLabel(n).replaceFirst('마감 ', '')),
         if (notice.applicationStart != null) _Row(label: '신청 시작', value: formatDateInfo(notice.applicationStart!)),
         if (n.applicationDeadline != null && n.deadlineNote != null) _Row(label: '마감 안내', value: n.deadlineNote!),
         if (notice.activityPeriod case final p?)
-          _Row(
-            label: '활동 기간',
-            value: [p.start, p.end].whereType<DateInfo>().map(formatDateInfo).join(' ~ '),
-          ),
+          _Row(label: '활동 기간', value: [p.start, p.end].whereType<DateInfo>().map(formatDateInfo).join(' ~ ')),
         if (n.published != null) _Row(label: '게시일', value: formatDateInfo(n.published!)),
         const Divider(height: 32),
         Text('지원 조건', style: text.titleMedium),
