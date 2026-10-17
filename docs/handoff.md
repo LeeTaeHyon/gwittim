@@ -69,7 +69,9 @@
 
 **T6 진행 상태 (2026-10-17, 브랜치 `docs/m1-work-items`):** [M1 작업표](m1-work-items.md)를 작성했습니다(W1~W17, 팀장 결정·팀원 확인 전). 착수 판단: 10/24 M1은 샘플·합성 데이터 기반으로 착수할 수 있습니다. Firebase·Cloud Run 생성과 Ollama 설치는 팀장의 별도 요청이 필요합니다. 이로써 개발 준비 T1~T6 문서 작업을 마쳤습니다. 남은 것은 팀원 확인, 사전 승인, 환경 맞추기, Firebase 생성 요청입니다.
 
-이 브랜치(`docs/development-preparation-spec`)는 아직 병합되지 않은 `docs/github-setup-handoff`(8051262) 위에서 시작했습니다. 해당 PR을 먼저 병합하거나 이 PR에 함께 포함됨을 확인해야 합니다.
+**W1 진행 상태 (2026-10-18, 브랜치 `feat/w1-collect-pipeline`):** `backend/collectors/common/`에 RawNotice 스키마 검증, `content_hash` 재계산, 중복 판정(출처 ID + 공고 ID 또는 정규화 URL), `notice_version` 증가, 실패 기록, 메모리·JSON 파일 저장소를 만들었습니다. `uv run pytest` 12건 통과. Firestore 저장소는 W4에서 같은 인터페이스로 추가합니다.
+
+개발 준비 PR(#1~#4)은 2026-10-18 main에 병합했습니다.
 
 | 작업 | 담당 | 목표일 |
 |---|---|---|
