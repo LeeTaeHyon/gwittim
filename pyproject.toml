@@ -5,6 +5,7 @@ description = "귀띔 백엔드 (수집 파이프라인·분석·추천)와 공�
 requires-python = "==3.12.*"
 dependencies = [
     "fastapi>=0.115",
+    "firebase-admin>=6.6",
     "jsonschema>=4.23",
     "uvicorn>=0.32",
 ]
