@@ -1,4 +1,4 @@
 from .app import create_app
-from .deps import Deps, FakeTokenVerifier, InMemoryNotices, InMemoryProfiles, InMemorySaved
+from .deps import CachedNoticeReader, Deps, FakeTokenVerifier, InMemoryNotices, InMemoryProfiles, InMemorySaved
 
-__all__ = ["Deps", "FakeTokenVerifier", "InMemoryNotices", "InMemoryProfiles", "InMemorySaved", "create_app"]
+__all__ = ["CachedNoticeReader", "Deps", "FakeTokenVerifier", "InMemoryNotices", "InMemoryProfiles", "InMemorySaved", "create_app"]
