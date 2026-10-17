@@ -84,7 +84,7 @@ ROLE_RULES = {
     "office_admin": r"사무원|경영지원|행정 (?:직원|보조)",
 }
 
-START_DEADLINE = re.compile(r"신청\s*기간|접수\s*기간|모집\s*기간|신청\s*기한|접수\s*기한|제출\s*기한|마감|까지")
+START_DEADLINE = re.compile(r"신청\s*기간|접수\s*기간|모집\s*기간|공모\s*기간|원서\s*접수|신청\s*기한|접수\s*기한|제출\s*기한|마감|까지")
 ACTIVITY = re.compile(r"활동\s*기간|교육\s*기간|운영\s*기간|행사\s*기간|연수\s*기간")
 NOTE = re.compile(r"선착순|예산\s*소진|조기\s*마감")
 
@@ -189,7 +189,12 @@ class RuleBasedAnalyzer:
                 unrestricted_line = line
 
         explicit = unrestricted_line is not None and not conditions
-        complete = (bool(conditions) or explicit) and not unresolved and not raw["attachments"]
+        complete = (
+            (bool(conditions) or explicit)
+            and not unresolved
+            and not raw["attachments"]
+            and not raw["source_fields"].get("body_image_count")  # 포스터 이미지 속 조건은 읽지 못함
+        )
         return {
             "conditions": conditions,
             "unresolved_conditions": unresolved,
