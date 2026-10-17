@@ -87,7 +87,7 @@ key.properties
 *.log
 
 # ===== 로컬 배치 데이터 (수집 원문·분석 결과) =====
-data/
+/data/
 
 # ===== Node =====
 node_modules/
