@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/user_profile.schema.json",
+  "title": "UserProfile — 사용자 입력",
+  "description": "미입력은 null 또는 빈 배열. 사용자 ID는 인증 정보에서 얻으므로 이 문서에 넣지 않음. SPEC §5.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "university_id",
+    "major_id",
+    "grade",
+    "enrollment_status",
+    "interest_ids",
+    "target_role_ids",
+    "updated_at"
+  ],
+  "properties": {
+    "university_id": { "oneOf": [{ "$ref": "common.schema.json#/$defs/code" }, { "type": "null" }] },
+    "major_id": { "oneOf": [{ "$ref": "common.schema.json#/$defs/code" }, { "type": "null" }] },
+    "grade": { "oneOf": [{ "$ref": "common.schema.json#/$defs/grade" }, { "type": "null" }] },
+    "enrollment_status": { "oneOf": [{ "$ref": "common.schema.json#/$defs/enrollment_status" }, { "type": "null" }] },
+    "interest_ids": { "$ref": "common.schema.json#/$defs/code_list" },
+    "target_role_ids": { "$ref": "common.schema.json#/$defs/code_list" },
+    "updated_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" }
+  }
+}

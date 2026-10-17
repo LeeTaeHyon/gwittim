@@ -1,0 +1,110 @@
+{
+  "_expect": {
+    "keyword": "type",
+    "path": "items/1/recommendation/score"
+  },
+  "data": {
+    "mode": "personalized",
+    "items": [
+      {
+        "recommendation": {
+          "notice_id": "n_synthetic_0004",
+          "notice_version": 2,
+          "score": 92.5,
+          "eligibility_status": "met",
+          "condition_results": [
+            {
+              "field": "university_id",
+              "status": "met",
+              "evidence": "우리대학",
+              "unknown_reason": null
+            },
+            {
+              "field": "grade",
+              "status": "met",
+              "evidence": "2~3학년",
+              "unknown_reason": null
+            },
+            {
+              "field": "enrollment_status",
+              "status": "met",
+              "evidence": "재학생",
+              "unknown_reason": null
+            },
+            {
+              "field": "major_id",
+              "status": "met",
+              "evidence": "컴퓨터공학과 재학생",
+              "unknown_reason": null
+            }
+          ],
+          "reason_codes": [
+            "interest_match",
+            "role_match",
+            "major_match",
+            "deadline_timing",
+            "eligibility_met"
+          ],
+          "generated_at": "2026-10-17T03:05:00Z",
+          "ranking_version": "rank-0.1-synthetic"
+        },
+        "notice": {
+          "notice_id": "n_synthetic_0004",
+          "notice_version": 2,
+          "title": "[합성 샘플] 컴퓨터공학과 프로젝트 발표회 참가자 모집",
+          "category": "event",
+          "source_url": "https://www.mjc.ac.kr/bbs/data/view.do?menu_idx=66&bbs_mst_idx=BM0000000026&data_idx=BD9999990001",
+          "published": {
+            "date": "2026-10-15",
+            "time": null,
+            "timezone": null,
+            "precision": "date",
+            "evidence": "날짜 2026-10-15"
+          },
+          "application_deadline": {
+            "date": "2026-10-30",
+            "time": "17:00",
+            "timezone": "Asia/Seoul",
+            "precision": "minute",
+            "evidence": "2026. 10. 30.(금) 17:00까지"
+          },
+          "deadline_note": null,
+          "lifecycle_status": "open"
+        }
+      },
+      {
+        "recommendation": {
+          "notice_id": "n_synthetic_0002",
+          "notice_version": 1,
+          "score": null,
+          "eligibility_status": "needs_check",
+          "condition_results": [],
+          "reason_codes": [
+            "eligibility_needs_check"
+          ],
+          "generated_at": "2026-10-17T03:05:00Z",
+          "ranking_version": "rank-0.1-synthetic"
+        },
+        "notice": {
+          "notice_id": "n_synthetic_0002",
+          "notice_version": 1,
+          "title": "[합성 샘플] 해외 연수 프로그램 모집 (선착순)",
+          "category": "global",
+          "source_url": "https://www.mjc.ac.kr/bbs/data/view.do?menu_idx=66&bbs_mst_idx=BM0000000026&data_idx=BD9999990001",
+          "published": {
+            "date": "2026-10-15",
+            "time": null,
+            "timezone": null,
+            "precision": "date",
+            "evidence": "날짜 2026-10-15"
+          },
+          "application_deadline": null,
+          "deadline_note": "선착순 마감 (정원 도달 시 조기 종료)",
+          "lifecycle_status": "open"
+        }
+      }
+    ],
+    "next_cursor": "c_synthetic_page2",
+    "generated_at": "2026-10-17T03:05:00Z"
+  }
+}

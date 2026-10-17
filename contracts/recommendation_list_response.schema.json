@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/recommendation_list_response.schema.json",
+  "title": "list_recommendations 응답",
+  "description": "mode=latest이면 개인화 점수를 만들지 않음 (score null, 게시일 내림차순). SPEC §6·§7, D-005 #2·#10.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mode", "items", "next_cursor", "generated_at"],
+  "properties": {
+    "mode": { "enum": ["personalized", "latest"] },
+    "items": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["recommendation", "notice"],
+        "properties": {
+          "recommendation": { "$ref": "recommendation_item.schema.json" },
+          "notice": { "$ref": "common.schema.json#/$defs/notice_summary" }
+        }
+      }
+    },
+    "next_cursor": { "$ref": "common.schema.json#/$defs/cursor" },
+    "generated_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "mode": { "const": "latest" } } },
+      "then": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "recommendation": {
+                  "properties": {
+                    "score": { "type": "null" },
+                    "reason_codes": {
+                      "items": { "enum": ["eligibility_met", "eligibility_needs_check"] }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "items": {
+            "items": { "properties": { "recommendation": { "properties": { "score": { "type": "number" } } } } }
+          }
+        }
+      }
+    }
+  ]
+}

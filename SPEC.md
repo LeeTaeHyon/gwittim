@@ -1,7 +1,7 @@
 # 귀띔 (Gwittim) — 공통 개발 명세
 
-- 버전: 0.1
-- 작성일: 2026-10-16
+- 버전: 0.2
+- 작성일: 2026-10-16 / 0.2 갱신: 2026-10-17 (D-005 계약 결정 반영, `contracts/` 초안 작성)
 - 상태: 구현 착수용 제안 초안. 팀 합의 후 기준 버전으로 사용한다.
 - 대상: 팀장, 팀원, 각자의 AI 코딩 에이전트
 - 이 문서는 목표 동작을 정의한다. 구현 완료를 의미하지 않는다.
@@ -62,7 +62,7 @@ M1의 수동 검증 표본은 20건을 목표로 한다. 부족하면 실제 건
 
 ## 5. 공통 데이터 계약
 
-이 문서는 필드의 의미를 정의한다. 실제 타입·필수값·열거값 검증은 `contracts/`의 JSON Schema로 관리한다. 스키마가 아직 없다면 첫 공동 작업으로 작성한다. 문서와 스키마를 같은 PR에서 갱신한다.
+이 문서는 필드의 의미를 정의한다. 실제 타입·필수값·열거값 검증은 `contracts/`의 JSON Schema로 관리하고 `uv run python tools/validate_contracts.py`로 `fixtures/`와 함께 검증한다. 문서와 스키마를 같은 PR에서 갱신한다.
 
 ### 공통 규칙
 
@@ -83,11 +83,11 @@ M1의 수동 검증 표본은 20건을 목표로 한다. 부족하면 실제 건
 | source_url | string | 원문 URL |
 | title | string | 원문 제목 |
 | body_text | string | 메뉴·푸터를 제거한 본문 |
-| published_at | string 또는 null | 원문 게시 시각, 명시되지 않으면 null |
+| published | object 또는 null | 원문 게시일 날짜 정보. 날짜만 있으면 precision=date, 미표기는 null |
 | collected_at | string | 이번 수집 시각 |
-| content_hash | string | 제목·본문·주요 정형 필드 등 의미 있는 내용의 해시 |
-| source_fields | object | API가 제공한 날짜·대상 등 원래 필드 |
-| attachments | array | 파일명·URL·유형. 배열에 있다고 다운로드 허용된 것은 아님 |
+| content_hash | string | `sha256:<hex>`. title·body_text·published·source_fields·첨부 파일명의 해시 |
+| source_fields | object | 출처가 제공한 날짜·대상·작성 부서 등 원래 필드. 조회수처럼 매번 바뀌는 값 제외 |
+| attachments | array | file_name·url(직접 URL 없으면 null)·type. 배열에 있다고 다운로드 허용된 것은 아님 |
 
 수집기는 DB 저장을 직접 책임지지 않는다. 저장·분석은 공통 파이프라인에서 처리한다. 수집시각처럼 매번 달라지는 값은 content_hash에서 제외한다.
 
@@ -101,18 +101,20 @@ M1의 수동 검증 표본은 20건을 목표로 한다. 부족하면 실제 건
 | summary | string 또는 null | 검증된 요약 |
 | category | string | 공통 카테고리 코드 |
 | interest_tags / related_majors / related_roles | string 배열 | 공통 사전 코드 |
+| published | object 또는 null | 게시일 날짜 정보. 추천 동점 정렬에 사용 |
 | application_start | object 또는 null | 신청 시작 날짜 정보 |
 | application_deadline | object 또는 null | 신청 마감 날짜 정보 |
-| activity_period | object 또는 null | 확인된 활동 기간 |
+| deadline_note | string 또는 null | 확정 날짜가 아닌 마감 설명 원문 (선착순, 예산 소진 시 등) |
+| activity_period | object 또는 null | 확인된 활동 기간 `{start, end, evidence}`. start·end는 날짜 정보 또는 null |
 | eligibility | object | 조건·미해석 조건·추출 완전성 |
 | lifecycle_status | string | open / closed / unknown / removed |
 | publication_status | string | published / review_pending |
-| notice_version / analysis_version | integer / string | 공고 변경 버전 / 분석기 버전 |
+| notice_version / analysis_version | integer / string | 공고 변경 버전(원문 content_hash 변경 시만 증가) / 분석기 버전 |
 | last_collected_at / last_verified_at | string 또는 null | 수집 / 원문 정상 확인 시각 |
-| changed_fields | string 배열 | 직전 버전 대비 변경된 핵심 필드 |
+| changed_fields | string 배열 | 직전 버전 대비 변경된 Notice 최상위 필드명 |
 
-날짜 정보 구조: `date`, `time`(미상은 null), `timezone`(미상은 null), `precision`(date 또는 minute), `evidence`.
-‘선착순 마감’이나 ‘예산 소진 시’는 확정 마감일로 바꾸지 않고 별도 원문 설명으로 보존한다. 날짜만 확인된 당일에는 임의의 마감시각을 보여주지 않는다.
+날짜 정보 구조: `date`(YYYY-MM-DD), `time`(HH:MM, 미상은 null), `timezone`(IANA 이름, 미상은 null), `precision`(date 또는 minute), `evidence`(원문 문구, 필수). precision이 minute이면 time이 있어야 하고 date이면 time은 null이다.
+‘선착순 마감’이나 ‘예산 소진 시’는 확정 마감일로 바꾸지 않고 `deadline_note`에 원문 설명으로 보존한다. 날짜만 확인된 당일에는 임의의 마감시각을 보여주지 않는다.
 
 ### EligibilityCondition — 조건
 
@@ -128,13 +130,14 @@ M1의 수동 검증 표본은 20건을 목표로 한다. 부족하면 실제 건
 
 P0 자동 비교 지원 필드는 university_id, major_id, grade, enrollment_status이며 연산자는 eq, in이다. 필수 조건은 AND로 평가한다. 복잡한 OR·예외·연령·소득·학점 등은 `unresolved_conditions`에 보존한다.
 
-`eligibility`에는 `conditions`, `unresolved_conditions`, `extraction_complete`를 둔다. 첨부파일에 조건이 있으나 미처리했다면 extraction_complete는 false다. LLM의 자기 확신만으로 true를 확정하지 않는다.
+`eligibility`에는 `conditions`, `unresolved_conditions`, `extraction_complete`, `explicitly_unrestricted`, `unrestricted_evidence`를 둔다. 모집 제한 없음이 원문에 명시된 경우에만 `explicitly_unrestricted`를 true로 하고 근거를 남기며, 이때 conditions는 비어 있어야 한다. 그 외의 빈 conditions는 조건을 찾지 못한 상태다. 첨부파일에 조건이 있으나 미처리했다면 extraction_complete는 false다. LLM의 자기 확신만으로 true를 확정하지 않는다.
 
 ### UserProfile — 사용자 입력
 
 university_id, major_id, grade, enrollment_status, interest_ids, target_role_ids, updated_at.
 
-- 학교·학과·상태·관심사·직무는 공통 선택 사전을 사용한다.
+- 학교·학과·상태·관심사·직무는 공통 선택 사전(`contracts/dictionaries/`)을 사용한다. 코드는 학교 접두사를 붙인 불투명 ID다(예: `mjc`, `mjc.computer_engineering`).
+- grade는 1~4 정수, enrollment_status는 enrolled / on_leave / graduated.
 - 미입력은 null 또는 빈 선택 배열로 보존한다.
 - 성적·소득·주민등록번호·학생증은 수집하지 않는다.
 - 사용자 ID는 인증 정보에서 얻는다. 요청 본문의 사용자 ID를 신뢰하지 않는다.
@@ -144,13 +147,14 @@ university_id, major_id, grade, enrollment_status, interest_ids, target_role_ids
 notice_id, notice_version, score, eligibility_status, condition_results, reason_codes, generated_at, ranking_version.
 
 - eligibility_status: met / not_met / needs_check.
-- condition_results: 각 조건의 판정·근거·미확인 이유.
+- condition_results: 각 조건의 `field`, `status`(met / not_met / unknown), `evidence`, `unknown_reason`(profile_missing / condition_unresolved / extraction_incomplete, unknown일 때만).
 - score는 내부 순위용이며 합격 확률·지원 가능 확률이 아니다.
-- reason_codes는 실제 점수 기여·판정 근거에서 생성한다. 앱은 공통 템플릿으로 표시한다.
+- reason_codes(interest_match, role_match, major_match, deadline_timing, eligibility_met, eligibility_needs_check)는 실제 점수 기여·판정 근거에서 생성한다. 앱은 공통 템플릿으로 표시한다.
+- 추천 목록 응답의 `mode`는 personalized 또는 latest다. latest(개인화 불가)이면 score는 null이고 게시일 내림차순이다.
 
 ### SavedNotice — 저장
 
-notice_id, saved_at, saved_notice_version, saved_deadline_snapshot.
+notice_id, saved_at, saved_notice_version, saved_deadline_snapshot(저장 당시 application_deadline 복사본 또는 null).
 
 저장 목록은 최신 Notice와 연결한다. 저장 당시 정보는 변경 안내용이며 최신 마감일을 덮어쓰는 근거가 아니다.
 
@@ -180,7 +184,7 @@ notice_id, saved_at, saved_notice_version, saved_deadline_snapshot.
 1. review_pending, closed, removed 공고는 기본 추천에서 제외한다.
 2. not_met은 기본 추천에서 제외하되 전체 탐색에서는 상태와 함께 볼 수 있다.
 3. needs_check는 배지를 붙여 후보에 포함할 수 있다. 날짜 미상 공고는 마감 임박 영역에서 제외한다.
-4. 초기 점수: 관심사 40, 직무 35, 전공 15, 시기 10. 각 요소는 0~1이다.
+4. 초기 점수: 관심사 40, 직무 35, 전공 15, 시기 10. 각 요소는 0~1이다. 시기는 마감까지 남은 날짜로 0~14일 1.0, 15~30일 0.6, 31일 이상 0.3이며, 마감일이 없거나 지났거나 deadline_note만 있으면 평가 불가다.
 5. 사용자 미입력 또는 공고 정보 부족으로 평가 불가능한 요소는 분모에서 제외한다. 점수 = 100 × 가중합 / 평가 가능한 가중치 합.
 6. 평가 가능한 요소가 없으면 개인화 점수를 만들지 않고 최신 공고 탐색으로 제공한다.
 7. 동점은 게시일 내림차순, 내부 ID 순으로 정렬한다. 게시일 미상은 뒤에 둔다.
@@ -209,7 +213,7 @@ notice_id, saved_at, saved_notice_version, saved_deadline_snapshot.
 | delete_saved_notice | 인증 사용자, notice_id | 삭제 결과. 반복 요청 안전 |
 | list_saved_notices | 인증 사용자, cursor | SavedNotice + 최신 공고 상태 |
 
-인증 실패·권한 없음·입력 오류·미존재·일시 장애를 구분한다. 앱에 스택 추적·비밀키를 반환하지 않는다. 추천 페이지 이동 중 중복·누락을 줄이도록 초기에는 소량 결과를 한 번에 받아 표시해도 된다.
+인증 실패·권한 없음·입력 오류·미존재·일시 장애를 구분한다. 오류 응답은 `{error: {code, message}}`이고 code는 unauthenticated / permission_denied / invalid_argument / not_found / unavailable이다. 목록 응답은 items, next_cursor(불투명 문자열 또는 null), generated_at을 가지며 limit은 최대 50이다. 앱에 스택 추적·비밀키를 반환하지 않는다. 추천 페이지 이동 중 중복·누락을 줄이도록 초기에는 소량 결과를 한 번에 받아 표시해도 된다.
 
 앱 데이터 접근은 Repository 인터페이스로 감싼다. 샘플 구현과 실제 구현을 교체할 수 있어야 한다. UI에 추천 점수 계산을 중복 구현하지 않는다.
 
