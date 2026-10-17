@@ -2,25 +2,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/ui/format.dart';
 
-DateInfo info(String date, {String? time, String? tz}) => DateInfo(
-      date: date,
-      time: time,
-      timezone: tz,
-      precision: time == null ? 'date' : 'minute',
-      evidence: '근거',
-    );
+DateInfo info(String date, {String? time, String? tz}) =>
+    DateInfo(date: date, time: time, timezone: tz, precision: time == null ? 'date' : 'minute', evidence: '근거');
 
 NoticeSummary summary({DateInfo? deadline, String? note, String status = 'open'}) => NoticeSummary(
-      noticeId: 'n',
-      noticeVersion: 1,
-      title: 't',
-      category: 'contest',
-      sourceUrl: 'https://example.invalid',
-      published: null,
-      applicationDeadline: deadline,
-      deadlineNote: note,
-      lifecycleStatus: status,
-    );
+  noticeId: 'n',
+  noticeVersion: 1,
+  title: 't',
+  category: 'contest',
+  sourceUrl: 'https://example.invalid',
+  published: null,
+  applicationDeadline: deadline,
+  deadlineNote: note,
+  lifecycleStatus: status,
+);
 
 void main() {
   test('날짜만 확인된 값은 시각을 보여주지 않는다', () {

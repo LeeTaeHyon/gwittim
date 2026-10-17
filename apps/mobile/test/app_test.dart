@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
+import 'package:flutter/widgets.dart';
 import 'package:gwittim/main.dart';
+import 'package:gwittim/ui/feed_screen.dart';
 
 class FailingRepository implements NoticeRepository {
   int calls = 0;
@@ -17,6 +19,24 @@ class FailingRepository implements NoticeRepository {
 
   @override
   Future<Map<String, String>> categoryNames() async => {};
+
+  @override
+  Future<UserProfile?> getProfile() async => null;
+
+  @override
+  Future<void> updateProfile(UserProfile profile) async {}
+
+  @override
+  Future<List<DictionaryItem>> dictionary(String name) async => [];
+
+  @override
+  Future<List<SavedEntry>> listSaved() async => [];
+
+  @override
+  Future<void> saveNotice(String noticeId) async {}
+
+  @override
+  Future<void> deleteSaved(String noticeId) async {}
 }
 
 /// 에셋 읽기는 실제 비동기라 fake async 밖(runAsync)에서 미리 읽는다.
@@ -51,14 +71,16 @@ void main() {
 
   testWidgets('피드 → 상세 → 원문 열기', (tester) async {
     final opened = <Uri>[];
-    await tester.pumpWidget(GwittimApp(
-      repository: await loaded(tester),
-      openUrl: (u) async {
-        opened.add(u);
-        return true;
-      },
-      today: today,
-    ));
+    await tester.pumpWidget(
+      GwittimApp(
+        repository: await loaded(tester),
+        openUrl: (u) async {
+          opened.add(u);
+          return true;
+        },
+        today: today,
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('[합성 샘플] 컴퓨터공학과 프로젝트 발표회 참가자 모집'), findsOneWidget);
@@ -83,8 +105,14 @@ void main() {
     await tester.pumpWidget(GwittimApp(repository: await loaded(tester), openUrl: (_) async => true, today: today));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(find.text('[합성 샘플] 해외 연수 프로그램 모집 (선착순)'), 200);
+    await tester.scrollUntilVisible(
+      find.text('[합성 샘플] 해외 연수 프로그램 모집 (선착순)'),
+      200,
+      scrollable: find.descendant(of: find.byType(FeedScreen), matching: find.byType(Scrollable)).first,
+    );
     expect(find.text('선착순 마감 (정원 도달 시 조기 종료)'), findsOneWidget);
+    await tester.ensureVisible(find.text('[합성 샘플] 해외 연수 프로그램 모집 (선착순)'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('[합성 샘플] 해외 연수 프로그램 모집 (선착순)'));
     await tester.pumpAndSettle();
 
@@ -94,11 +122,9 @@ void main() {
   });
 
   testWidgets('프로필이 비면 최신순 안내를 보여준다', (tester) async {
-    await tester.pumpWidget(GwittimApp(
-      repository: await loaded(tester, personalized: false),
-      openUrl: (_) async => true,
-      today: today,
-    ));
+    await tester.pumpWidget(
+      GwittimApp(repository: await loaded(tester, personalized: false), openUrl: (_) async => true, today: today),
+    );
     await tester.pumpAndSettle();
     expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있어요'), findsOneWidget);
   });
