@@ -247,6 +247,11 @@ SPEC·역할·기술·계약에 관한 팀 합의를 날짜순으로 남깁니�
 - **SPEC 변경이 필요합니다:** Notice에 `published`·`deadline_note` 추가, RawNotice `published_at` → `published`, eligibility 필드 추가, 추천 응답 `mode` 추가. 이 변경은 T5 PR에서 SPEC·`contracts/`·`fixtures/`와 함께 갱신합니다. 필요하면 `schema_version`도 함께 정합니다(초기 1.0 기준).
 - 생산자·소비자 영향: 수집기(RawNotice `published`) → 분석·검증(날짜 객체·eligibility·deadline_note) → 추천(mode, condition_results, reason_codes, 시기 점수) → 앱(오류 코드, 템플릿 표시, 시각 미상 처리). 아직 코드가 없어 기존 소비자의 호환성 문제는 없습니다.
 
+### 보완 (2026-10-18, W12 구현 중, 팀장 결정)
+
+- #2 보완: `personalized` 모드에서도 관심사·직무·전공을 하나도 평가할 수 없는 공고는 `score: null`로 점수 있는 공고 뒤에 둡니다. 시기 점수만으로 100점이 되어 개인화 공고보다 앞서는 문제를 막기 위해서입니다.
+- 의미 검증 보완: 조건 판정이 모두 met이어도 미해석 조건·불완전 추출이 있으면 `needs_check`를 허용합니다.
+
 ### 미정·T5에서 확인
 
 - RawNotice `source_fields` 키 이름, `attachments` 객체 구조(파일명·URL 또는 null·유형), `content_hash`에 넣을 필드: T5 스키마 초안에서 제안하고 팀장이 검토합니다.

@@ -69,6 +69,8 @@
 
 **W1 진행 상태 (2026-10-18, 브랜치 `feat/w1-collect-pipeline`):** `backend/collectors/common/`에 RawNotice 스키마 검증, `content_hash` 재계산, 중복 판정(출처 ID + 공고 ID 또는 정규화 URL), `notice_version` 증가, 실패 기록, 메모리·JSON 파일 저장소를 만들었습니다. `uv run pytest` 12건 통과. Firestore 저장소는 W4에서 같은 인터페이스로 추가합니다.
 
+**W12 진행 상태 (2026-10-18, 브랜치 `feat/w12-recommendation`):** `backend/recommendation/`에 조건 비교(met/not_met/needs_check), 점수(평가 불가 분모 제외, 시기 구간), 목록 생성(제외 규칙, latest 모드, 동점 정렬, limit 50)을 순수 함수로 만들었습니다. 출력은 `recommendation_list_response` 스키마로 검증합니다. `uv run pytest` 34건 통과(W1 포함). D-005 보완 2건은 계약·SPEC에 함께 반영했습니다.
+
 이 브랜치(`docs/development-preparation-spec`)는 아직 병합되지 않은 `docs/github-setup-handoff`(8051262) 위에서 시작했습니다. 해당 PR을 먼저 병합하거나 이 PR에 함께 포함됨을 확인해야 합니다.
 
 | 작업 | 담당 | 목표일 |

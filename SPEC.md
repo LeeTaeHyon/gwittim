@@ -150,7 +150,7 @@ notice_id, notice_version, score, eligibility_status, condition_results, reason_
 - condition_results: 각 조건의 `field`, `status`(met / not_met / unknown), `evidence`, `unknown_reason`(profile_missing / condition_unresolved / extraction_incomplete, unknown일 때만).
 - score는 내부 순위용이며 합격 확률·지원 가능 확률이 아니다.
 - reason_codes(interest_match, role_match, major_match, deadline_timing, eligibility_met, eligibility_needs_check)는 실제 점수 기여·판정 근거에서 생성한다. 앱은 공통 템플릿으로 표시한다.
-- 추천 목록 응답의 `mode`는 personalized 또는 latest다. latest(개인화 불가)이면 score는 null이고 게시일 내림차순이다.
+- 추천 목록 응답의 `mode`는 personalized 또는 latest다. latest(개인화 불가)이면 score는 null이고 게시일 내림차순이다. personalized에서도 관심사·직무·전공을 하나도 평가할 수 없는 공고는 score null로 점수 있는 공고 뒤에 둔다.
 
 ### SavedNotice — 저장
 
