@@ -1,0 +1,80 @@
+{
+ "dictionary": "interests",
+ "status": "draft",
+ "updated": "2026-10-17",
+ "source": "T5 초안 제안 (2026-10-17), 팀장 검토 전",
+ "items": [
+  {
+   "id": "ai_data",
+   "name_ko": "AI·데이터"
+  },
+  {
+   "id": "software",
+   "name_ko": "소프트웨어 개발"
+  },
+  {
+   "id": "security",
+   "name_ko": "정보보안"
+  },
+  {
+   "id": "electronics_hw",
+   "name_ko": "전자·하드웨어"
+  },
+  {
+   "id": "mechanical_manufacturing",
+   "name_ko": "기계·제조"
+  },
+  {
+   "id": "construction_spatial",
+   "name_ko": "건설·공간정보"
+  },
+  {
+   "id": "design",
+   "name_ko": "디자인"
+  },
+  {
+   "id": "media_content",
+   "name_ko": "미디어·콘텐츠"
+  },
+  {
+   "id": "business_marketing",
+   "name_ko": "경영·마케팅"
+  },
+  {
+   "id": "finance_accounting",
+   "name_ko": "금융·회계"
+  },
+  {
+   "id": "startup",
+   "name_ko": "창업"
+  },
+  {
+   "id": "global_language",
+   "name_ko": "외국어·글로벌"
+  },
+  {
+   "id": "education_welfare",
+   "name_ko": "교육·복지"
+  },
+  {
+   "id": "health",
+   "name_ko": "보건·의료"
+  },
+  {
+   "id": "culture_arts",
+   "name_ko": "문화·예술"
+  },
+  {
+   "id": "sports",
+   "name_ko": "스포츠"
+  },
+  {
+   "id": "public_service",
+   "name_ko": "공공·행정"
+  },
+  {
+   "id": "volunteering",
+   "name_ko": "봉사·사회공헌"
+  }
+ ]
+}
