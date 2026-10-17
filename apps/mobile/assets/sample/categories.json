@@ -1,0 +1,56 @@
+{
+ "dictionary": "categories",
+ "status": "draft",
+ "updated": "2026-10-17",
+ "source": "T5 초안 제안 (2026-10-17). 공지사항 게시판 제목 샘플 기준, 팀장 검토 전",
+ "items": [
+  {
+   "id": "contest",
+   "name_ko": "공모전·경진대회"
+  },
+  {
+   "id": "scholarship",
+   "name_ko": "장학"
+  },
+  {
+   "id": "job",
+   "name_ko": "채용"
+  },
+  {
+   "id": "internship",
+   "name_ko": "인턴·현장실습"
+  },
+  {
+   "id": "education_program",
+   "name_ko": "교육·특강·프로그램"
+  },
+  {
+   "id": "extracurricular",
+   "name_ko": "비교과·역량 프로그램"
+  },
+  {
+   "id": "global",
+   "name_ko": "해외연수·교류"
+  },
+  {
+   "id": "startup",
+   "name_ko": "창업"
+  },
+  {
+   "id": "volunteer",
+   "name_ko": "봉사"
+  },
+  {
+   "id": "event",
+   "name_ko": "행사"
+  },
+  {
+   "id": "academic",
+   "name_ko": "학사 안내"
+  },
+  {
+   "id": "other",
+   "name_ko": "기타"
+  }
+ ]
+}
