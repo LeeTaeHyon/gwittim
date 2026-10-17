@@ -79,6 +79,7 @@ def test_prompt_redacts_contacts_and_uses_json_schema(ollama):
     prompt = req["messages"][1]["content"]
     assert "test@example.invalid" not in prompt and "02-300-1234" not in prompt
     assert req["format"]["type"] == "object" and req["options"]["temperature"] == 0
+    assert req["think"] is False
     assert redact("010-1234-5678 a@b.co") == "[전화번호 생략] [이메일 생략]"
 
 
@@ -156,3 +157,19 @@ def test_llm_notice_passes_validation(ollama):
     notice, issues = build_notice(store.records[result.key], today=date(2026, 10, 17), analyzer=analyzer(ollama))
     assert issues == []
     assert notice["analysis_version"] == "rule-0.1+ollama:test-model"
+
+
+def test_summary_with_wrong_weekday_or_unknown_date_is_rejected(ollama):
+    body = "접수기한 : 2026.10.30.(금) 까지\n본선 : 2026.11.13.(금) 15:00"
+    a = analyzer(ollama)
+    ollama.reply = {"summary": "10월 30일(화)까지 접수한다.", "deadline": None, "conditions": [], "unresolved": []}
+    assert a.analyze(raw(body=body), MJC)["summary"] is None  # 10/30은 금요일
+    ollama.reply = {"summary": "10월 13일까지 접수한다.", "deadline": None, "conditions": [], "unresolved": []}
+    assert a.analyze(raw(body=body), MJC)["summary"] is None  # 원문에 없는 날짜 (숫자 10·13은 원문에 있음)
+    ollama.reply = {"summary": "10월 30일(금)까지 접수하고 11월 13일 본선을 연다.", "deadline": None, "conditions": [], "unresolved": []}
+    assert a.analyze(raw(body=body), MJC)["summary"] == "10월 30일(금)까지 접수하고 11월 13일 본선을 연다."
+    ollama.reply = {"summary": "모집은 11월 30일까지다.", "deadline": None, "conditions": [], "unresolved": []}
+    body2 = "모집기간 ; 2026.10.14 ~ 2026.11.30"  # 요일 없는 날짜도 원문 날짜로 인정
+    assert a.analyze(raw(body=body2), MJC)["summary"] == "모집은 11월 30일까지다."
+    ollama.reply = {"summary": "2026 년 12 월 말까지 모집합니다.", "deadline": None, "conditions": [], "unresolved": []}
+    assert a.analyze(raw(body=body2), MJC)["summary"] is None  # 원문에 없는 '12월 말'

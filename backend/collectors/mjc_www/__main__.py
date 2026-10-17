@@ -30,7 +30,8 @@ def main() -> None:
     ap.add_argument("--max-items", type=int, default=None)
     ap.add_argument("--delay", type=float, default=1.0)
     ap.add_argument("--data-dir", type=Path, default=Path("data/local"))
-    ap.add_argument("--ollama-model", default=None, help="지정하면 로컬 Ollama 모델로 보강 분석 (W8)")
+    ap.add_argument("--ollama-model", default="gemma4:12b", help="로컬 Ollama 보강 분석 모델 (D-007)")
+    ap.add_argument("--no-llm", action="store_true", help="규칙 분석만 사용")
     args = ap.parse_args()
 
     store = JsonFileStore(args.data_dir / "pipeline")
@@ -53,7 +54,7 @@ def main() -> None:
         today=datetime.now(KST).date(),
         pages=args.pages,
         max_items=args.max_items,
-        analyzer=OllamaAnalyzer(args.ollama_model) if args.ollama_model else None,
+        analyzer=None if args.no_llm else OllamaAnalyzer(args.ollama_model),  # Ollama가 없으면 규칙 분석으로 자동 폴백
         delay=args.delay,
     )
     notices_path.write_text(json.dumps(notices, ensure_ascii=False, indent=1), encoding="utf-8")
