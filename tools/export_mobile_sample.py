@@ -40,7 +40,9 @@ def main() -> None:
     write("notices.json", {n["notice_id"]: n for n in notices})
     write("recommendations_personalized.json", personalized)
     write("recommendations_latest.json", latest)
-    write("categories.json", load(ROOT / "contracts/dictionaries/categories.json"))
+    for name in ("categories", "majors", "interests", "roles"):
+        write(f"{name}.json", load(ROOT / f"contracts/dictionaries/{name}.json"))
+    write("profile.json", profile)
     print(f"notices {len(notices)}, personalized {len(personalized['items'])}, latest {len(latest['items'])}")
 
 

@@ -1,0 +1,168 @@
+{
+ "dictionary": "majors",
+ "status": "draft",
+ "updated": "2026-10-17",
+ "source": "www.mjc.ac.kr 하단 '학과 홈페이지' 목록 (2026-10-17 확인). '계약학과'는 단일 학과 여부 미확인으로 제외.",
+ "items": [
+  {
+   "id": "mjc.ai_game_software",
+   "name_ko": "AI게임소프트웨어학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.computer_engineering",
+   "name_ko": "컴퓨터공학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.computer_security",
+   "name_ko": "컴퓨터보안공학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.electronic_engineering",
+   "name_ko": "전자공학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.information_communication",
+   "name_ko": "정보통신공학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.mechanical_engineering",
+   "name_ko": "기계공학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.industrial_management",
+   "name_ko": "산업경영공학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.electrical_engineering",
+   "name_ko": "전기공학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.civil_engineering",
+   "name_ko": "토목공학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.cadastral_spatial_info",
+   "name_ko": "지적공간정보학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.drone_information",
+   "name_ko": "드론정보공학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.business_administration",
+   "name_ko": "경영학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.tax_accounting",
+   "name_ko": "세무회계과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.real_estate",
+   "name_ko": "부동산경영과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.social_welfare",
+   "name_ko": "사회복지과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.public_administration",
+   "name_ko": "공공행정서비스과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.aviation_service",
+   "name_ko": "항공서비스과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.chinese_business",
+   "name_ko": "중국어비즈니스과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.japanese",
+   "name_ko": "일본어과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.creative_writing",
+   "name_ko": "문예창작과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.early_childhood_education",
+   "name_ko": "유아교육학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.youth_education_counseling",
+   "name_ko": "청소년교육상담과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.industrial_design",
+   "name_ko": "산업디자인학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.fashion_living_design",
+   "name_ko": "패션ㆍ리빙디자인학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.communication_design",
+   "name_ko": "커뮤니케이션디자인과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.ai_media_design",
+   "name_ko": "AI미디어디자인학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.sports",
+   "name_ko": "사회체육과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.beauty_management",
+   "name_ko": "뷰티매니지먼트과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.health_information",
+   "name_ko": "보건의료정보과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.applied_music",
+   "name_ko": "실용음악과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.theater_film",
+   "name_ko": "연극영상학과",
+   "university_id": "mjc"
+  },
+  {
+   "id": "mjc.undeclared",
+   "name_ko": "자유전공학과",
+   "university_id": "mjc"
+  }
+ ]
+}

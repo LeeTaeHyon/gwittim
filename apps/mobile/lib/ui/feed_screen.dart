@@ -17,16 +17,17 @@ class FeedScreen extends StatefulWidget {
   final DateTime? today;
 
   @override
-  State<FeedScreen> createState() => _FeedScreenState();
+  State<FeedScreen> createState() => FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> {
+class FeedScreenState extends State<FeedScreen> {
   late Future<(RecommendationList, Map<String, String>)> _future = _load();
 
   Future<(RecommendationList, Map<String, String>)> _load() async =>
       (await widget.repository.listRecommendations(), await widget.repository.categoryNames());
 
-  Future<void> _reload() async {
+  /// 프로필 저장 후 다시 받는다.
+  Future<void> reload() async {
     final next = _load();
     setState(() {
       _future = next;
@@ -40,52 +41,48 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('귀띔')),
-      body: FutureBuilder(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return MessageView(icon: Icons.cloud_off, message: errorMessage(snapshot.error!), onRetry: _reload);
-          }
-          final (list, categories) = snapshot.data!;
-          return RefreshIndicator(
-            onRefresh: _reload,
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [
-                if (!list.personalized)
-                  const ListTile(
-                    leading: Icon(Icons.person_outline),
-                    title: Text('프로필을 입력하면 맞춤 추천을 받을 수 있어요'),
-                    subtitle: Text('지금은 최신 공고 순으로 보여드려요'),
-                  ),
-                if (list.items.isEmpty)
-                  const MessageView(icon: Icons.inbox_outlined, message: '지금 보여드릴 공고가 없어요.'),
-                for (final entry in list.items)
-                  _NoticeCard(
-                    entry: entry,
-                    categoryName: categories[entry.notice.category] ?? entry.notice.category,
-                    today: widget.today ?? DateTime.now(),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => DetailScreen(
-                          repository: widget.repository,
-                          noticeId: entry.notice.noticeId,
-                          recommendation: entry.recommendation,
-                          openUrl: widget.openUrl,
-                        ),
+    return FutureBuilder(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return MessageView(icon: Icons.cloud_off, message: errorMessage(snapshot.error!), onRetry: reload);
+        }
+        final (list, categories) = snapshot.data!;
+        return RefreshIndicator(
+          onRefresh: reload,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              if (!list.personalized)
+                const ListTile(
+                  leading: Icon(Icons.person_outline),
+                  title: Text('프로필을 입력하면 맞춤 추천을 받을 수 있어요'),
+                  subtitle: Text('지금은 최신 공고 순으로 보여드려요'),
+                ),
+              if (list.items.isEmpty) const MessageView(icon: Icons.inbox_outlined, message: '지금 보여드릴 공고가 없어요.'),
+              for (final entry in list.items)
+                _NoticeCard(
+                  entry: entry,
+                  categoryName: categories[entry.notice.category] ?? entry.notice.category,
+                  today: widget.today ?? DateTime.now(),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => DetailScreen(
+                        repository: widget.repository,
+                        noticeId: entry.notice.noticeId,
+                        recommendation: entry.recommendation,
+                        openUrl: widget.openUrl,
                       ),
                     ),
                   ),
-              ],
-            ),
-          );
-        },
-      ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -114,11 +111,15 @@ class _NoticeCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Wrap(spacing: 6, runSpacing: 4, children: [
-                StatusChip(label: categoryName),
-                StatusChip(label: eligibilityLabel(r.eligibilityStatus), warning: r.eligibilityStatus != 'met'),
-                if (dday != null) StatusChip(label: dday, warning: true),
-              ]),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  StatusChip(label: categoryName),
+                  StatusChip(label: eligibilityLabel(r.eligibilityStatus), warning: r.eligibilityStatus != 'met'),
+                  if (dday != null) StatusChip(label: dday, warning: true),
+                ],
+              ),
               const SizedBox(height: 8),
               Text(n.title, style: text.titleMedium),
               const SizedBox(height: 4),

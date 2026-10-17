@@ -29,33 +29,33 @@ String? daysLeftLabel(NoticeSummary n, DateTime today) {
 }
 
 String lifecycleLabel(String status) => switch (status) {
-      'open' => '모집 중',
-      'closed' => '마감',
-      'removed' => '삭제된 공고',
-      _ => '상태 미확인',
-    };
+  'open' => '모집 중',
+  'closed' => '마감',
+  'removed' => '삭제된 공고',
+  _ => '상태 미확인',
+};
 
 String eligibilityLabel(String status) => switch (status) {
-      'met' => '지원 조건 충족',
-      'not_met' => '지원 조건 불충족',
-      _ => '조건 확인 필요',
-    };
+  'met' => '지원 조건 충족',
+  'not_met' => '지원 조건 불충족',
+  _ => '조건 확인 필요',
+};
 
 /// reason_codes 공통 템플릿 (SPEC §5·§6). '관심 분야 관련'과 '지원 조건 충족'을 구분한다.
 String reasonText(String code) => switch (code) {
-      'interest_match' => '관심 분야와 관련된 공고예요',
-      'role_match' => '희망 직무와 관련된 공고예요',
-      'major_match' => '전공과 관련된 공고예요',
-      'deadline_timing' => '2주 안에 신청이 마감돼요',
-      'eligibility_met' => '확인된 지원 조건을 모두 충족해요',
-      'eligibility_needs_check' => '지원 조건을 원문에서 확인해 주세요',
-      _ => '',
-    };
+  'interest_match' => '관심 분야와 관련된 공고예요',
+  'role_match' => '희망 직무와 관련된 공고예요',
+  'major_match' => '전공과 관련된 공고예요',
+  'deadline_timing' => '2주 안에 신청이 마감돼요',
+  'eligibility_met' => '확인된 지원 조건을 모두 충족해요',
+  'eligibility_needs_check' => '지원 조건을 원문에서 확인해 주세요',
+  _ => '',
+};
 
 String conditionFieldLabel(String field) => switch (field) {
-      'university_id' => '학교',
-      'major_id' => '학과',
-      'grade' => '학년',
-      'enrollment_status' => '재학 상태',
-      _ => field,
-    };
+  'university_id' => '학교',
+  'major_id' => '학과',
+  'grade' => '학년',
+  'enrollment_status' => '재학 상태',
+  _ => field,
+};
