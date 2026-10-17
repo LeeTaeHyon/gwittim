@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-- SPEC 0.2(D-001~005 팀장 결정, 팀원 확인 전), `contracts/` 스키마·사전(draft)·`fixtures/` 합성 샘플.
+- SPEC 0.2(D-001~006 확정: 2026-10-18 팀장 결정으로 확정), `contracts/` 스키마·사전(draft)·`fixtures/` 합성 샘플.
 - 백엔드(Python 3.12 + uv): 수집 파이프라인(W1), 명지전문대 www 어댑터(W2), 규칙 기반 분석·검증(W3), 게시 모듈(W4), 추천 함수(W12), 서버 API(W13). `uv run pytest` 87건 통과.
 - 보안 규칙: `firestore.rules`, Emulator 규칙 테스트 7건 통과(`tests/firestore-rules`).
 - 앱(Flutter 3.47.7): 피드·상세·원문(W5), 프로필·저장·마감 목록(W14). 합성 샘플 Repository로 동작. `flutter test` 17건 통과, 디버그 APK 빌드 성공.
@@ -93,7 +93,7 @@
 | 인증 방식·서버 실행 환경 결정 (D-004: Google 로그인, Cloud Run) | 팀장 | 10/18 |
 | 공통 ID·태그·학과/직무 사전, `contracts/` JSON Schema 작성 (초안 완료, 사전은 draft) | 팀장, 팀원 검토 | 10/18 |
 | 샘플 JSON(`fixtures/`) 작성 (합성 샘플 완료), 역할 경계 합의 (D-002) | 공동 | 10/18 |
-| `docs/decisions.md`에 위 결정 기록 (D-001~003 팀장 결정 완료, 팀원 확인 전) | 팀장 | 결정 시 |
+| `docs/decisions.md`에 위 결정 기록 (D-001~006 확정, 2026-10-18) | 팀장 | 결정 시 |
 
 10/19~23은 시험주간으로 신규 기능 필수 일정이 없습니다. 승인 답변·차단 사항만 확인합니다.
 
@@ -108,6 +108,13 @@
 - 삭제 감지(D-006)를 구현했습니다. 실사이트에서 있는 글은 `found`, 없는 글은 `not_found`로 판별되는 것을 확인했습니다.
 - Cloud Run용 `Dockerfile`: 로컬 빌드 성공. 컨테이너가 비루트 사용자로 실행되고, 에뮬레이터 대상으로 토큰 없음 401, 토큰 있음 200을 확인했습니다. 실제 배포는 하지 않았습니다.
 - 실제 Firebase 프로젝트가 생기면 남은 일: 배치 실행 시 `GWITTIM_FIREBASE_PROJECT_ID` 설정, 컨테이너 배포, 앱 `tokenProvider`를 Firebase Auth로 교체.
+
+## 2026-10-18 승인 작업 결과
+
+- D-001~006: 팀장 결정으로 확정 (확정 규칙 변경)
+- Android SDK 라이선스 수락(팀장 허락), 에뮬레이터 `Medium_Phone`(Android 17)에서 앱 실행: 피드·상세 표시, 원문 보기 → Chrome 열림 확인 (Chrome 첫 실행 약관은 수락하지 않음)
+- Ollama 0.40.5 설치, 모델 평가 → D-007 gemma4:12b
+- Firebase·Cloud Run 예상 비용: [cost-estimate.md](cost-estimate.md) — 50~200명 규모 월 0원 예상. API에 공고 목록 5분 캐시 추가(Firestore 무료 읽기 초과 방지). Firebase 프로젝트 생성은 비용 확인 후 팀장 결정 대기
 
 ## 미결·차단 사항
 

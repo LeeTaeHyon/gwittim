@@ -161,3 +161,29 @@ def test_unexpected_error_hides_details(deps):
     resp = TestClient(create_app(deps), raise_server_exceptions=False).get("/v1/recommendations", headers=ALICE)
     assert_error(resp, 503, "unavailable")
     assert "secret" not in resp.text and "RuntimeError" not in resp.text
+
+
+# ---------- 공고 목록 캐시 (비용) ----------
+
+def test_cached_notice_reader_limits_reads(deps):
+    from backend.api import CachedNoticeReader
+
+    calls = []
+
+    class Counting(InMemoryNotices):
+        def list_published(self):
+            calls.append(1)
+            return super().list_published()
+
+    now = [0.0]
+    reader = CachedNoticeReader(Counting(deps.notices.notices), ttl_seconds=300, clock=lambda: now[0])
+    for _ in range(10):
+        reader.list_published()
+    assert len(calls) == 1
+    now[0] = 299
+    reader.list_published()
+    assert len(calls) == 1
+    now[0] = 300
+    reader.list_published()
+    assert len(calls) == 2
+    assert reader.get("n_synthetic_0005") is None  # 단건은 캐시 없이 published 규칙 그대로
