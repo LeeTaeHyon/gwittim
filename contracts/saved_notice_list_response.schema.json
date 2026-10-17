@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/saved_notice_list_response.schema.json",
+  "title": "list_saved_notices 응답",
+  "description": "SavedNotice + 최신 공고 상태. 삭제된 공고는 notice.lifecycle_status=removed로 표시. SPEC §6·§7.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items", "next_cursor", "generated_at"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["saved", "notice"],
+        "properties": {
+          "saved": { "$ref": "saved_notice.schema.json" },
+          "notice": { "$ref": "common.schema.json#/$defs/notice_summary" }
+        }
+      }
+    },
+    "next_cursor": { "$ref": "common.schema.json#/$defs/cursor" },
+    "generated_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" }
+  }
+}

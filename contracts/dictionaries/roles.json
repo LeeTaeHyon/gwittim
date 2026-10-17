@@ -1,0 +1,80 @@
+{
+  "dictionary": "roles",
+  "status": "draft",
+  "updated": "2026-10-17",
+  "source": "T5 초안 제안 (2026-10-17), 팀장 검토 전",
+  "items": [
+    {
+      "id": "software_developer",
+      "name_ko": "소프트웨어 개발자"
+    },
+    {
+      "id": "data_ai",
+      "name_ko": "데이터·AI 엔지니어"
+    },
+    {
+      "id": "security_engineer",
+      "name_ko": "보안 엔지니어"
+    },
+    {
+      "id": "hw_engineer",
+      "name_ko": "전자·전기 엔지니어"
+    },
+    {
+      "id": "mechanical_engineer",
+      "name_ko": "기계·생산 엔지니어"
+    },
+    {
+      "id": "civil_engineer",
+      "name_ko": "건설·토목 엔지니어"
+    },
+    {
+      "id": "designer",
+      "name_ko": "디자이너"
+    },
+    {
+      "id": "content_creator",
+      "name_ko": "콘텐츠·영상 제작"
+    },
+    {
+      "id": "marketer",
+      "name_ko": "마케터"
+    },
+    {
+      "id": "office_admin",
+      "name_ko": "사무·경영지원"
+    },
+    {
+      "id": "accountant",
+      "name_ko": "세무·회계"
+    },
+    {
+      "id": "service",
+      "name_ko": "서비스·항공"
+    },
+    {
+      "id": "educator",
+      "name_ko": "교육·보육"
+    },
+    {
+      "id": "social_worker",
+      "name_ko": "사회복지"
+    },
+    {
+      "id": "healthcare",
+      "name_ko": "보건의료"
+    },
+    {
+      "id": "public_official",
+      "name_ko": "공공기관·공무원"
+    },
+    {
+      "id": "artist",
+      "name_ko": "예술·공연"
+    },
+    {
+      "id": "entrepreneur",
+      "name_ko": "창업가"
+    }
+  ]
+}

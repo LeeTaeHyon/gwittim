@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "unauthenticated",
+    "message": "다시 로그인해 주세요."
+  }
+}

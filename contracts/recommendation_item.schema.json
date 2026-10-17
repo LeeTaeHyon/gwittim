@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/recommendation_item.schema.json",
+  "title": "RecommendationItem — 추천 출력",
+  "description": "score는 내부 순위용(0~100)이며 확률이 아님. 개인화 불가(latest 모드)면 null. SPEC §5·§6, D-005.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "notice_id",
+    "notice_version",
+    "score",
+    "eligibility_status",
+    "condition_results",
+    "reason_codes",
+    "generated_at",
+    "ranking_version"
+  ],
+  "properties": {
+    "notice_id": { "type": "string", "minLength": 1 },
+    "notice_version": { "type": "integer", "minimum": 1 },
+    "score": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+    "eligibility_status": { "enum": ["met", "not_met", "needs_check"] },
+    "condition_results": { "type": "array", "items": { "$ref": "#/$defs/condition_result" } },
+    "reason_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "interest_match",
+          "role_match",
+          "major_match",
+          "deadline_timing",
+          "eligibility_met",
+          "eligibility_needs_check"
+        ]
+      }
+    },
+    "generated_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" },
+    "ranking_version": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "condition_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "status", "evidence", "unknown_reason"],
+      "properties": {
+        "field": { "$ref": "common.schema.json#/$defs/condition_field" },
+        "status": { "enum": ["met", "not_met", "unknown"] },
+        "evidence": { "type": ["string", "null"] },
+        "unknown_reason": {
+          "enum": ["profile_missing", "condition_unresolved", "extraction_incomplete", null]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "unknown" } } },
+          "then": { "properties": { "unknown_reason": { "type": "string" } } },
+          "else": { "properties": { "unknown_reason": { "type": "null" } } }
+        }
+      ]
+    }
+  }
+}
