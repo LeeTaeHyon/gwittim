@@ -108,7 +108,9 @@ def build_notice(
     raw = record.raw
     if previous and previous["notice_version"] == record.notice_version and previous["analysis_version"] == analyzer.version:
         reused = dict(previous, last_collected_at=record.last_collected_at, changed_fields=[])
-        reused["lifecycle_status"] = lifecycle(reused["application_deadline"], today)
+        reused["lifecycle_status"] = "removed" if record.removed else lifecycle(reused["application_deadline"], today)
+        if reused["lifecycle_status"] != previous["lifecycle_status"]:
+            reused["changed_fields"] = ["lifecycle_status"]
         return reused, []
 
     fields = analyzer.analyze(raw, source_config(raw["source_id"]))
@@ -131,7 +133,7 @@ def build_notice(
         "deadline_note": fields["deadline_note"],
         "activity_period": fields["activity_period"],
         "eligibility": fields["eligibility"],
-        "lifecycle_status": lifecycle(fields["application_deadline"], today),
+        "lifecycle_status": "removed" if record.removed else lifecycle(fields["application_deadline"], today),
         "publication_status": "published",
         "notice_version": record.notice_version,
         "analysis_version": version,
