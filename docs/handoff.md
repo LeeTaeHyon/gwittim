@@ -1,13 +1,15 @@
 # 인수인계 (handoff)
 
-마지막 갱신: 2026-10-17
+마지막 갱신: 2026-10-18
 
 ## 현재 상태
 
-- 저장소 초기 설정 완료: SPEC.md(v0.1 제안 초안), README.md, AGENTS.md, .gitignore, .env.example, PR 템플릿.
-- 앱·백엔드 코드 없음. Firebase 프로젝트 미생성. 서버 실행 환경 미선정. CI 없음.
-- 확정된 환경변수 없음.
-- SPEC.md는 팀 합의 전 초안입니다. 합의 후 기준 버전으로 사용합니다.
+- SPEC 0.2(D-001~005 팀장 결정, 팀원 확인 전), `contracts/` 스키마·사전(draft)·`fixtures/` 합성 샘플.
+- 백엔드(Python 3.12 + uv): 수집 파이프라인(W1), 명지전문대 www 어댑터(W2), 규칙 기반 분석·검증(W3), 게시 모듈(W4), 추천 함수(W12), 서버 API(W13). `uv run pytest` 87건 통과.
+- 보안 규칙: `firestore.rules`, Emulator 규칙 테스트 7건 통과(`tests/firestore-rules`).
+- 앱(Flutter 3.47.7): 피드·상세·원문(W5), 프로필·저장·마감 목록(W14). 합성 샘플 Repository로 동작. `flutter test` 17건 통과, 디버그 APK 빌드 성공.
+- Firebase·Cloud Run 미생성, 배포 없음, CI 없음, 확정된 환경변수 없음.
+- 2026-10-18 작업 PR은 #7(W3) → #8(W2) → #9(W4) → #10(W5) → #11(W13) → #12(W14) → 이 문서 PR 순서로 쌓여 있습니다. 위에서부터 차례로 병합합니다.
 
 ## GitHub 초기 설정 결과 (2026-10-16)
 
@@ -93,5 +95,10 @@
 - 결정된 환경변수를 `.env.example`에 이름·설명으로 추가.
 
 ## 미결·차단 사항
+
+- Firebase dev/prod 프로젝트와 Cloud Run 생성은 팀장의 생성 요청이 필요합니다. W6(실제 로그인·Firestore 연동)과 배포가 여기에 막혀 있습니다.
+- Ollama 설치와 로컬 모델 평가(W8)는 아직 하지 않았습니다. 지금 분석은 규칙 기반만 씁니다.
+- 이 PC에 Android 에뮬레이터(AVD)가 없고, Android SDK 라이선스 일부가 미수락 상태입니다(`flutter doctor --android-licenses`, 팀장 직접 수락).
+- 사전(학과·카테고리·관심사·직무)은 draft 상태입니다. 실공고에서 "전공심화과정 포함" 표기를 확인했으므로 grade 1~4는 유지합니다.
 
 - 대회 마감일 공식 공지 변경 여부 팀장 확인 필요.
