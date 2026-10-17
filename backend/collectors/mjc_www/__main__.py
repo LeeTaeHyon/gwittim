@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from backend.analysis import build_notice
+from backend.analysis.llm import OllamaAnalyzer
 from backend.collectors.common import JsonFileStore, Outcome, ingest
 
 from .adapter import BOARDS, collect
@@ -24,12 +25,14 @@ def main() -> None:
     ap.add_argument("--max-items", type=int, default=None)
     ap.add_argument("--delay", type=float, default=1.0)
     ap.add_argument("--data-dir", type=Path, default=Path("data/local"))
+    ap.add_argument("--ollama-model", default=None, help="지정하면 로컬 Ollama 모델로 보강 분석 (W8)")
     args = ap.parse_args()
 
     store = JsonFileStore(args.data_dir / "pipeline")
     notices_path = args.data_dir / "notices.json"
     notices = json.loads(notices_path.read_text(encoding="utf-8")) if notices_path.exists() else {}
     today = datetime.now(KST).date()
+    analyzer = OllamaAnalyzer(args.ollama_model) if args.ollama_model else None
 
     summary = {o.value: 0 for o in Outcome} | {"review_pending": 0, "fetch_errors": 0}
     for board in (b for b in BOARDS.values() if b.active):
@@ -41,7 +44,7 @@ def main() -> None:
             if result.outcome is Outcome.REJECTED:
                 continue
             record = store.records[result.key]
-            notice, issues = build_notice(record, today=today, previous=notices.get(result.key))
+            notice, issues = build_notice(record, today=today, previous=notices.get(result.key), analyzer=analyzer)
             notices[result.key] = notice
             summary["review_pending"] += bool(issues)
 

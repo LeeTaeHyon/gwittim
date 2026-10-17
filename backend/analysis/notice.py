@@ -112,6 +112,8 @@ def build_notice(
         return reused, []
 
     fields = analyzer.analyze(raw, source_config(raw["source_id"]))
+    # LLM 실패 시 분석기는 규칙 분석 결과와 그 버전을 돌려준다 (예전·다른 분석을 LLM 결과처럼 표시하지 않음)
+    version = fields.pop("_analysis_version", analyzer.version)
     notice = {
         "schema_version": "1.0",
         "notice_id": notice_id_for(record.key),
@@ -132,7 +134,7 @@ def build_notice(
         "lifecycle_status": lifecycle(fields["application_deadline"], today),
         "publication_status": "published",
         "notice_version": record.notice_version,
-        "analysis_version": analyzer.version,
+        "analysis_version": version,
         "last_collected_at": record.last_collected_at,
         "last_verified_at": raw["collected_at"],
         "changed_fields": [],
