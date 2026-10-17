@@ -12,15 +12,16 @@ from dataclasses import dataclass
 from datetime import date
 
 _SEP = r"\s*[.\-/년]\s*"
+_CLOCK = r"(?:(?P<h>\d{1,2})\s*:\s*(?P<mi>\d{2})|(?P<kh>\d{1,2})\s*시(?:\s*(?P<kmi>\d{1,2})\s*분)?)"
 _FULL = re.compile(
     r"(?P<y>20\d{2})" + _SEP + r"(?P<m>\d{1,2})\s*[.\-/월]\s*(?P<d>\d{1,2})\s*[.일]?\s*"
-    r"(?:\((?P<wd>[월화수목금토일])\))?\s*(?:(?P<h>\d{1,2})\s*:\s*(?P<mi>\d{2}))?"
+    r"(?:\((?P<wd>[월화수목금토일])\))?\s*(?:" + _CLOCK + r")?"
 )
 _SHORT = re.compile(
     r"(?P<m>\d{1,2})\s*[.\-/월]\s*(?P<d>\d{1,2})\s*[.일]?\s*(?:\((?P<wd>[월화수목금토일])\))?\s*"
-    r"(?:(?P<h>\d{1,2})\s*:\s*(?P<mi>\d{2}))?"
+    r"(?:" + _CLOCK + r")?"
 )
-_TIME = re.compile(r"(?P<h>\d{1,2})\s*:\s*(?P<mi>\d{2})")
+_TIME = re.compile(_CLOCK)
 _RANGE_SEP = re.compile(r"\s*[~∼～\-–]\s*")
 
 
@@ -35,13 +36,21 @@ def _point(m: re.Match, year: int) -> Point | None:
         day = date(year, int(m["m"]), int(m["d"]))
     except ValueError:
         return None
-    time = None
+    clock = _clock(m)
+    if clock is False:
+        return None
+    return Point(day, clock)
+
+
+def _clock(m: re.Match) -> str | None | bool:
+    """HH:MM 또는 HH시 [MM분]. 없으면 None, 범위 밖이면 False."""
     if m["h"] is not None:
         h, mi = int(m["h"]), int(m["mi"])
-        if h > 23 or mi > 59:
-            return None
-        time = f"{h:02d}:{mi:02d}"
-    return Point(day, time)
+    elif m["kh"] is not None:
+        h, mi = int(m["kh"]), int(m["kmi"] or 0)
+    else:
+        return None
+    return f"{h:02d}:{mi:02d}" if h <= 23 and mi <= 59 else False
 
 
 def parse_line(line: str) -> tuple[Point | None, Point | None]:
@@ -72,8 +81,8 @@ def parse_line(line: str) -> tuple[Point | None, Point | None]:
 
 
 def _point_time(day: date, m: re.Match) -> Point | None:
-    h, mi = int(m["h"]), int(m["mi"])
-    return Point(day, f"{h:02d}:{mi:02d}") if h <= 23 and mi <= 59 else None
+    clock = _clock(m)
+    return Point(day, clock) if clock else None
 
 
 def date_info(point: Point, evidence: str, timezone: str | None) -> dict:
