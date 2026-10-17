@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gwittim.invalid/contracts/recommendation_list_response.schema.json",
   "title": "list_recommendations 응답",
-  "description": "mode=latest이면 개인화 점수를 만들지 않음 (score null, 게시일 내림차순). SPEC §6·§7, D-005 #2·#10.",
+  "description": "mode=latest이면 개인화 점수를 만들지 않음 (score null, 게시일 내림차순). personalized에서도 개인화 요소를 하나도 평가할 수 없는 공고는 score null로 뒤에 둠. SPEC §6·§7, D-005 #2·#10.",
   "type": "object",
   "additionalProperties": false,
   "required": ["mode", "items", "next_cursor", "generated_at"],
@@ -42,13 +42,6 @@
                 }
               }
             }
-          }
-        }
-      },
-      "else": {
-        "properties": {
-          "items": {
-            "items": { "properties": { "recommendation": { "properties": { "score": { "type": "number" } } } } }
           }
         }
       }
