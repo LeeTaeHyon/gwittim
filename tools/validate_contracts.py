@@ -104,7 +104,8 @@ def check_eligibility_status(data) -> list[str]:
         elif "unknown" in statuses:
             expected = {"needs_check"}
         else:
-            expected = {"met"}
+            # 판정 결과가 모두 met이어도 미해석 조건·불완전 추출(Notice 쪽 정보)이 있으면 needs_check
+            expected = {"met", "needs_check"}
         if value["eligibility_status"] not in expected:
             errors.append(f"eligibility_status: {path} = {value['eligibility_status']!r}, 조건 판정 {statuses} 와 맞지 않음")
     return errors
