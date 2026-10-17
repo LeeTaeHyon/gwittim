@@ -6,6 +6,7 @@ P0 활성 게시판은 공지사항(66) 하나다.
 from __future__ import annotations
 
 import time
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -44,10 +45,28 @@ BOARDS: dict[str, Board] = {
 Fetcher = Callable[[str], str]
 
 
-def http_fetch(url: str) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return resp.read().decode("utf-8", "replace")
+# D-006: 일시 장애(네트워크·429·5xx)만 재시도, 최대 2회 재시도, 대기 5초 → 15초
+RETRY_WAITS = (5.0, 15.0)
+
+
+def _retryable(error: Exception) -> bool:
+    if isinstance(error, urllib.error.HTTPError):
+        return error.code == 429 or error.code >= 500
+    return isinstance(error, (urllib.error.URLError, TimeoutError, ConnectionError))
+
+
+def http_fetch(url: str, *, waits: tuple[float, ...] = RETRY_WAITS, sleep=time.sleep) -> str:
+    """403·404 등은 재시도하지 않고 바로 실패로 올린다 (단일 실패로 삭제 확정 금지는 파이프라인 규칙)."""
+    for attempt in range(len(waits) + 1):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return resp.read().decode("utf-8", "replace")
+        except Exception as e:
+            if attempt == len(waits) or not _retryable(e):
+                raise
+            sleep(waits[attempt])
+    raise AssertionError("unreachable")
 
 
 def list_url(board: Board, page: int) -> str:
