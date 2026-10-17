@@ -1,6 +1,7 @@
 """팀장 PC 로컬 배치 실행: 활성 게시판 수집 → 파이프라인 → 분석. 결과는 data/local/ (커밋 금지).
 
-uv run python -m backend.collectors.mjc_www --pages 1 --max-items 5
+uv run python -m backend.collectors.mjc_www            # D-006: 3시간마다 실행
+uv run python -m backend.collectors.mjc_www --pages 1 --max-items 5   # 빠른 확인
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ KST = timezone(timedelta(hours=9), "Asia/Seoul")  # 한국은 일광절약시간
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--pages", type=int, default=1)
+    ap.add_argument("--pages", type=int, default=2)  # D-006
     ap.add_argument("--max-items", type=int, default=None)
     ap.add_argument("--delay", type=float, default=1.0)
     ap.add_argument("--data-dir", type=Path, default=Path("data/local"))

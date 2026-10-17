@@ -174,7 +174,16 @@ class _DetailBody extends StatelessWidget {
         ],
         const SizedBox(height: 24),
         FilledButton.icon(onPressed: onOpen, icon: const Icon(Icons.open_in_new), label: const Text('원문 보기')),
-        if (notice.lastVerifiedAt != null)
+        if (staleNotice(notice.lastVerifiedAt, DateTime.now().toUtc()) case final stale?)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              stale,
+              style: text.bodySmall?.copyWith(color: Theme.of(context).colorScheme.error),
+              textAlign: TextAlign.center,
+            ),
+          )
+        else if (notice.lastVerifiedAt != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
