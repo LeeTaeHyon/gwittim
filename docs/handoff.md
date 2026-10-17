@@ -67,6 +67,8 @@
 
 **T5 진행 상태 (2026-10-17, 브랜치 `feat/contracts-v1`):** `contracts/` 스키마 10개, 사전 5개(모두 draft), `fixtures/` 합성 샘플(정상 13·오류 23), `tools/validate_contracts.py`를 작성했습니다. SPEC은 0.2로 갱신했습니다(D-005 반영). `uv run python tools/validate_contracts.py` 결과는 전체 통과입니다. 실제 수집기·추천기·앱 소비자는 아직 없어서 소비자 통합 검증은 하지 않았습니다(M1 작업표로 넘김). 다음 작업은 T6(M1 작업 분할)입니다.
 
+**T6 진행 상태 (2026-10-17, 브랜치 `docs/m1-work-items`):** [M1 작업표](m1-work-items.md)를 작성했습니다(W1~W17, 팀장 결정·팀원 확인 전). 착수 판단: 10/24 M1은 샘플·합성 데이터 기반으로 착수할 수 있습니다. 실제 공고 연결은 **학교 허락 전까지 차단**입니다. Firebase·Cloud Run 생성과 Ollama 설치는 팀장의 별도 요청이 필요합니다. 이로써 개발 준비 T1~T6 문서 작업을 마쳤습니다. 남은 것은 학교 허락 요청 발송, 팀원 확인, 사전 승인, 환경 맞추기입니다.
+
 이 브랜치(`docs/development-preparation-spec`)는 아직 병합되지 않은 `docs/github-setup-handoff`(8051262) 위에서 시작했습니다. 해당 PR을 먼저 병합하거나 이 PR에 함께 포함됨을 확인해야 합니다.
 
 | 작업 | 담당 | 목표일 |
