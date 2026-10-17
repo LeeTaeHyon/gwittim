@@ -1,7 +1,7 @@
 {
   "_expect": {
-    "keyword": "type",
-    "path": "items/1/recommendation/score"
+    "keyword": "maximum",
+    "path": "items/0/recommendation/score"
   },
   "data": {
     "mode": "personalized",
@@ -10,7 +10,7 @@
         "recommendation": {
           "notice_id": "n_synthetic_0004",
           "notice_version": 2,
-          "score": 92.5,
+          "score": 120,
           "eligibility_status": "met",
           "condition_results": [
             {
@@ -76,7 +76,7 @@
         "recommendation": {
           "notice_id": "n_synthetic_0002",
           "notice_version": 1,
-          "score": null,
+          "score": 40.0,
           "eligibility_status": "needs_check",
           "condition_results": [],
           "reason_codes": [
