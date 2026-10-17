@@ -116,6 +116,23 @@
 - Ollama 0.40.5 설치, 모델 평가 → D-007 gemma4:12b
 - Firebase·Cloud Run 예상 비용: [cost-estimate.md](cost-estimate.md) — 50~200명 규모 월 0원 예상. API에 공고 목록 5분 캐시 추가(Firestore 무료 읽기 초과 방지). Firebase 프로젝트 생성은 비용 확인 후 팀장 결정 대기
 
+## Firebase dev 프로젝트 (2026-10-18 생성, 팀장 지시)
+
+| 항목 | 값 |
+|---|---|
+| 프로젝트 ID | `gwittim-dev` (GCP 프로젝트에 Firebase 추가, 상태 ACTIVE) |
+| 결제 | 메인 결제 계정(KRW)에 연결, Blaze |
+| 예산 알림 | ₩7,000/월(약 $5), `gwittim-dev`만 대상, 실제 지출 50·90·100%와 예측 100%에서 알림. 알림은 지출을 막지 않음 |
+| API | Firebase, Firestore, Identity Toolkit, Firebase Rules, Cloud Run, Artifact Registry, Cloud Build, Billing Budgets |
+| Firestore | `(default)`, 네이티브 모드, `asia-northeast3`(서울) |
+| 보안 규칙 | `firestore.rules`를 배포·릴리스, 배포본과 파일 내용 일치 확인 |
+
+아직 하지 않은 것:
+- 이 PC의 ADC 로그인: `gcloud auth application-default login`은 팀장이 브라우저에서 직접 해야 합니다. 이후 `GWITTIM_FIREBASE_PROJECT_ID=gwittim-dev`로 배치가 실제 Firestore에 게시합니다.
+- Google 로그인 제공자 설정: OAuth 동의 화면과 Android 앱 등록(SHA-1)이 필요합니다.
+- Cloud Run 배포: `gcloud run deploy --source .` (Dockerfile 준비 완료)
+- prod 프로젝트는 아직 만들지 않았습니다.
+
 ## 미결·차단 사항
 
 - 앱 화면 확인 (2026-10-18): 실기기·에뮬레이터 대신 임시 웹 빌드로 피드·상세·저장·프로필을 확인했습니다. 웹 빌드는 저장소에 넣지 않았습니다. 웹에서는 한글 글꼴이 늦게 로드되는 현상이 있었고, 이는 웹 전용입니다.
