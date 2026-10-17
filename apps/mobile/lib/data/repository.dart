@@ -97,8 +97,7 @@ class SampleNoticeRepository implements NoticeRepository {
   ];
 
   final Map<String, Map<String, dynamic>> _cache = {};
-  UserProfile? _profile;
-  bool _profileLoaded = false;
+  Future<UserProfile?>? _profile;
   final Map<String, Map<String, dynamic>> _saved = {};
 
   /// 샘플 자료를 미리 읽어 둔다. 위젯 테스트에서는 tester.runAsync 안에서 부른다.
@@ -119,19 +118,14 @@ class SampleNoticeRepository implements NoticeRepository {
     }
   }
 
+  /// 피드와 프로필 탭이 동시에 불러도 같은 결과를 받도록 한 번만 읽는다.
   @override
-  Future<UserProfile?> getProfile() async {
-    if (!_profileLoaded) {
-      _profileLoaded = true;
-      if (personalized) _profile = UserProfile.fromJson(await _json('profile.json'));
-    }
-    return _profile;
-  }
+  Future<UserProfile?> getProfile() =>
+      _profile ??= personalized ? _json('profile.json').then(UserProfile.fromJson) : Future<UserProfile?>.value(null);
 
   @override
   Future<void> updateProfile(UserProfile profile) async {
-    _profileLoaded = true;
-    _profile = profile;
+    _profile = Future.value(profile);
   }
 
   @override
