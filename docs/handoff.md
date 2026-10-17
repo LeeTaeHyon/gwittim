@@ -67,6 +67,8 @@
 
 **T5 진행 상태 (2026-10-17, 브랜치 `feat/contracts-v1`):** `contracts/` 스키마 10개, 사전 5개(모두 draft), `fixtures/` 합성 샘플(정상 13·오류 23), `tools/validate_contracts.py`를 작성했습니다. SPEC은 0.2로 갱신했습니다(D-005 반영). `uv run python tools/validate_contracts.py` 결과는 전체 통과입니다. 실제 수집기·추천기·앱 소비자는 아직 없어서 소비자 통합 검증은 하지 않았습니다(M1 작업표로 넘김). 다음 작업은 T6(M1 작업 분할)입니다.
 
+**W1 진행 상태 (2026-10-18, 브랜치 `feat/w1-collect-pipeline`):** `backend/collectors/common/`에 RawNotice 스키마 검증, `content_hash` 재계산, 중복 판정(출처 ID + 공고 ID 또는 정규화 URL), `notice_version` 증가, 실패 기록, 메모리·JSON 파일 저장소를 만들었습니다. `uv run pytest` 12건 통과. Firestore 저장소는 W4에서 같은 인터페이스로 추가합니다.
+
 이 브랜치(`docs/development-preparation-spec`)는 아직 병합되지 않은 `docs/github-setup-handoff`(8051262) 위에서 시작했습니다. 해당 PR을 먼저 병합하거나 이 PR에 함께 포함됨을 확인해야 합니다.
 
 | 작업 | 담당 | 목표일 |
