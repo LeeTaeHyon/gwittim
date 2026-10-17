@@ -211,3 +211,51 @@ SPEC·역할·기술·계약에 관한 팀 합의를 날짜순으로 남깁니�
 |---|---|---|---|
 | 팀장 | 위 표대로 | 2026-10-17 | 대화로 결정, 기록은 AI 에이전트 |
 | 팀원 | | | |
+
+---
+
+## D-005. 공통 계약 미정 사항 (T4)
+
+- 상태: **팀장 결정 (팀원 확인 전)**
+- 작성일·팀장 결정: 2026-10-17
+- 참여자: 팀장 (팀원 확인 전)
+- 근거: SPEC §5~§7, docs/next-work-spec.md T4 "계약 작성 전 결정 질문" 10건
+
+### 결정
+
+| # | 질문 | 결정 |
+|---|---|---|
+| 1 | 게시일 정렬 입력 | RawNotice·Notice 모두 `published`를 **날짜 객체**로 둡니다(아래 날짜 객체). 날짜만 있는 게시판은 `precision: "date"`, `time: null`입니다. 추천 동점 정렬은 Notice의 `published.date`를 쓰고, null이면 뒤로 보냅니다. |
+| 2 | 개인화 불가 | 추천 응답에 `mode: "personalized" \| "latest"`를 둡니다. `latest`이면 모든 항목의 `score`가 null이고 게시일 내림차순으로 정렬합니다. 앱은 프로필 입력 안내를 표시합니다. |
+| 3 | 날짜 객체 | `date`: `YYYY-MM-DD` 필수. `time`: `HH:MM` 또는 null. `timezone`: IANA 이름 또는 null(미상). `precision`: `date` \| `minute`이며, `minute`이면 `time` 필수. `evidence`: 원문 문구, 필수. 확정 날짜가 아닌 마감("선착순", "예산 소진 시")은 Notice의 `deadline_note`(string 또는 null)에 보존합니다. |
+| 4 | 활동 기간·저장 스냅샷 | `activity_period`: `{start, end, evidence}`이며 start·end는 각각 날짜 객체 또는 null, 전체가 미상이면 null. `saved_deadline_snapshot`: 저장 당시 `application_deadline` 객체 복사본 또는 null. |
+| 5 | 모집 제한 없음 | `eligibility`에 `explicitly_unrestricted`(boolean, 기본 false)와 `unrestricted_evidence`(string 또는 null)를 둡니다. true는 원문 근거가 있고 `conditions`가 비어 있을 때만 허용합니다. 그 외의 빈 `conditions`는 "조건 못 찾음"입니다. |
+| 6 | 조건·프로필 코드 | 학교 접두사가 붙은 불투명 코드를 씁니다: `university_id: "mjc"`, `major_id: "mjc.<학과>"`. P0 사전은 명지전문대와 홈페이지 하단 학과 목록 33개입니다. `grade`: 정수 1~4. `enrollment_status`: `enrolled` \| `on_leave` \| `graduated`. 사전 파일은 `contracts/dictionaries/`에 두고 팀장이 관리합니다. 다른 학교는 사전 항목만 추가하면 됩니다. |
+| 7 | 판정·추천 이유 | `condition_results[]`: `{field, status: met \| not_met \| unknown, evidence, unknown_reason}`. `unknown_reason`: `profile_missing` \| `condition_unresolved` \| `extraction_incomplete` 또는 null. `reason_codes`: `interest_match`, `role_match`, `major_match`, `deadline_timing`, `eligibility_met`, `eligibility_needs_check`. 실제 점수 기여나 판정 근거가 있을 때만 붙이고, 문장은 앱 템플릿으로 만듭니다. |
+| 8 | 시기 점수 | 마감까지 남은 날짜(날짜 단위 비교): 0~14일 1.0, 15~30일 0.6, 31일 이상 0.3. 마감일이 없거나 지났거나 `deadline_note`만 있으면 평가 불가로 보고 분모에서 뺍니다. 시각·시간대가 미상이어도 날짜가 있으면 평가합니다. 날짜만 확인된 당일 마감에는 시각을 표시하지 않습니다. |
+| 9 | 변경·분석 버전 | `changed_fields`: Notice 최상위 필드명(예: `application_deadline`, `eligibility`). `notice_version`은 원문 `content_hash`가 바뀔 때만 올립니다. 분석기만 바뀌면 `analysis_version`만 바꿉니다. |
+| 10 | API 실패·목록 응답 | 오류: `{error: {code, message}}`이며 `code`는 `unauthenticated` \| `permission_denied` \| `invalid_argument` \| `not_found` \| `unavailable`. `message`는 사용자 표시용이고 스택·내부 정보를 넣지 않습니다. 목록: `{items, next_cursor(불투명 문자열 또는 null), generated_at}`, `limit` 최대 50. HTTP 경로는 서버 착수 시 정합니다. |
+
+### 이유
+
+- 날짜를 한 가지 객체로 통일하면 게시일·마감·활동 기간의 검증과 "시각 미상 표시 금지" 규칙을 한 곳에서 처리할 수 있습니다.
+- 빈 조건 배열과 "명시적 제한 없음"을 구분하라는 SPEC §6 규칙을 스키마 수준에서 강제합니다.
+- 학교 접두사 코드로 P0는 명지전문대만 다루면서도 다른 학교 추가 시 기존 데이터를 바꾸지 않습니다.
+
+### 영향 (AGENTS.md §3)
+
+- **SPEC 변경이 필요합니다:** Notice에 `published`·`deadline_note` 추가, RawNotice `published_at` → `published`, eligibility 필드 추가, 추천 응답 `mode` 추가. 이 변경은 T5 PR에서 SPEC·`contracts/`·`fixtures/`와 함께 갱신합니다. 필요하면 `schema_version`도 함께 정합니다(초기 1.0 기준).
+- 생산자·소비자 영향: 수집기(RawNotice `published`) → 분석·검증(날짜 객체·eligibility·deadline_note) → 추천(mode, condition_results, reason_codes, 시기 점수) → 앱(오류 코드, 템플릿 표시, 시각 미상 처리). 아직 코드가 없어 기존 소비자의 호환성 문제는 없습니다.
+
+### 미정·T5에서 확인
+
+- RawNotice `source_fields` 키 이름, `attachments` 객체 구조(파일명·URL 또는 null·유형), `content_hash`에 넣을 필드: T5 스키마 초안에서 제안하고 팀장이 검토합니다.
+- 학과 33개의 코드값, "계약학과"를 단일 학과로 볼지, 전공심화(4학년) 운영 여부: 실제 학교 자료로 확인한 뒤 사전에 반영합니다. 확인 전에는 코드값을 추정해 넣지 않습니다.
+- 관심사·직무·카테고리 사전의 초기 항목: T5에서 별도로 제안합니다.
+
+### 확인
+
+| 역할 | 결정 | 날짜 | 비고 |
+|---|---|---|---|
+| 팀장 | 위 표대로 | 2026-10-17 | 대화로 결정, 기록은 AI 에이전트 |
+| 팀원 | | | |
