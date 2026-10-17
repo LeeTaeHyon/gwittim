@@ -1,15 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'data/api_repository.dart';
 import 'data/repository.dart';
 import 'ui/common.dart';
 import 'ui/feed_screen.dart';
 import 'ui/profile_screen.dart';
 import 'ui/saved_screen.dart';
 
+// 실행 설정 (--dart-define):
+//   GWITTIM_API_BASE  서버 API 주소. 비우면 합성 샘플 자료로 동작한다.
+//   GWITTIM_DEV_TOKEN 로컬 개발 서버(backend.api.local)용 토큰. W6에서 Firebase Auth ID 토큰으로 바꾼다.
+const _apiBase = String.fromEnvironment('GWITTIM_API_BASE');
+const _devToken = String.fromEnvironment('GWITTIM_DEV_TOKEN');
+
 void main() {
-  // W6에서 Firebase 로그인과 실제 Repository로 교체한다. 지금은 합성 샘플 자료를 쓴다.
-  runApp(GwittimApp(repository: SampleNoticeRepository(), openUrl: _openExternal));
+  final NoticeRepository repository = _apiBase.isEmpty
+      ? SampleNoticeRepository()
+      : ApiNoticeRepository(
+          baseUrl: Uri.parse(_apiBase.endsWith('/') ? _apiBase : '$_apiBase/'),
+          tokenProvider: () async => _devToken.isEmpty ? null : _devToken,
+        );
+  runApp(GwittimApp(repository: repository, openUrl: _openExternal));
 }
 
 Future<bool> _openExternal(Uri url) => launchUrl(url, mode: LaunchMode.externalApplication);
