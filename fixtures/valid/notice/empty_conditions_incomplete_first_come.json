@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "notice_id": "n_synthetic_0002",
+  "source_id": "mjc_www_notice",
+  "source_url": "https://www.mjc.ac.kr/bbs/data/view.do?menu_idx=66&bbs_mst_idx=BM0000000026&data_idx=BD9999990001",
+  "title": "[합성 샘플] 해외 연수 프로그램 모집 (선착순)",
+  "summary": null,
+  "category": "global",
+  "interest_tags": [
+    "global_language"
+  ],
+  "related_majors": [],
+  "related_roles": [],
+  "published": {
+    "date": "2026-10-15",
+    "time": null,
+    "timezone": null,
+    "precision": "date",
+    "evidence": "날짜 2026-10-15"
+  },
+  "application_start": {
+    "date": "2026-10-20",
+    "time": null,
+    "timezone": null,
+    "precision": "date",
+    "evidence": "신청기간: 2026.10.20.(화) ~"
+  },
+  "application_deadline": null,
+  "deadline_note": "선착순 마감 (정원 도달 시 조기 종료)",
+  "activity_period": null,
+  "eligibility": {
+    "conditions": [],
+    "unresolved_conditions": [
+      {
+        "evidence": "세부 자격은 첨부 모집요강 참조",
+        "note": "첨부 미처리"
+      }
+    ],
+    "extraction_complete": false,
+    "explicitly_unrestricted": false,
+    "unrestricted_evidence": null
+  },
+  "lifecycle_status": "open",
+  "publication_status": "published",
+  "notice_version": 1,
+  "analysis_version": "analysis-0.1-synthetic",
+  "last_collected_at": "2026-10-17T03:00:00Z",
+  "last_verified_at": "2026-10-17T03:00:00Z",
+  "changed_fields": []
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/raw_notice.schema.json",
+  "title": "RawNotice — 수집기 출력",
+  "description": "어댑터가 내보내는 원문 공고. DB 저장은 공통 파이프라인이 맡음. SPEC §5, D-005.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_id",
+    "source_notice_id",
+    "source_url",
+    "title",
+    "body_text",
+    "published",
+    "collected_at",
+    "content_hash",
+    "source_fields",
+    "attachments"
+  ],
+  "properties": {
+    "schema_version": { "$ref": "common.schema.json#/$defs/schema_version" },
+    "source_id": { "$ref": "common.schema.json#/$defs/code", "description": "출처 설정 ID (게시판 단위, 예: mjc_www_notice)." },
+    "source_notice_id": { "type": ["string", "null"], "minLength": 1, "description": "출처가 제공하는 공고 ID. 없으면 null (정규화 URL로 식별)." },
+    "source_url": { "type": "string", "format": "uri" },
+    "title": { "type": "string", "minLength": 1 },
+    "body_text": { "type": "string", "description": "메뉴·푸터를 제거한 본문." },
+    "published": {
+      "description": "원문 게시일. 날짜만 있으면 precision=date, time=null. 미표기는 null.",
+      "oneOf": [{ "$ref": "common.schema.json#/$defs/date_info" }, { "type": "null" }]
+    },
+    "collected_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" },
+    "content_hash": {
+      "description": "sha256:<hex>. title, body_text, published, source_fields, attachments[].file_name의 정규화 JSON으로 계산. collected_at 등 매번 바뀌는 값 제외.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "source_fields": {
+      "description": "출처가 제공한 원래 필드. 조회수처럼 매번 바뀌는 값은 넣지 않음.",
+      "type": "object"
+    },
+    "attachments": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/attachment" } }
+  }
+}

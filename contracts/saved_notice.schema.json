@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/saved_notice.schema.json",
+  "title": "SavedNotice — 저장",
+  "description": "저장 당시 정보는 변경 안내용이며 최신 마감일을 덮어쓰지 않음. SPEC §5, D-005 #4.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["notice_id", "saved_at", "saved_notice_version", "saved_deadline_snapshot"],
+  "properties": {
+    "notice_id": { "type": "string", "minLength": 1 },
+    "saved_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" },
+    "saved_notice_version": { "type": "integer", "minimum": 1 },
+    "saved_deadline_snapshot": {
+      "description": "저장 당시 application_deadline 복사본. 없으면 null.",
+      "oneOf": [{ "$ref": "common.schema.json#/$defs/date_info" }, { "type": "null" }]
+    }
+  }
+}

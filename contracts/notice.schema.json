@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/notice.schema.json",
+  "title": "Notice — 앱이 사용하는 공고",
+  "description": "분석·검증을 거쳐 게시되는 공고. SPEC §5, D-005.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "notice_id",
+    "source_id",
+    "source_url",
+    "title",
+    "summary",
+    "category",
+    "interest_tags",
+    "related_majors",
+    "related_roles",
+    "published",
+    "application_start",
+    "application_deadline",
+    "deadline_note",
+    "activity_period",
+    "eligibility",
+    "lifecycle_status",
+    "publication_status",
+    "notice_version",
+    "analysis_version",
+    "last_collected_at",
+    "last_verified_at",
+    "changed_fields"
+  ],
+  "properties": {
+    "schema_version": { "$ref": "common.schema.json#/$defs/schema_version" },
+    "notice_id": { "type": "string", "minLength": 1 },
+    "source_id": { "$ref": "common.schema.json#/$defs/code" },
+    "source_url": { "type": "string", "format": "uri" },
+    "title": { "type": "string", "minLength": 1 },
+    "summary": { "type": ["string", "null"], "description": "검증된 요약. 없으면 null." },
+    "category": { "$ref": "common.schema.json#/$defs/code" },
+    "interest_tags": { "$ref": "common.schema.json#/$defs/code_list" },
+    "related_majors": { "$ref": "common.schema.json#/$defs/code_list" },
+    "related_roles": { "$ref": "common.schema.json#/$defs/code_list" },
+    "published": { "oneOf": [{ "$ref": "common.schema.json#/$defs/date_info" }, { "type": "null" }] },
+    "application_start": { "oneOf": [{ "$ref": "common.schema.json#/$defs/date_info" }, { "type": "null" }] },
+    "application_deadline": { "oneOf": [{ "$ref": "common.schema.json#/$defs/date_info" }, { "type": "null" }] },
+    "deadline_note": {
+      "type": ["string", "null"],
+      "description": "확정 날짜가 아닌 마감 설명 원문 (예: 선착순 마감, 예산 소진 시)."
+    },
+    "activity_period": { "oneOf": [{ "$ref": "common.schema.json#/$defs/activity_period" }, { "type": "null" }] },
+    "eligibility": { "$ref": "common.schema.json#/$defs/eligibility" },
+    "lifecycle_status": { "$ref": "common.schema.json#/$defs/lifecycle_status" },
+    "publication_status": { "$ref": "common.schema.json#/$defs/publication_status" },
+    "notice_version": { "type": "integer", "minimum": 1, "description": "원문 content_hash가 바뀔 때만 증가." },
+    "analysis_version": { "type": "string", "minLength": 1 },
+    "last_collected_at": { "oneOf": [{ "$ref": "common.schema.json#/$defs/utc_timestamp" }, { "type": "null" }] },
+    "last_verified_at": { "oneOf": [{ "$ref": "common.schema.json#/$defs/utc_timestamp" }, { "type": "null" }] },
+    "changed_fields": {
+      "description": "직전 버전 대비 바뀐 Notice 최상위 필드명.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "title",
+          "summary",
+          "category",
+          "interest_tags",
+          "related_majors",
+          "related_roles",
+          "published",
+          "application_start",
+          "application_deadline",
+          "deadline_note",
+          "activity_period",
+          "eligibility",
+          "lifecycle_status",
+          "source_url"
+        ]
+      }
+    }
+  }
+}
