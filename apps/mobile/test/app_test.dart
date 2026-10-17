@@ -63,6 +63,12 @@ void main() {
       expect(list.items.every((i) => i.recommendation.score == null), isTrue);
     });
 
+    test('동시에 프로필을 읽어도 같은 프로필을 받는다 (피드·프로필 탭 동시 로드)', () async {
+      final repo = SampleNoticeRepository();
+      final results = await Future.wait([repo.getProfile(), repo.getProfile()]);
+      expect(results.map((p) => p?.majorId), ['mjc.computer_engineering', 'mjc.computer_engineering']);
+    });
+
     test('검토 대기 공고는 상세로 보이지 않는다', () async {
       expect(await SampleNoticeRepository().getNotice('n_synthetic_0005'), isNull);
       expect(await SampleNoticeRepository().getNotice('n_synthetic_0001'), isNotNull);
