@@ -1,20 +1,25 @@
-"""팀장 PC 로컬 배치 실행: 활성 게시판 수집 → 파이프라인 → 분석. 결과는 data/local/ (커밋 금지).
+"""팀장 PC 로컬 배치 실행 (D-006: 3시간마다). 수집 → 파이프라인 → 분석 → 게시 → 사라진 공고 확인.
 
-uv run python -m backend.collectors.mjc_www            # D-006: 3시간마다 실행
-uv run python -m backend.collectors.mjc_www --pages 1 --max-items 5   # 빠른 확인
+uv run python -m backend.collectors.mjc_www                       # 로컬 파일만 (data/local/)
+uv run python -m backend.collectors.mjc_www --pages 1 --max-items 5  # 빠른 확인
+GWITTIM_FIREBASE_PROJECT_ID=<id> uv run python -m backend.collectors.mjc_www  # Firestore에 게시
+(에뮬레이터: FIRESTORE_EMULATOR_HOST=127.0.0.1:8080, 프로젝트 ID demo-gwittim)
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
+from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from backend.analysis import build_notice
 from backend.analysis.llm import OllamaAnalyzer
-from backend.collectors.common import JsonFileStore, Outcome, ingest
+from backend.batch import run_batch
+from backend.collectors.common import JsonFileStore
+from backend.publish import InMemorySink
 
-from .adapter import BOARDS, collect
+from .adapter import BOARDS
 
 KST = timezone(timedelta(hours=9), "Asia/Seoul")  # 한국은 일광절약시간 없음. Windows tzdata 불필요
 
@@ -31,24 +36,30 @@ def main() -> None:
     store = JsonFileStore(args.data_dir / "pipeline")
     notices_path = args.data_dir / "notices.json"
     notices = json.loads(notices_path.read_text(encoding="utf-8")) if notices_path.exists() else {}
-    today = datetime.now(KST).date()
-    analyzer = OllamaAnalyzer(args.ollama_model) if args.ollama_model else None
 
-    summary = {o.value: 0 for o in Outcome} | {"review_pending": 0, "fetch_errors": 0}
-    for board in (b for b in BOARDS.values() if b.active):
-        raws, errors = collect(board, pages=args.pages, max_items=args.max_items, delay=args.delay)
-        summary["fetch_errors"] += len(errors)
-        for raw in raws:
-            result = ingest(raw, store)
-            summary[result.outcome.value] += 1
-            if result.outcome is Outcome.REJECTED:
-                continue
-            record = store.records[result.key]
-            notice, issues = build_notice(record, today=today, previous=notices.get(result.key), analyzer=analyzer)
-            notices[result.key] = notice
-            summary["review_pending"] += bool(issues)
+    project = os.environ.get("GWITTIM_FIREBASE_PROJECT_ID")
+    if project:
+        from backend.firebase_store import FirestoreSink, init_app
 
+        sink = FirestoreSink(init_app(project))
+    else:
+        sink = InMemorySink()
+
+    report = run_batch(
+        (b for b in BOARDS.values() if b.active),
+        store=store,
+        sink=sink,
+        notices=notices,
+        today=datetime.now(KST).date(),
+        pages=args.pages,
+        max_items=args.max_items,
+        analyzer=OllamaAnalyzer(args.ollama_model) if args.ollama_model else None,
+        delay=args.delay,
+    )
     notices_path.write_text(json.dumps(notices, ensure_ascii=False, indent=1), encoding="utf-8")
+    summary = asdict(report)
+    summary["fetch_errors"] = len(report.fetch_errors)
+    summary["sink"] = f"firestore:{project}" if project else "local"
     print(json.dumps(summary, ensure_ascii=False))
 
 

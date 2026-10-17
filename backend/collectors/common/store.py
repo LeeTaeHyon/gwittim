@@ -19,6 +19,8 @@ class RawRecord:
     notice_version: int
     first_collected_at: str
     last_collected_at: str
+    consecutive_not_found: int = 0  # D-006: 서로 다른 수집 실행에서 연속으로 원문이 없던 횟수
+    removed: bool = False
 
 
 @dataclass

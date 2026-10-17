@@ -102,6 +102,13 @@
 - 실제 실행 가능한 검사(Flutter analyze/test, Python test)가 생기면 CI 추가 검토.
 - 결정된 환경변수를 `.env.example`에 이름·설명으로 추가.
 
+## M1 경로 검증 (2026-10-18)
+
+- 실제 학교 공지 5건으로 Firestore·Auth 에뮬레이터에서 전체 흐름을 확인했습니다: 수집 → 파이프라인 → 분석 → Firestore 게시 → API(실제 ID 토큰) 추천·상세. 테스트는 `backend/tests/test_e2e_emulator.py`(`GWITTIM_E2E_LIVE=1`)입니다.
+- 삭제 감지(D-006)를 구현했습니다. 실사이트에서 있는 글은 `found`, 없는 글은 `not_found`로 판별되는 것을 확인했습니다.
+- Cloud Run용 `Dockerfile`: 로컬 빌드 성공. 컨테이너가 비루트 사용자로 실행되고, 에뮬레이터 대상으로 토큰 없음 401, 토큰 있음 200을 확인했습니다. 실제 배포는 하지 않았습니다.
+- 실제 Firebase 프로젝트가 생기면 남은 일: 배치 실행 시 `GWITTIM_FIREBASE_PROJECT_ID` 설정, 컨테이너 배포, 앱 `tokenProvider`를 Firebase Auth로 교체.
+
 ## 미결·차단 사항
 
 - 앱 화면 확인 (2026-10-18): 실기기·에뮬레이터 대신 임시 웹 빌드로 피드·상세·저장·프로필을 확인했습니다. 웹 빌드는 저장소에 넣지 않았습니다. 웹에서는 한글 글꼴이 늦게 로드되는 현상이 있었고, 이는 웹 전용입니다.
