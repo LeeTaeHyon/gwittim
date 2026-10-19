@@ -162,6 +162,12 @@
 | 분석 | Ollama gemma4:12b. Ollama가 꺼져 있으면 규칙 분석으로 자동 폴백 |
 | 첫 예약 실행 확인 | 2026-10-19 19:49, 결과 코드 0, 43건 수집·변경 없음(Firestore 재기록 0) |
 
+알림·GPU (2026-10-19 추가, `scripts/run_batch.ps1`):
+- 시작·끝에 Windows 알림. 끝 알림에 새·변경·그대로 건수와 gemma4 사용 여부(분석 건수)·걸린 시간 표시
+- gemma4는 새 공고나 내용이 바뀐 공고를 분석할 때만 GPU에 올라가고, 배치가 끝나면 바로 내림(Ollama 기본 5분 대기 없음)
+- 로그 한 줄 요약에 `started_at`·`finished_at`·`seconds`·`llm{used, analyzed, fallback_rule_only, unloaded}` 추가
+- 작업 스케줄러 실행 명령: `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File <Gwittim-batch>\scriptsun_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
+
 운영:
 - 코드 갱신(main 병합 후): `git -C ..\Gwittim-batch fetch origin` → `git -C ..\Gwittim-batch checkout --detach origin/main` → `uv sync` (같은 폴더에서)
 - 멈추기: 작업 스케줄러에서 작업 사용 안 함, 또는 `Disable-ScheduledTask -TaskName "Gwittim 수집 배치 (하루 2회)"`

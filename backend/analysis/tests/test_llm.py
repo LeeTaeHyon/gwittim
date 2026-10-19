@@ -173,3 +173,21 @@ def test_summary_with_wrong_weekday_or_unknown_date_is_rejected(ollama):
     assert a.analyze(raw(body=body2), MJC)["summary"] == "모집은 11월 30일까지다."
     ollama.reply = {"summary": "2026 년 12 월 말까지 모집합니다.", "deadline": None, "conditions": [], "unresolved": []}
     assert a.analyze(raw(body=body2), MJC)["summary"] is None  # 원문에 없는 '12월 말'
+
+
+def test_counts_llm_use_and_unloads(ollama):
+    ollama.reply = {"summary": None, "deadline": None, "conditions": [], "unresolved": []}
+    a = analyzer(ollama)
+    a.analyze(raw(), MJC)
+    a.analyze(raw(), MJC)
+    assert (a.llm_analyzed, a.llm_failed) == (2, 0)
+    ollama.reply = "error"
+    a.analyze(raw(), MJC)
+    assert a.llm_failed == 1
+    ollama.reply = {}
+    assert a.unload() is True
+    assert ollama.requests[-1] == {"model": "test-model", "keep_alive": 0}
+
+
+def test_unload_ignores_unreachable_server():
+    assert OllamaAnalyzer("m", host="http://127.0.0.1:9", timeout=1).unload() is False

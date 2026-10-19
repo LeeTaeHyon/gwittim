@@ -87,6 +87,8 @@ class OllamaAnalyzer:
         self.base = base or RuleBasedAnalyzer()
         self.version = f"{self.base.version}+ollama:{model}"
         self.rejected: list[str] = []  # 마지막 분석에서 버린 LLM 출력과 사유 (평가·디버깅용)
+        self.llm_analyzed = 0  # LLM 응답을 받은 공고 수
+        self.llm_failed = 0  # LLM 호출 실패로 규칙 분석만 쓴 공고 수
 
     # ---------- Ollama 호출 ----------
 
@@ -119,6 +121,19 @@ class OllamaAnalyzer:
             message = json.loads(resp.read())["message"]["content"]
         return json.loads(message)
 
+    def unload(self) -> bool:
+        """배치가 끝나면 모델을 GPU에서 바로 내린다 (Ollama 기본은 마지막 사용 5분 뒤). 실패해도 무시."""
+        req = urllib.request.Request(
+            f"{self.host}/api/generate",
+            data=json.dumps({"model": self.model, "keep_alive": 0}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30):
+                return True
+        except Exception:
+            return False
+
     # ---------- 분석 ----------
 
     def analyze(self, raw: dict, source: SourceConfig) -> dict:
@@ -127,7 +142,9 @@ class OllamaAnalyzer:
         title, body = raw["title"], redact(raw["body_text"])
         try:
             out = self._chat(title, body)
+            self.llm_analyzed += 1
         except Exception as e:  # 네트워크·모델·JSON 실패: 규칙 분석만으로 돌려준다
+            self.llm_failed += 1
             self.rejected.append(f"llm_unavailable: {type(e).__name__}")
             return {**fields, "_analysis_version": self.base.version}
 
