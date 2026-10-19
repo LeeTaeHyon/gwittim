@@ -1,4 +1,4 @@
-"""팀장 PC 로컬 배치 실행 (D-006: 3시간마다). 수집 → 파이프라인 → 분석 → 게시 → 사라진 공고 확인.
+"""팀장 PC 로컬 배치 실행 (D-006: 매일 09:00·18:00, Windows 작업 스케줄러). 수집 → 파이프라인 → 분석 → 게시 → 사라진 공고 확인.
 
 uv run python -m backend.collectors.mjc_www                       # 로컬 파일만 (data/local/)
 uv run python -m backend.collectors.mjc_www --pages 1 --max-items 5  # 빠른 확인
