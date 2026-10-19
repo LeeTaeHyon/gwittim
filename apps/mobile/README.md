@@ -26,3 +26,16 @@ GWITTIM_LIVE_API=http://127.0.0.1:8765/ flutter test test/api_live_test.dart
 ```
 
 `GWITTIM_API_BASE`를 비우면 합성 샘플로 동작합니다. 실제 로그인(Firebase Auth ID 토큰)은 Firebase 프로젝트 생성 후 `tokenProvider`만 바꿉니다.
+
+## dev 서버 + Google 로그인으로 실행 (gwittim-dev)
+
+1. Firebase 콘솔에서 받은 `google-services.json`을 `android/app/`에 둡니다(커밋 금지, `.gitignore` 처리됨).
+2. 실행:
+
+```bash
+flutter run --dart-define=GWITTIM_API_BASE=https://gwittim-api-630835219636.asia-northeast3.run.app/
+```
+
+- 로그인 화면 → Google 로그인 → Firebase ID 토큰으로 서버 API를 부릅니다. 앱은 사용자 ID를 보내지 않습니다.
+- Google 로그인은 Firebase에 등록된 SHA-1의 키로 서명된 빌드에서만 됩니다(지금은 이 PC의 디버그 키).
+- `GWITTIM_DEV_TOKEN`을 함께 주면 로그인 없이 로컬 개발 서버용 토큰을 씁니다.
