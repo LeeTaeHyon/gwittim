@@ -122,7 +122,7 @@
 |---|---|
 | 프로젝트 ID | `gwittim-dev` (GCP 프로젝트에 Firebase 추가, 상태 ACTIVE) |
 | 결제 | 메인 결제 계정(KRW)에 연결, Blaze |
-| 예산 알림 | ₩7,000/월(약 $5), `gwittim-dev`만 대상, 실제 지출 50·90·100%와 예측 100%에서 알림. 알림은 지출을 막지 않음 |
+| 예산 알림 | ₩1,000/월 (2026-10-19 팀장 요청으로 ₩7,000에서 낮춤), `gwittim-dev`만 대상, 실제 지출 ₩500·₩900·₩1,000과 예측 ₩1,000에서 알림. 알림일 뿐 청구액이나 지출 상한이 아님 |
 | API | Firebase, Firestore, Identity Toolkit, Firebase Rules, Cloud Run, Artifact Registry, Cloud Build, Billing Budgets |
 | Firestore | `(default)`, 네이티브 모드, `asia-northeast3`(서울) |
 | 보안 규칙 | `firestore.rules`를 배포·릴리스, 배포본과 파일 내용 일치 확인 |
