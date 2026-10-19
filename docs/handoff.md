@@ -116,6 +116,32 @@
 - Ollama 0.40.5 설치, 모델 평가 → D-007 gemma4:12b
 - Firebase·Cloud Run 예상 비용: [cost-estimate.md](cost-estimate.md) — 50~200명 규모 월 0원 예상. API에 공고 목록 5분 캐시 추가(Firestore 무료 읽기 초과 방지). Firebase 프로젝트 생성은 비용 확인 후 팀장 결정 대기
 
+## Firebase dev 프로젝트 (2026-10-18 생성, 팀장 지시)
+
+| 항목 | 값 |
+|---|---|
+| 프로젝트 ID | `gwittim-dev` (GCP 프로젝트에 Firebase 추가, 상태 ACTIVE) |
+| 결제 | 메인 결제 계정(KRW)에 연결, Blaze |
+| 예산 알림 | ₩1,000/월 (2026-10-19 팀장 요청으로 ₩7,000에서 낮춤), `gwittim-dev`만 대상, 실제 지출 ₩500·₩900·₩1,000과 예측 ₩1,000에서 알림. 알림일 뿐 청구액이나 지출 상한이 아님 |
+| API | Firebase, Firestore, Identity Toolkit, Firebase Rules, Cloud Run, Artifact Registry, Cloud Build, Billing Budgets |
+| Firestore | `(default)`, 네이티브 모드, `asia-northeast3`(서울) |
+| 보안 규칙 | `firestore.rules`를 배포·릴리스, 배포본과 파일 내용 일치 확인 |
+| Authentication | 초기화 완료(2026-10-19). 활성 로그인 제공자 없음 (Google 로그인은 아래 남은 일) |
+| Android 앱 | `kr.gwittim.gwittim` 등록, 디버그 키 SHA-1 등록 (`google-services.json`은 받지 않음·커밋 금지) |
+| Cloud Run | `gwittim-api` (asia-northeast3), `https://gwittim-api-630835219636.asia-northeast3.run.app`, 최소 0·최대 2 인스턴스, 1 vCPU·512 MiB, 전용 서비스 계정 `gwittim-api@`(권한 `roles/datastore.user`만), 공개 호출 허용(인증은 API가 Firebase ID 토큰으로 직접 검증) |
+| Artifact Registry | `cloud-run-source-deploy` 정리 정책: 최근 2개만 보관 |
+
+배포 검증 (2026-10-19):
+- 토큰 없음·가짜 토큰 → 401, `/docs` → 404
+- 실제 Firebase ID 토큰(검증용 익명 사용자, 확인 후 삭제·익명 로그인 다시 끔) → `/v1/recommendations` 200(공고가 아직 없어 latest 0건), `/v1/profile` 404, `/v1/saved` 200. 실제 Auth 토큰 검증과 서비스 계정의 Firestore 읽기가 동작함
+
+남은 일 (팀장 직접):
+- **ADC 로그인:** `gcloud auth application-default login` (본인 계정 브라우저 로그인). 이후 `GWITTIM_FIREBASE_PROJECT_ID=gwittim-dev uv run python -m backend.collectors.mjc_www`로 실제 Firestore에 게시
+- **Google 로그인 제공자:** 개인(Gmail) 소유 프로젝트라 OAuth 동의 화면(앱 이름·지원 이메일)을 API로 만들 수 없어 Firebase 콘솔 → Authentication → 로그인 방법 → Google 사용 설정이 필요. 그 뒤 앱에 Firebase Auth를 붙이고 `tokenProvider`를 교체
+- prod 프로젝트는 만들지 않았습니다
+
+다시 배포: `gcloud run deploy gwittim-api --source . --project=gwittim-dev --region=asia-northeast3` (설정은 유지됨)
+
 ## 미결·차단 사항
 
 - 앱 화면 확인 (2026-10-18): 실기기·에뮬레이터 대신 임시 웹 빌드로 피드·상세·저장·프로필을 확인했습니다. 웹 빌드는 저장소에 넣지 않았습니다. 웹에서는 한글 글꼴이 늦게 로드되는 현상이 있었고, 이는 웹 전용입니다.
