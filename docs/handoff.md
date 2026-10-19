@@ -147,7 +147,25 @@
 - 팀장이 ADC 로그인과 Google 로그인 제공자를 설정했고, `google-services.json`을 받았습니다(`apps/mobile/android/app/`, 커밋 금지).
 - 첫 실배치: 공지사항 2페이지 → **43건 수집·분석(gemma4)·게시** → `gwittim-dev` Firestore. 배포된 API가 추천 34건(마감된 공고 제외)과 상세(요약 포함)를 반환하는 것을 확인했습니다.
 - 앱: Firebase Auth + Google 로그인 → Cloud Run API. 에뮬레이터에서 로그인 화면과 Google 로그인 창이 설정 오류 없이 열리는 것까지 확인했습니다. 실제 계정 로그인은 팀장이 직접 해야 합니다.
-- 배치 자동 실행(3시간)은 아직 등록하지 않았습니다(팀장 PC 작업 스케줄러, 승인 필요).
+- 배치 자동 실행: 등록 완료 (아래 '수집 배치 자동 실행').
+- 실기기·에뮬레이터 Google 로그인 → 피드에 실제 공지 표시: 팀장 확인 완료 (2026-10-19).
+
+## 수집 배치 자동 실행 (2026-10-19 등록)
+
+| 항목 | 내용 |
+|---|---|
+| 작업 이름 | Windows 작업 스케줄러 `Gwittim 수집 배치 (3시간)` (D-006 3시간 주기) |
+| 실행 조건 | 팀장 계정으로 로그인해 있을 때만 (비밀번호 저장 안 함, ADC 로그인 사용). 놓친 실행은 가능할 때 바로 실행, 겹치면 건너뜀, 1시간 제한 |
+| 코드 | `Code_Project\Gwittim-batch` (main 고정 worktree). 메인 체크아웃의 브랜치 작업과 무관 |
+| 데이터 | `Gwittim\data\local` (파이프라인 기록·notices.json, 커밋 안 됨) |
+| 로그 | `Gwittim\data\localatch.log` (실행마다 시각 + 요약 JSON 한 줄) |
+| 분석 | Ollama gemma4:12b. Ollama가 꺼져 있으면 규칙 분석으로 자동 폴백 |
+| 첫 예약 실행 확인 | 2026-10-19 19:49, 결과 코드 0, 43건 수집·변경 없음(Firestore 재기록 0) |
+
+운영:
+- 코드 갱신(main 병합 후): `git -C ..\Gwittim-batch fetch origin` → `git -C ..\Gwittim-batch checkout --detach origin/main` → `uv sync` (같은 폴더에서)
+- 멈추기: 작업 스케줄러에서 작업 사용 안 함, 또는 `Disable-ScheduledTask -TaskName "Gwittim 수집 배치 (3시간)"`
+- PC가 꺼져 있으면 수집이 멈춥니다. 앱은 마지막으로 게시된 공고를 계속 보여주고, 24시간이 지나면 상세에 '오래된 정보' 안내가 나옵니다(D-006).
 
 ## 미결·차단 사항
 
