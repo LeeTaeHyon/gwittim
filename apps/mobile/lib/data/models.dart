@@ -159,12 +159,34 @@ class Notice {
   );
 }
 
+/// 조건별 비교 결과 (recommendation_item.condition_result). 서버가 판정한 값을 표시만 한다.
+class ConditionResult {
+  const ConditionResult({required this.field, required this.status, required this.evidence, this.unknownReason});
+
+  final String field;
+
+  /// met / not_met / unknown
+  final String status;
+  final String evidence;
+
+  /// profile_missing / condition_unresolved / extraction_incomplete, 판정됐으면 null
+  final String? unknownReason;
+
+  factory ConditionResult.fromJson(Map<String, dynamic> m) => ConditionResult(
+    field: m['field'] as String,
+    status: m['status'] as String,
+    evidence: m['evidence'] as String,
+    unknownReason: m['unknown_reason'] as String?,
+  );
+}
+
 class Recommendation {
   const Recommendation({
     required this.noticeId,
     required this.score,
     required this.eligibilityStatus,
     required this.reasonCodes,
+    this.conditionResults = const [],
   });
 
   final String noticeId;
@@ -175,12 +197,17 @@ class Recommendation {
   /// met / not_met / needs_check
   final String eligibilityStatus;
   final List<String> reasonCodes;
+  final List<ConditionResult> conditionResults;
 
   factory Recommendation.fromJson(Map<String, dynamic> m) => Recommendation(
     noticeId: m['notice_id'] as String,
     score: (m['score'] as num?)?.toDouble(),
     eligibilityStatus: m['eligibility_status'] as String,
     reasonCodes: [for (final r in m['reason_codes'] as List) r as String],
+    conditionResults: [
+      for (final c in (m['condition_results'] as List?) ?? const [])
+        ConditionResult.fromJson(c as Map<String, dynamic>),
+    ],
   );
 }
 
