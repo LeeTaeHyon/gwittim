@@ -181,7 +181,7 @@ notice_id, saved_at, saved_notice_version, saved_deadline_snapshot(저장 당시
 
 ### 추천
 
-1. review_pending, closed, removed 공고는 기본 추천에서 제외한다.
+1. review_pending, closed, removed 공고와 학생 대상이 아닌 행정 공지(category admin_notice: 교직원 채용, 시설·점검 안내 등)는 기본 추천에서 제외한다. 행정 공지는 게시는 하되 관심사·직무·전공 꼬리표를 붙이지 않는다.
 2. not_met은 기본 추천에서 제외하되 전체 탐색에서는 상태와 함께 볼 수 있다.
 3. needs_check는 배지를 붙여 후보에 포함할 수 있다. 날짜 미상 공고는 마감 임박 영역에서 제외한다.
 4. 초기 점수: 관심사 40, 직무 35, 전공 15, 시기 10. 각 요소는 0~1이다. 시기는 마감까지 남은 날짜로 0~14일 1.0, 15~30일 0.6, 31일 이상 0.3이며, 마감일이 없거나 지났거나 deadline_note만 있으면 평가 불가다.

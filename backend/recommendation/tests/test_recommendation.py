@@ -123,6 +123,13 @@ def test_not_met_excluded(notices, profile):
     assert "n_synthetic_0004" not in [i["notice"]["notice_id"] for i in out["items"]]
 
 
+def test_admin_notice_excluded(notices, profile):
+    notices[0]["category"] = "admin_notice"  # 교직원 채용 등 학생 대상이 아닌 공지
+    for p in (profile, {}):
+        ids = [i["notice"]["notice_id"] for i in recommend(notices, p, today=TODAY, generated_at=NOW)["items"]]
+        assert "n_synthetic_0001" not in ids
+
+
 def test_latest_mode_without_personal_input(notices):
     empty = fixture("user_profile/empty.json")
     out = recommend(notices, empty, today=TODAY, generated_at=NOW)

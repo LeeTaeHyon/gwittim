@@ -16,7 +16,7 @@ from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
 
-ANALYSIS_VERSION = "rule-0.1"
+ANALYSIS_VERSION = "rule-0.2"  # 0.2: 부서명 오탐 제거, 직무·학과 키워드, 비학생 공지(admin_notice)
 
 
 class Analyzer(Protocol):
@@ -37,13 +37,24 @@ def _dictionary(name: str) -> list[dict]:
 
 # ---------- 키워드 표 (제목 우선, 첫 일치) ----------
 
+# 학생 대상 기회가 아닌 공지(교직원 채용, 시설·행정 안내). 제목으로만 판단하고, 추천에서는 빼되 게시는 한다.
+ADMIN_TITLE = re.compile(
+    r"(?:교수|교원|강사|직원|조교)\s*(?:초빙|공개\s*채용|채용)|교직원|정기\s*점검|안전\s*진단|주차장|청소\s*작업|보건실"
+    r"|국민\s*행동\s*요령|라이선스|입찰|휴무|정전|단수|시스템\s*점검"
+)
+
+# 꼬리표 키워드 판정 전에 지우는 부서·센터 이름 (예: '취·창업팀'이 창업 공고로, 'AI·IR센터'가 AI 공고로 잡히던 문제)
+TAG_NOISE = re.compile(
+    r"(?:진로)?\s*취\s*[·ㆍ・.]?\s*창업\s*(?:팀|지원센터|센터)|AI\s*[·ㆍ・]\s*IR\s*(?:센터|팀)|글로벌\s*교육\s*(?:센터|팀)"
+)
+
 CATEGORY_RULES = [
     ("contest", r"공모전|경진대회|해커톤|대회"),
     ("scholarship", r"장학"),
     ("internship", r"인턴|현장실습"),
     ("job", r"채용|구인"),
     ("volunteer", r"봉사"),
-    ("global", r"해외|연수|교환학생|유학"),
+    ("global", r"해외|연수|교환학생|유학(?!생)"),
     ("startup", r"창업"),
     ("extracurricular", r"비교과|마일리지|역량"),
     ("education_program", r"교육생|특강|강좌|과정|교육"),
@@ -52,36 +63,80 @@ CATEGORY_RULES = [
 ]
 
 INTEREST_RULES = {
-    "ai_data": r"\bAI\b|인공지능|데이터",
-    "software": r"소프트웨어|개발자|코딩|프로그래밍|SW",
-    "security": r"보안",
-    "electronics_hw": r"전자|반도체|하드웨어|전기",
-    "mechanical_manufacturing": r"기계|제조|생산",
-    "construction_spatial": r"건설|토목|공간정보|드론",
+    "ai_data": r"\bAI\b|인공지능|빅\s*데이터|데이터\s*(?:분석|사이언스|과학|엔지니어)",
+    "software": r"소프트웨어|개발자|코딩|프로그래밍|\bSW\b|해커톤|앱\s*개발",
+    "security": r"정보\s*보안|사이버\s*보안|해킹",
+    "electronics_hw": r"전자|반도체|하드웨어|전기\s*공학|임베디드",
+    "mechanical_manufacturing": r"기계|제조|생산\s*관리|스마트\s*팩토리",
+    "construction_spatial": r"건설|토목|공간정보|드론|측량",
     "design": r"디자인",
     "media_content": r"영상|미디어|콘텐츠",
     "business_marketing": r"마케팅|경영|비즈니스",
     "finance_accounting": r"금융|회계|세무",
     "startup": r"창업",
-    "global_language": r"해외|외국어|어학|글로벌|유학",
-    "education_welfare": r"유아교육|사회복지|상담",
-    "health": r"보건|의료",
+    "global_language": r"해외|외국어|어학|글로벌|교환\s*학생|유학(?!생)|일본어|중국어",  # '외국인 유학생'은 제외
+    "education_welfare": r"유아\s*교육|사회복지|청소년|상담사|(?<!창업)보육",
+    "health": r"보건의료|의료|간호",
     "culture_arts": r"문화|예술|공연|음악|문학|글쓰기",
     "sports": r"스포츠|체육",
-    "public_service": r"공공기관|행정|공무원",
+    "public_service": r"공공기관|공무원|공기업",
     "volunteering": r"봉사",
 }
 
 ROLE_RULES = {
-    "software_developer": r"개발자|소프트웨어 개발|백엔드|프론트엔드",
-    "data_ai": r"데이터 (?:분석|엔지니어)|AI 엔지니어",
-    "security_engineer": r"보안 (?:엔지니어|전문)",
-    "designer": r"디자이너",
-    "marketer": r"마케터|마케팅 (?:직무|담당)",
-    "accountant": r"회계|세무사무",
+    "software_developer": r"개발자|소프트웨어|코딩|프로그래밍|해커톤|앱\s*개발|웹\s*개발",
+    "data_ai": r"데이터\s*(?:분석|엔지니어|사이언스)|인공지능|머신\s*러닝|딥\s*러닝|AI\s*(?:개발|모델|엔지니어|서비스|경진|해커톤)",
+    "security_engineer": r"정보\s*보안|보안\s*(?:엔지니어|전문)|해킹|CTF",
+    "hw_engineer": r"반도체|임베디드|전자\s*회로|전기\s*기사",
+    "mechanical_engineer": r"기계\s*설계|\bCAD\b|스마트\s*팩토리|생산\s*관리",
+    "civil_engineer": r"토목|건설\s*(?:현장|기술)|측량",
+    "designer": r"디자이너|디자인\s*공모|\bUX\b|UI\s*디자인|시각\s*디자인",
+    "content_creator": r"콘텐츠\s*제작|영상\s*(?:제작|편집|공모)|크리에이터|유튜브|숏폼",
+    "marketer": r"마케터|마케팅|서포터즈|홍보\s*(?:대사|기자단)",
+    "office_admin": r"사무원|경영\s*지원|사무\s*보조|행정\s*(?:직원|보조|인턴)",
+    "accountant": r"회계|세무",
+    "service": r"승무원|항공\s*서비스|호텔\s*(?:리어|경영|서비스)|서비스직",
+    "educator": r"교사|보육\s*교사|교육\s*봉사|학습\s*멘토|튜터",
+    "social_worker": r"사회복지",
+    "healthcare": r"간호|보건의료|병원\s*(?:행정|실습)",
+    "public_official": r"공무원|공공기관\s*(?:채용|인턴)|공기업",
+    "artist": r"실용음악|작곡|연극|전시회",
     "entrepreneur": r"창업",
-    "content_creator": r"콘텐츠 제작|영상 제작|크리에이터",
-    "office_admin": r"사무원|경영지원|행정 (?:직원|보조)",
+}
+
+# 학과 관련성: 학과 이름이 그대로 나오거나(아래 analyze), 그 학과가 직접 다루는 분야어가 나올 때
+MAJOR_RULES = {
+    "mjc.computer_engineering": r"소프트웨어|코딩|프로그래밍|해커톤|앱\s*개발|웹\s*개발",
+    "mjc.ai_game_software": r"게임|인공지능|AI\s*(?:개발|모델|서비스|경진|해커톤)",
+    "mjc.computer_security": r"정보\s*보안|사이버\s*보안|해킹|CTF",
+    "mjc.electronic_engineering": r"반도체|전자\s*회로|임베디드",
+    "mjc.information_communication": r"정보\s*통신|네트워크\s*(?:관리|엔지니어)|통신\s*기술",
+    "mjc.mechanical_engineering": r"기계\s*설계|\bCAD\b|스마트\s*팩토리",
+    "mjc.industrial_management": r"품질\s*관리|생산\s*관리|산업\s*경영",
+    "mjc.electrical_engineering": r"전기\s*(?:기사|설비|공사)",
+    "mjc.civil_engineering": r"토목|건설\s*(?:현장|기술)",
+    "mjc.cadastral_spatial_info": r"공간\s*정보|\bGIS\b|측량|지적\s*(?:측량|정보)",
+    "mjc.drone_information": r"드론",
+    "mjc.business_administration": r"마케팅|경영\s*(?:전략|컨설팅)|비즈니스\s*모델",
+    "mjc.tax_accounting": r"회계|세무",
+    "mjc.real_estate": r"부동산",
+    "mjc.social_welfare": r"사회복지",
+    "mjc.public_administration": r"공무원|공공\s*행정",
+    "mjc.aviation_service": r"항공\s*서비스|승무원|항공사",
+    "mjc.chinese_business": r"중국어|\bHSK\b",
+    "mjc.japanese": r"일본어|\bJLPT\b|일본",
+    "mjc.creative_writing": r"글쓰기|문예|시나리오|웹소설",
+    "mjc.early_childhood_education": r"유아|(?<!창업)보육",
+    "mjc.youth_education_counseling": r"청소년",
+    "mjc.industrial_design": r"제품\s*디자인|산업\s*디자인",
+    "mjc.fashion_living_design": r"패션|리빙",
+    "mjc.communication_design": r"시각\s*디자인|광고\s*디자인|편집\s*디자인",
+    "mjc.ai_media_design": r"영상\s*(?:제작|편집)|모션\s*그래픽|미디어\s*디자인",
+    "mjc.sports": r"스포츠|체육",
+    "mjc.beauty_management": r"뷰티|메이크업|헤어",
+    "mjc.health_information": r"보건의료|의무\s*기록|병원\s*행정",
+    "mjc.applied_music": r"실용음악|밴드|작곡",
+    "mjc.theater_film": r"연극|영화|연기",
 }
 
 START_DEADLINE = re.compile(r"신청\s*기간|접수\s*기간|모집\s*기간|공모\s*기간|원서\s*접수|신청\s*기한|접수\s*기한|제출\s*기한|마감|까지")
@@ -111,12 +166,16 @@ class RuleBasedAnalyzer:
     def analyze(self, raw: dict, source: SourceConfig) -> dict:
         title, lines = raw["title"], _lines(raw)
         text = title + "\n" + "\n".join(lines)
+        admin = bool(ADMIN_TITLE.search(title))
+        tag_text = "" if admin else TAG_NOISE.sub(" ", text)  # 비학생 공지는 꼬리표 없음
+        majors = {m["id"] for m in _dictionary("majors")}
+        named = [m["id"] for m in _dictionary("majors") if m["name_ko"] in tag_text]
         return {
             "summary": None,  # 검증된 요약은 LLM 단계 이후
-            "category": self._category(title, text),
-            "interest_tags": _codes(INTEREST_RULES, text, {i["id"] for i in _dictionary("interests")}),
-            "related_majors": [m["id"] for m in _dictionary("majors") if m["name_ko"] in text],
-            "related_roles": _codes(ROLE_RULES, text, {r["id"] for r in _dictionary("roles")}),
+            "category": "admin_notice" if admin else self._category(title, text),
+            "interest_tags": _codes(INTEREST_RULES, tag_text, {i["id"] for i in _dictionary("interests")}),
+            "related_majors": named + [c for c in _codes(MAJOR_RULES, tag_text, majors) if c not in named],
+            "related_roles": _codes(ROLE_RULES, tag_text, {r["id"] for r in _dictionary("roles")}),
             **self._dates(lines, source),
             "eligibility": self._eligibility(raw, lines, source),
         }
