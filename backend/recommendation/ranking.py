@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from .config import EXCLUDED_LIFECYCLE, EXCLUDED_PUBLICATION, MAX_LIMIT, RANKING_VERSION
+from .config import EXCLUDED_CATEGORIES, EXCLUDED_LIFECYCLE, EXCLUDED_PUBLICATION, MAX_LIMIT, RANKING_VERSION
 from .eligibility import evaluate
 from .scoring import factors, score
 
@@ -29,7 +29,7 @@ def has_personal_input(profile: dict) -> bool:
 def recommend(notices: list[dict], profile: dict, *, today: date, generated_at: str, limit: int = 20) -> dict:
     """list_recommendations 응답을 만든다.
 
-    - review_pending, closed, removed, not_met은 기본 추천에서 제외
+    - review_pending, closed, removed, not_met, 행정 공지(admin_notice)는 기본 추천에서 제외
     - 프로필에 관심사·직무·전공이 없으면 mode=latest: 점수 없이 게시일 내림차순
     - 정렬: 점수 내림차순(점수 없음은 뒤) → 게시일 내림차순(미상은 뒤) → notice_id
     - 초기에는 소량 결과를 한 번에 돌려준다 (next_cursor=None, SPEC §7)
@@ -39,7 +39,11 @@ def recommend(notices: list[dict], profile: dict, *, today: date, generated_at: 
 
     items = []
     for notice in notices:
-        if notice["lifecycle_status"] in EXCLUDED_LIFECYCLE or notice["publication_status"] in EXCLUDED_PUBLICATION:
+        if (
+            notice["lifecycle_status"] in EXCLUDED_LIFECYCLE
+            or notice["publication_status"] in EXCLUDED_PUBLICATION
+            or notice["category"] in EXCLUDED_CATEGORIES
+        ):
             continue
         status, condition_results = evaluate(notice["eligibility"], profile)
         if status == "not_met":
