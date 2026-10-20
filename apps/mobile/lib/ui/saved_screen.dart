@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 import 'common.dart';
-import 'detail_screen.dart';
+import 'report_screen.dart';
 import 'format.dart';
 
 /// 저장한 공고를 마감일 순으로 보여준다. 최신 공고 상태와 저장 이후 바뀐 마감을 함께 표시한다 (SPEC §6).
@@ -89,10 +89,11 @@ class SavedScreenState extends State<SavedScreen> {
                 onTap: () async {
                   await Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => DetailScreen(
+                      builder: (_) => ReportScreen(
                         repository: widget.repository,
                         noticeId: e.notice.noticeId,
                         openUrl: widget.openUrl,
+                        today: widget.today,
                       ),
                     ),
                   );

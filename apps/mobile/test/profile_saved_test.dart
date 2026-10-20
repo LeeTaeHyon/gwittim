@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/main.dart';
+import 'package:gwittim/ui/briefing_data.dart';
 import 'package:gwittim/ui/profile_screen.dart';
 import 'package:gwittim/ui/saved_screen.dart';
 
@@ -29,6 +30,8 @@ SavedEntry entry(String id, {String? deadline, required DateTime savedAt, DateIn
   ),
 );
 
+final noBriefing = MemoryBriefingStore(alwaysShown: true);
+
 void main() {
   final today = DateTime(2026, 10, 17);
 
@@ -50,7 +53,9 @@ void main() {
 
   testWidgets('프로필을 입력하면 피드가 맞춤 추천으로 바뀐다', (tester) async {
     final repo = await loaded(tester, personalized: false);
-    await tester.pumpWidget(GwittimApp(repository: repo, openUrl: (_) async => true, today: today));
+    await tester.pumpWidget(
+      GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: noBriefing),
+    );
     await tester.pumpAndSettle();
     expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있어요'), findsOneWidget);
 
@@ -73,18 +78,22 @@ void main() {
     expect(profile.interestIds, ['software']);
     expect(profile.majorId, isNull); // 선택하지 않은 항목은 추정하지 않음
 
-    await tester.tap(find.text('추천'));
+    await tester.tap(find.text('홈'));
     await tester.pumpAndSettle();
     expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있어요'), findsNothing);
   });
 
   testWidgets('상세에서 저장 → 저장 탭에 마감 변경 안내 → 저장 취소', (tester) async {
     final repo = await loaded(tester);
-    await tester.pumpWidget(GwittimApp(repository: repo, openUrl: (_) async => true, today: today));
+    await tester.pumpWidget(
+      GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: noBriefing),
+    );
     await tester.pumpAndSettle();
 
     const title = '[합성 샘플] 컴퓨터공학과 프로젝트 발표회 참가자 모집';
-    await tester.tap(find.text(title));
+    await tester.ensureVisible(find.text(title).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(title).last);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('저장'));
     await tester.pumpAndSettle();

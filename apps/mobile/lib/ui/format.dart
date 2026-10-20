@@ -68,3 +68,31 @@ String? staleNotice(DateTime? lastVerifiedAt, DateTime now) {
   final ago = hours < 48 ? '$hours시간' : '${hours ~/ 24}일';
   return '마지막 확인 $ago 전이에요. 내용이 바뀌었을 수 있어요.';
 }
+
+/// 짧은 날짜: "10월 30일(금)", 시각이 확인된 경우에만 " 17:00"을 붙인다.
+String shortDate(DateInfo info) {
+  final base = shortDay(info.day);
+  return info.hasTime ? '$base ${info.time}' : base;
+}
+
+String shortDay(DateTime d) => '${d.month}월 ${d.day}일(${_weekdays[d.weekday - 1]})';
+
+String weekdayName(DateTime d) => _weekdays[d.weekday - 1];
+
+/// 모집 중이고 확정 마감이 오늘 이후면 남은 날 수. 아니면 null.
+int? daysLeft(NoticeSummary n, DateTime today) {
+  final d = n.applicationDeadline;
+  if (d == null || n.lifecycleStatus != 'open') return null;
+  final days = d.day.difference(DateTime(today.year, today.month, today.day)).inDays;
+  return days < 0 ? null : days;
+}
+
+/// 목록 칩용 짧은 조건 상태
+String eligibilityShort(String status) => switch (status) {
+  'met' => '조건 충족',
+  'not_met' => '조건 불충족',
+  _ => '조건 확인 필요',
+};
+
+/// 개인화 추천 이유 코드 → 화면 낱말 (형광펜으로 강조)
+const personalReasons = {'interest_match': '관심 분야', 'role_match': '희망 직무', 'major_match': '전공'};
