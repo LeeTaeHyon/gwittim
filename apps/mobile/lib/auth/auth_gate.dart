@@ -2,12 +2,20 @@ import 'package:flutter/material.dart';
 
 import '../data/repository.dart';
 import '../main.dart';
+import '../ui/briefing_data.dart';
 import '../ui/common.dart';
+import '../ui/theme.dart';
 import 'auth_service.dart';
 
 /// 로그인 전에는 로그인 화면, 로그인 후에는 서버 API를 쓰는 앱 본체.
 class AuthGate extends StatelessWidget {
-  const AuthGate({super.key, required this.auth, required this.repositoryFor, required this.openUrl});
+  const AuthGate({
+    super.key,
+    required this.auth,
+    required this.repositoryFor,
+    required this.openUrl,
+    this.briefingStore,
+  });
 
   final AuthService auth;
 
@@ -15,23 +23,32 @@ class AuthGate extends StatelessWidget {
   final NoticeRepository Function(Future<String?> Function() tokenProvider) repositoryFor;
   final OpenUrl openUrl;
 
+  /// 테스트에서 바꿔 끼운다. 기본은 기기 저장소.
+  final BriefingStore? briefingStore;
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<bool>(
       stream: auth.signedIn,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const MaterialApp(
-            home: Scaffold(body: Center(child: CircularProgressIndicator())),
+          // 로그인 화면과 같은 테마를 써야 테마 전환 애니메이션이 깨지지 않는다.
+          return MaterialApp(
+            theme: gwittimTheme(),
+            home: const Scaffold(body: Center(child: CircularProgressIndicator())),
           );
         }
         if (snapshot.data!) {
-          return GwittimApp(repository: repositoryFor(auth.idToken), openUrl: openUrl, onSignOut: auth.signOut);
+          return GwittimApp(
+            repository: repositoryFor(auth.idToken),
+            openUrl: openUrl,
+            onSignOut: auth.signOut,
+            briefingStore: briefingStore,
+          );
         }
         return MaterialApp(
           title: '귀띔',
-          theme: gwittimTheme(Brightness.light),
-          darkTheme: gwittimTheme(Brightness.dark),
+          theme: gwittimTheme(),
           home: SignInScreen(auth: auth),
         );
       },

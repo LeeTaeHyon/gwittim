@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gwittim/auth/auth_gate.dart';
 import 'package:gwittim/auth/auth_service.dart';
 import 'package:gwittim/data/repository.dart';
+import 'package:gwittim/ui/briefing_data.dart';
 
 class FakeAuth implements AuthService {
   FakeAuth({this.failWith});
@@ -56,6 +57,7 @@ void main() {
           return repo;
         },
         openUrl: (_) async => true,
+        briefingStore: MemoryBriefingStore(alwaysShown: true),
       ),
     );
     auth.start();
@@ -64,7 +66,7 @@ void main() {
 
     await tester.tap(find.text('Google로 로그인'));
     await tester.pumpAndSettle();
-    expect(find.text('추천'), findsOneWidget); // 하단 탭
+    expect(find.text('홈'), findsOneWidget); // 하단 탭
     expect(await captured!(), 'fake-id-token');
 
     await tester.tap(find.text('프로필'));
