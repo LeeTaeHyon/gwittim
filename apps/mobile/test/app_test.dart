@@ -1,9 +1,11 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
-import 'package:flutter/widgets.dart';
 import 'package:gwittim/main.dart';
-import 'package:gwittim/ui/feed_screen.dart';
+import 'package:gwittim/ui/briefing_data.dart';
+import 'package:gwittim/ui/home_screen.dart';
+import 'package:gwittim/ui/report_screen.dart';
 
 class FailingRepository implements NoticeRepository {
   int calls = 0;
@@ -46,8 +48,64 @@ Future<SampleNoticeRepository> loaded(WidgetTester tester, {bool personalized = 
   return repo;
 }
 
+/// 화면 밖이면 먼저 보이게 한 뒤 누른다.
+Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
+const projectTitle = '[합성 샘플] 컴퓨터공학과 프로젝트 발표회 참가자 모집';
+const firstComeTitle = '[합성 샘플] 해외 연수 프로그램 모집 (선착순)';
+
+DateInfo day(String date) => DateInfo(date: date, time: null, timezone: null, precision: 'date', evidence: date);
+
+NoticeSummary summary(String id, {String? deadline, String? note, String lifecycle = 'open'}) => NoticeSummary(
+  noticeId: id,
+  noticeVersion: 1,
+  title: id,
+  category: 'contest',
+  sourceUrl: 'https://example.invalid/$id',
+  published: null,
+  applicationDeadline: deadline == null ? null : day(deadline),
+  deadlineNote: note,
+  lifecycleStatus: lifecycle,
+);
+
+RecommendationEntry entry(
+  String id, {
+  String? deadline,
+  List<String> reasons = const [],
+  String status = 'needs_check',
+}) => RecommendationEntry(
+  recommendation: Recommendation(noticeId: id, score: null, eligibilityStatus: status, reasonCodes: reasons),
+  notice: summary(id, deadline: deadline),
+);
+
+Notice notice({
+  List<EligibilityCondition> conditions = const [],
+  List<String> unresolved = const [],
+  bool unrestricted = false,
+  bool complete = true,
+}) => Notice(
+  summary: summary('n'),
+  description: null,
+  applicationStart: null,
+  activityPeriod: null,
+  eligibility: Eligibility(
+    conditions: conditions,
+    unresolvedEvidence: unresolved,
+    extractionComplete: complete,
+    explicitlyUnrestricted: unrestricted,
+    unrestrictedEvidence: unrestricted ? '누구나' : null,
+  ),
+  lastVerifiedAt: null,
+);
+
 void main() {
   final today = DateTime(2026, 10, 17);
+  final noBriefing = MemoryBriefingStore(alwaysShown: true);
 
   group('샘플 Repository', () {
     test('맞춤 추천 목록을 읽는다', () async {
@@ -55,6 +113,7 @@ void main() {
       expect(list.personalized, isTrue);
       expect(list.items, isNotEmpty);
       expect(list.items.first.notice.noticeId, 'n_synthetic_0004');
+      expect(list.items.first.recommendation.conditionResults, isNotEmpty);
     });
 
     test('프로필이 비면 latest 모드이고 점수가 없다', () async {
@@ -75,7 +134,121 @@ void main() {
     });
   });
 
-  testWidgets('피드 → 상세 → 원문 열기', (tester) async {
+  group('브리핑 내용', () {
+    RecommendationList list(List<RecommendationEntry> items, {bool personalized = true}) =>
+        RecommendationList(mode: personalized ? 'personalized' : 'latest', items: items, generatedAt: today);
+
+    test('7일 안 가장 가까운 확정 마감, 관련 공고, 저장 후 마감 변경을 센다', () {
+      final b = buildBriefing(
+        list([
+          entry('a', deadline: '2026-10-23', reasons: ['interest_match']),
+          entry('b', deadline: '2026-10-20'),
+          entry('c', deadline: '2026-11-20', reasons: ['major_match']),
+          entry('d'), // 선착순 등 확정 마감 없음
+        ]),
+        [
+          SavedEntry(
+            saved: SavedNotice(
+              noticeId: 's',
+              savedAt: today,
+              savedNoticeVersion: 1,
+              savedDeadlineSnapshot: day('2026-10-27'),
+            ),
+            notice: summary('s', deadline: '2026-10-30'),
+          ),
+        ],
+        today,
+      );
+      expect(b.urgent?.notice.noticeId, 'b');
+      expect(b.related.map((e) => e.notice.noticeId), ['a', 'c']);
+      expect(b.changed.single.notice.noticeId, 's');
+      expect(deadlineChangeText(b.changed.single), '마감이 3일 늦춰졌어요');
+      expect(b.count, 3);
+    });
+
+    test('전할 소식이 없으면 비어 있다 (latest 모드는 관련 공고를 세지 않음)', () {
+      final b = buildBriefing(
+        list([
+          entry('a', deadline: '2026-11-20', reasons: ['interest_match']),
+          entry('b'),
+        ], personalized: false),
+        const [],
+        today,
+      );
+      expect(b.isEmpty, isTrue);
+    });
+
+    test('마감된·삭제된 저장 공고의 마감 변경은 알리지 않는다', () {
+      final b = buildBriefing(list(const []), [
+        SavedEntry(
+          saved: SavedNotice(
+            noticeId: 's',
+            savedAt: today,
+            savedNoticeVersion: 1,
+            savedDeadlineSnapshot: day('2026-10-10'),
+          ),
+          notice: summary('s', deadline: '2026-10-12', lifecycle: 'closed'),
+        ),
+      ], today);
+      expect(b.isEmpty, isTrue);
+    });
+  });
+
+  group('지원 전 체크리스트', () {
+    String? none(String _) => null;
+
+    test('조건을 찾지 못하면 제한 없음으로 쓰지 않는다', () {
+      final rows = checklistRows(notice(), null, none);
+      expect(rows.single.label, '공고에서 지원 조건을 찾지 못했어요');
+      expect(rows.single.state, CheckState.info);
+    });
+
+    test('명시적 제한 없음만 누구나', () {
+      expect(checklistRows(notice(unrestricted: true), null, none).single.label, '누구나 지원할 수 있어요');
+    });
+
+    test('성적 조건은 직접 확인하고 성적을 받지 않는다고 안내', () {
+      final row = checklistRows(notice(unresolved: ['직전 학기 평점 3.0 이상']), null, none).single;
+      expect(row.state, CheckState.check);
+      expect(row.note, contains('성적을 받지 않아요'));
+    });
+
+    test('서버 판정을 그대로 쓰고 프로필 값 이름을 붙인다', () {
+      final rec = Recommendation(
+        noticeId: 'n',
+        score: 50,
+        eligibilityStatus: 'needs_check',
+        reasonCodes: const [],
+        conditionResults: const [
+          ConditionResult(field: 'major_id', status: 'met', evidence: '컴퓨터공학과'),
+          ConditionResult(field: 'grade', status: 'unknown', evidence: '2~3학년', unknownReason: 'profile_missing'),
+        ],
+      );
+      final rows = checklistRows(
+        notice(
+          conditions: const [EligibilityCondition(field: 'major_id', evidence: '컴퓨터공학과')],
+        ),
+        rec,
+        (f) => f == 'major_id' ? '컴퓨터공학과' : null,
+      );
+      expect(rows.map((r) => r.label), ['학과 · 컴퓨터공학과', '학년 · 프로필에 없어요']);
+      expect(rows.last.state, CheckState.check);
+    });
+
+    test('추천 이유 낱말', () {
+      final rec = Recommendation(
+        noticeId: 'n',
+        score: 90,
+        eligibilityStatus: 'met',
+        reasonCodes: const ['interest_match', 'major_match', 'deadline_timing', 'eligibility_met'],
+      );
+      final (words, soon) = reasonParts(rec);
+      expect(words, ['관심 분야', '전공']);
+      expect(soon, isTrue);
+    });
+  });
+
+  testWidgets('홈 → 공고 리포트 → 학교 공지 열기', (tester) async {
     final opened = <Uri>[];
     await tester.pumpWidget(
       GwittimApp(
@@ -85,59 +258,109 @@ void main() {
           return true;
         },
         today: today,
+        briefingStore: noBriefing,
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('[합성 샘플] 컴퓨터공학과 프로젝트 발표회 참가자 모집'), findsOneWidget);
-    expect(find.text('지원 조건 충족'), findsWidgets);
+    expect(find.text('다가오는 마감'), findsOneWidget);
+    expect(find.text(projectTitle), findsNWidgets(2)); // 다가오는 마감 + 나에게 맞는 공고
     expect(find.text('D-13'), findsOneWidget); // 마감 10/30
+    expect(find.text('오늘 챙길 소식 '), findsNothing); // 형광펜 조각은 별도 위젯
+    expect(find.textContaining('마감일이 정해지지 않은 공고 1개'), findsOneWidget);
 
-    await tester.tap(find.text('[합성 샘플] 컴퓨터공학과 프로젝트 발표회 참가자 모집'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text(projectTitle).last);
 
-    expect(find.text('공고 상세'), findsOneWidget);
-    expect(find.text('2026년 10월 30일 (금) 17:00'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('• 전공과 관련된 공고예요'), 200);
-    expect(find.text('• 전공과 관련된 공고예요'), findsOneWidget);
+    expect(find.text('지원 전 체크리스트'), findsOneWidget);
+    expect(find.text('조건 충족'), findsOneWidget);
+    expect(find.text('학과 · 컴퓨터공학과'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('이래서 추천했어요'), 200);
+    await tester.scrollUntilVisible(find.text('10월 30일(금) 17:00 · 신청 마감'), 200);
+    expect(find.text('13일 남았어요'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('원문 보기'), 200);
-    await tester.tap(find.text('원문 보기'));
+    await tester.tap(find.text('학교 공지에서 보기'));
     await tester.pumpAndSettle();
     expect(opened.single.toString(), contains('mjc.ac.kr/bbs/data/view.do'));
   });
 
-  testWidgets('날짜만 있는 마감은 시각 없이, 조건 미발견·불완전 추출은 안내', (tester) async {
-    await tester.pumpWidget(GwittimApp(repository: await loaded(tester), openUrl: (_) async => true, today: today));
-    await tester.pumpAndSettle();
-
-    await tester.scrollUntilVisible(
-      find.text('[합성 샘플] 해외 연수 프로그램 모집 (선착순)'),
-      200,
-      scrollable: find.descendant(of: find.byType(FeedScreen), matching: find.byType(Scrollable)).first,
+  testWidgets('선착순 공고: 마감 칩 없이 원문 설명, 리포트는 직접 확인과 첨부 안내', (tester) async {
+    await tester.pumpWidget(
+      GwittimApp(repository: await loaded(tester), openUrl: (_) async => true, today: today, briefingStore: noBriefing),
     );
-    expect(find.text('선착순 마감 (정원 도달 시 조기 종료)'), findsOneWidget);
-    await tester.ensureVisible(find.text('[합성 샘플] 해외 연수 프로그램 모집 (선착순)'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('[합성 샘플] 해외 연수 프로그램 모집 (선착순)'));
     await tester.pumpAndSettle();
 
-    expect(find.text('공고에서 지원 조건을 찾지 못했어요. 원문을 확인해 주세요.'), findsOneWidget);
+    final home = find.descendant(of: find.byType(HomeScreen), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.text(firstComeTitle), 200, scrollable: home);
+    expect(find.text('선착순 마감 (정원 도달 시 조기 종료)'), findsOneWidget);
+    await tapVisible(tester, find.text(firstComeTitle));
+
+    expect(find.text('확인이 필요해요'), findsOneWidget);
+    expect(find.text('직접 확인'), findsOneWidget);
+    expect(find.text('학교 공지에서 확인하기'), findsOneWidget);
     expect(find.textContaining('첨부파일·이미지에 조건이 더 있을 수 있어요'), findsOneWidget);
     expect(find.textContaining('23:59'), findsNothing);
   });
 
-  testWidgets('프로필이 비면 최신순 안내를 보여준다', (tester) async {
+  testWidgets('조건 미발견 공고는 제한 없음으로 보이지 않는다', (tester) async {
+    final repo = await loaded(tester);
     await tester.pumpWidget(
-      GwittimApp(repository: await loaded(tester, personalized: false), openUrl: (_) async => true, today: today),
+      GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: noBriefing),
     );
     await tester.pumpAndSettle();
+    final home = find.descendant(of: find.byType(HomeScreen), matching: find.byType(Scrollable)).first;
+    const title = '[합성 샘플] 학습성과 글쓰기 공모전';
+    await tester.scrollUntilVisible(find.text(title), 200, scrollable: home);
+    await tapVisible(tester, find.text(title));
+    expect(find.text('누구나 지원할 수 있어요'), findsOneWidget); // 이 샘플은 명시적 제한 없음
+  });
+
+  testWidgets('하루 첫 실행에 브리핑, 같은 날 다시 열면 안 뜬다', (tester) async {
+    final store = MemoryBriefingStore();
+    final repo = await loaded(tester);
+    await tester.pumpWidget(
+      GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: store),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('오늘 챙길 소식이'), findsOneWidget);
+    expect(find.text('맞춤 공고'), findsOneWidget);
+    expect(find.textContaining('합격 가능성을 뜻하지 않아요'), findsOneWidget);
+    await tester.tap(find.text('확인했어요'));
+    await tester.pumpAndSettle();
+    expect(find.text('다가오는 마감'), findsOneWidget);
+    expect(find.text('오늘의 귀띔'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(
+      GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: store),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('오늘 챙길 소식이'), findsNothing);
+  });
+
+  testWidgets('프로필이 비면 최신순 안내와 프로필 입력 버튼', (tester) async {
+    await tester.pumpWidget(
+      GwittimApp(
+        repository: await loaded(tester, personalized: false),
+        openUrl: (_) async => true,
+        today: today,
+        briefingStore: MemoryBriefingStore(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('오늘 챙길 소식이'), findsNothing); // 전할 소식이 없으면 브리핑 없음
     expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있어요'), findsOneWidget);
+    expect(find.text('최신 공고'), findsOneWidget);
+    await tester.tap(find.text('프로필 입력'));
+    await tester.pumpAndSettle();
+    expect(find.text('내 프로필'), findsOneWidget);
   });
 
   testWidgets('오류 시 상세 없이 안내와 재시도', (tester) async {
     final repo = FailingRepository();
-    await tester.pumpWidget(GwittimApp(repository: repo, openUrl: (_) async => true, today: today));
+    await tester.pumpWidget(
+      GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: noBriefing),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('잠시 후 다시 시도해 주세요.'), findsOneWidget);

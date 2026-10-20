@@ -1,0 +1,12 @@
+{
+ "dictionary": "universities",
+ "status": "draft",
+ "updated": "2026-10-17",
+ "source": "P0 대상 학교 (SPEC §2). 2026-10-17",
+ "items": [
+  {
+   "id": "mjc",
+   "name_ko": "명지전문대학"
+  }
+ ]
+}
