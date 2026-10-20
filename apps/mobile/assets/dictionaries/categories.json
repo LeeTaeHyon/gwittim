@@ -49,6 +49,10 @@
    "name_ko": "학사 안내"
   },
   {
+   "id": "admin_notice",
+   "name_ko": "행정·교직원 안내"
+  },
+  {
    "id": "other",
    "name_ko": "기타"
   }

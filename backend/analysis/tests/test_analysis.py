@@ -87,6 +87,38 @@ def test_major_condition_and_tags():
     assert "software" in fields["interest_tags"] and "software_developer" in fields["related_roles"]
 
 
+def test_department_names_are_not_tags():
+    # 실제 공지: 담당 부서 '취·창업팀', 'AI·IR센터'가 창업·AI 공고로 잡히던 문제
+    fields = RuleBasedAnalyzer().analyze(
+        raw_notice("문의: 진로취·창업팀\n설문 주관: AI·IR센터", title="2026-2학기 취업 온라인 콘텐츠 수강 안내"), MJC
+    )
+    assert "startup" not in fields["interest_tags"] and "ai_data" not in fields["interest_tags"]
+    assert "entrepreneur" not in fields["related_roles"]
+
+
+def test_topic_keywords_give_roles_and_majors():
+    fields = RuleBasedAnalyzer().analyze(raw_notice("일본어·중국어(HSK) 회화반 모집, 해커톤 참가팀 모집"), MJC)
+    assert {"mjc.japanese", "mjc.chinese_business", "mjc.computer_engineering"} <= set(fields["related_majors"])
+    assert "software_developer" in fields["related_roles"]
+
+
+def test_lookalike_words_are_not_tags():
+    fields = RuleBasedAnalyzer().analyze(
+        raw_notice("창업보육센터 입주기업 모집\n대상: 외국인 유학생 포함\n항공편 개별 예약"), MJC
+    )
+    assert "education_welfare" not in fields["interest_tags"] and "global_language" not in fields["interest_tags"]
+    assert not {"mjc.early_childhood_education", "mjc.aviation_service"} & set(fields["related_majors"])
+
+
+def test_staff_notice_is_admin_without_tags():
+    fields = RuleBasedAnalyzer().analyze(
+        raw_notice("전임교원 소프트웨어 분야 공개채용, 원서접수기간: 2026.10.26.(월) ~ 2026.10.30.(금)", title="[교원초빙] 2027.03.01.자 전임교원 교수초빙"),
+        MJC,
+    )
+    assert fields["category"] == "admin_notice"
+    assert fields["interest_tags"] == [] and fields["related_roles"] == [] and fields["related_majors"] == []
+
+
 def test_build_notice_is_schema_valid_and_published():
     record, _ = record_for(raw_notice(CONTEST))
     notice, issues = build_notice(record, today=TODAY)
