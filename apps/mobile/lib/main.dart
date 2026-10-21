@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'auth/auth_gate.dart';
@@ -21,8 +22,11 @@ const _apiBase = String.fromEnvironment('GWITTIM_API_BASE');
 const _devToken = String.fromEnvironment('GWITTIM_DEV_TOKEN');
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // 화면 설정을 먼저 읽어서 첫 화면부터 고른 테마로 그린다 (D-010).
+  final theme = await ThemeController.load(PrefsThemeStore());
   if (_apiBase.isEmpty) {
-    runApp(GwittimApp(repository: SampleNoticeRepository(), openUrl: _openExternal));
+    runApp(GwittimApp(repository: SampleNoticeRepository(), openUrl: _openExternal, themeController: theme));
     return;
   }
   final baseUrl = Uri.parse(_apiBase.endsWith('/') ? _apiBase : '$_apiBase/');
@@ -31,11 +35,11 @@ Future<void> main() async {
       GwittimApp(
         repository: ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: () async => _devToken),
         openUrl: _openExternal,
+        themeController: theme,
       ),
     );
     return;
   }
-  WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   await FirebaseAuthService.initializeGoogle();
   runApp(
@@ -43,13 +47,37 @@ Future<void> main() async {
       auth: FirebaseAuthService(),
       repositoryFor: (tokenProvider) => ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: tokenProvider),
       openUrl: _openExternal,
+      themeController: theme,
     ),
   );
 }
 
 Future<bool> _openExternal(Uri url) => launchUrl(url, mode: LaunchMode.externalApplication);
 
-class GwittimApp extends StatelessWidget {
+/// 라이트·다크 테마와 고른 화면 설정(themeMode)을 연결한 MaterialApp.
+class GwMaterialApp extends StatelessWidget {
+  const GwMaterialApp({super.key, required this.themeController, required this.home});
+
+  final ThemeController themeController;
+  final Widget home;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder(
+      valueListenable: themeController,
+      builder: (context, mode, child) => MaterialApp(
+        title: '귀띔',
+        theme: gwittimTheme(),
+        darkTheme: gwittimTheme(Brightness.dark),
+        themeMode: mode,
+        home: child,
+      ),
+      child: home,
+    );
+  }
+}
+
+class GwittimApp extends StatefulWidget {
   const GwittimApp({
     super.key,
     required this.repository,
@@ -57,6 +85,7 @@ class GwittimApp extends StatelessWidget {
     this.today,
     this.onSignOut,
     this.briefingStore,
+    this.themeController,
   });
 
   final NoticeRepository repository;
@@ -69,17 +98,36 @@ class GwittimApp extends StatelessWidget {
   /// 하루 첫 실행 기록. 기본은 기기 저장소 (D-009).
   final BriefingStore? briefingStore;
 
+  /// 화면(테마) 설정. 없으면 시스템 설정을 따르고 이번 실행에만 기억한다.
+  final ThemeController? themeController;
+
+  @override
+  State<GwittimApp> createState() => _GwittimAppState();
+}
+
+class _GwittimAppState extends State<GwittimApp> {
+  ThemeController? _ownTheme;
+  late final BriefingStore _briefingStore = widget.briefingStore ?? PrefsBriefingStore();
+
+  ThemeController get _theme => widget.themeController ?? (_ownTheme ??= ThemeController());
+
+  @override
+  void dispose() {
+    _ownTheme?.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: '귀띔',
-      theme: gwittimTheme(),
+    return GwMaterialApp(
+      themeController: _theme,
       home: HomeShell(
-        repository: repository,
-        openUrl: openUrl,
-        today: today,
-        onSignOut: onSignOut,
-        briefingStore: briefingStore ?? PrefsBriefingStore(),
+        repository: widget.repository,
+        openUrl: widget.openUrl,
+        today: widget.today,
+        onSignOut: widget.onSignOut,
+        briefingStore: _briefingStore,
+        themeController: _theme,
       ),
     );
   }
@@ -91,6 +139,7 @@ class HomeShell extends StatefulWidget {
     required this.repository,
     required this.openUrl,
     required this.briefingStore,
+    required this.themeController,
     this.today,
     this.onSignOut,
   });
@@ -99,6 +148,7 @@ class HomeShell extends StatefulWidget {
   final NoticeRepository repository;
   final OpenUrl openUrl;
   final BriefingStore briefingStore;
+  final ThemeController themeController;
   final DateTime? today;
 
   @override
@@ -106,8 +156,6 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  static const _titles = ['', '저장한 공고', '내 프로필'];
-
   final _homeKey = GlobalKey<HomeScreenState>();
   final _savedKey = GlobalKey<SavedScreenState>();
   int _tab = 0;
@@ -119,42 +167,42 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: _tab == 0
-          ? null
-          : AppBar(
-              title: Text(_titles[_tab]),
-              actions: [
-                if (_tab == 2 && widget.onSignOut != null)
-                  IconButton(tooltip: '로그아웃', icon: const Icon(Icons.logout), onPressed: widget.onSignOut),
-              ],
-            ),
-      body: SafeArea(
-        bottom: false,
-        child: IndexedStack(
-          index: _tab,
-          children: [
-            HomeScreen(
-              key: _homeKey,
-              repository: widget.repository,
-              openUrl: widget.openUrl,
-              briefingStore: widget.briefingStore,
-              today: widget.today,
-              onOpenProfile: () => _select(2),
-            ),
-            SavedScreen(key: _savedKey, repository: widget.repository, openUrl: widget.openUrl, today: widget.today),
-            ProfileScreen(repository: widget.repository, onSaved: () => _homeKey.currentState?.reload()),
+    // 탭 화면에는 앱 바가 없어서 상태 표시줄 아이콘 색을 직접 맞춘다.
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: statusBarStyle(Theme.of(context).brightness),
+      child: Scaffold(
+        body: SafeArea(
+          bottom: false,
+          child: IndexedStack(
+            index: _tab,
+            children: [
+              HomeScreen(
+                key: _homeKey,
+                repository: widget.repository,
+                openUrl: widget.openUrl,
+                briefingStore: widget.briefingStore,
+                today: widget.today,
+                onOpenProfile: () => _select(2),
+              ),
+              SavedScreen(key: _savedKey, repository: widget.repository, openUrl: widget.openUrl, today: widget.today),
+              ProfileScreen(
+                repository: widget.repository,
+                themeController: widget.themeController,
+                onSaved: () => _homeKey.currentState?.reload(),
+                onSignOut: widget.onSignOut,
+              ),
+            ],
+          ),
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: _select,
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: '홈'),
+            NavigationDestination(icon: Icon(Icons.bookmark_border), selectedIcon: Icon(Icons.bookmark), label: '저장'),
+            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '프로필'),
           ],
         ),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: _select,
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: '홈'),
-          NavigationDestination(icon: Icon(Icons.bookmark_border), selectedIcon: Icon(Icons.bookmark), label: '저장'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '프로필'),
-        ],
       ),
     );
   }

@@ -19,7 +19,8 @@ class BriefingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const headline = TextStyle(fontSize: 28, height: 1.42, fontWeight: FontWeight.w700, color: Gw.ink);
+    final c = context.gw;
+    final headline = TextStyle(fontSize: 28, height: 1.42, fontWeight: FontWeight.w700, color: c.ink);
     final sections = <Widget>[
       if (briefing.urgent case final u?)
         _UrgentBubble(entry: u, today: today, onOpen: () => _open(context, u.notice, u.recommendation)),
@@ -54,12 +55,12 @@ class BriefingScreen extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         '${today.month}월 ${today.day}일 ${weekdayName(today)}요일',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Gw.muted),
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.muted),
                       ),
                     ],
                   ),
                   const SizedBox(height: 14),
-                  const Text('오늘 챙길 소식이', style: headline),
+                  Text('오늘 챙길 소식이', style: headline),
                   Text.rich(
                     TextSpan(
                       style: headline,
@@ -89,9 +90,9 @@ class BriefingScreen extends StatelessWidget {
             ),
             const SizedBox(height: 14),
           ],
-          const Padding(
-            padding: EdgeInsets.fromLTRB(12, 6, 12, 0),
-            child: Text('추천 순서는 관심사·희망 직무·전공·마감 시기로 정해요. 합격 가능성을 뜻하지 않아요.', style: captionStyle),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+            child: Text('추천 순서는 관심사·희망 직무·전공·마감 시기로 정해요. 합격 가능성을 뜻하지 않아요.', style: captionStyle(context)),
           ),
         ],
       ),
@@ -134,8 +135,8 @@ class _Rise extends StatelessWidget {
   }
 }
 
-const _kicker = TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Gw.navy);
-const _title = TextStyle(fontSize: 21, height: 1.45, fontWeight: FontWeight.w700, color: Gw.ink);
+TextStyle _kicker(GwColors c) => TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.accent);
+TextStyle _title(GwColors c) => TextStyle(fontSize: 21, height: 1.45, fontWeight: FontWeight.w700, color: c.ink);
 
 class _UrgentBubble extends StatelessWidget {
   const _UrgentBubble({required this.entry, required this.today, required this.onOpen});
@@ -150,25 +151,26 @@ class _UrgentBubble extends StatelessWidget {
     final left = daysLeft(n, today)!;
     final start = DateTime(today.year, today.month, today.day);
     final days = [for (var i = 0; i < 7; i++) start.add(Duration(days: i))];
+    final c = context.gw;
     return GwCard(
       bubble: true,
       padding: const EdgeInsets.all(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('마감 임박', style: _kicker.copyWith(color: Gw.urgent)),
+          Text('마감 임박', style: _kicker(c).copyWith(color: c.urgent)),
           const SizedBox(height: 6),
-          Text(n.title, style: _title, maxLines: 3, overflow: TextOverflow.ellipsis),
-          Text(left == 0 ? '오늘 마감돼요' : '$left일 뒤 마감돼요', style: _title.copyWith(color: Gw.urgent)),
+          Text(n.title, style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(left == 0 ? '오늘 마감돼요' : '$left일 뒤 마감돼요', style: _title(c).copyWith(color: c.urgent)),
           const SizedBox(height: 18),
-          // 오늘부터 7일: 오늘(네이비)과 마감일(빨강)을 표시한다.
+          // 오늘부터 7일: 오늘(라이트 네이비, 다크 라임)과 마감일(빨강)을 표시한다.
           Row(
             children: [
               for (final d in days)
                 Expanded(
                   child: Column(
                     children: [
-                      Text(weekdayName(d), style: const TextStyle(fontSize: 12, color: Gw.muted)),
+                      Text(weekdayName(d), style: TextStyle(fontSize: 12, color: c.muted)),
                       const SizedBox(height: 6),
                       Container(
                         width: 34,
@@ -177,15 +179,17 @@ class _UrgentBubble extends StatelessWidget {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: d == start
-                              ? Gw.navy
-                              : (d.difference(start).inDays == left ? Gw.urgent : Colors.transparent),
+                              ? c.point
+                              : (d.difference(start).inDays == left ? c.urgentFill : null),
                         ),
                         child: Text(
                           '${d.day}',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
-                            color: d == start || d.difference(start).inDays == left ? Colors.white : Gw.muted,
+                            color: d == start
+                                ? c.onPoint
+                                : (d.difference(start).inDays == left ? c.onUrgentFill : c.muted),
                           ),
                         ),
                       ),
@@ -195,7 +199,7 @@ class _UrgentBubble extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: d == start ? Gw.navy : Gw.urgent,
+                          color: d == start ? c.accent : c.urgent,
                         ),
                       ),
                     ],
@@ -205,12 +209,12 @@ class _UrgentBubble extends StatelessWidget {
           ),
           if (entry.recommendation.eligibilityStatus == 'needs_check') ...[
             const SizedBox(height: 16),
-            const Row(
+            Row(
               children: [
-                Icon(Icons.help_outline, size: 18, color: Gw.check),
-                SizedBox(width: 8),
+                Icon(Icons.help_outline, size: 18, color: c.check),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Text('지원 조건 중 직접 확인할 것이 있어요', style: TextStyle(fontSize: 14, color: Gw.sub)),
+                  child: Text('지원 조건 중 직접 확인할 것이 있어요', style: TextStyle(fontSize: 14, color: c.sub)),
                 ),
               ],
             ),
@@ -232,20 +236,21 @@ class _RelatedBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.gw;
     return GwCard(
       bubble: true,
       padding: const EdgeInsets.all(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('맞춤 공고', style: _kicker),
+          Text('맞춤 공고', style: _kicker(c)),
           const SizedBox(height: 6),
           Text.rich(
             TextSpan(
-              style: _title,
+              style: _title(c),
               children: [
                 const TextSpan(text: '관심 분야·직무·전공과\n관련된 공고가 '),
-                markSpan('${entries.length}개', _title),
+                markSpan('${entries.length}개', _title(c)),
                 const TextSpan(text: ' 있어요'),
               ],
             ),
@@ -264,12 +269,12 @@ class _RelatedBubble extends StatelessWidget {
                       height: 26,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       alignment: Alignment.center,
-                      decoration: BoxDecoration(color: Gw.navySoft, borderRadius: BorderRadius.circular(13)),
+                      decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(13)),
                       child: Text(switch (daysLeft(e.notice, today)) {
                         null => e.notice.deadlineNote == null ? '마감 미상' : '선착순',
                         0 => '오늘',
                         final d => 'D-$d',
-                      }, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Gw.navy)),
+                      }, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.onChip)),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -277,7 +282,7 @@ class _RelatedBubble extends StatelessWidget {
                         e.notice.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Gw.body),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body),
                       ),
                     ),
                   ],
@@ -287,7 +292,7 @@ class _RelatedBubble extends StatelessWidget {
           if (entries.length > 3)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text('외 ${entries.length - 3}개는 홈에서 볼 수 있어요', style: captionStyle),
+              child: Text('외 ${entries.length - 3}개는 홈에서 볼 수 있어요', style: captionStyle(context)),
             ),
         ],
       ),
@@ -305,15 +310,16 @@ class _ChangedBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final before = entry.saved.savedDeadlineSnapshot;
     final now = entry.notice.applicationDeadline;
+    final c = context.gw;
     return GwCard(
       bubble: true,
       padding: const EdgeInsets.all(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('저장한 공고', style: _kicker),
+          Text('저장한 공고', style: _kicker(c)),
           const SizedBox(height: 6),
-          Text('${entry.notice.title}\n${deadlineChangeText(entry)}', style: _title),
+          Text('${entry.notice.title}\n${deadlineChangeText(entry)}', style: _title(c)),
           const SizedBox(height: 16),
           Wrap(
             spacing: 8,
@@ -324,32 +330,35 @@ class _ChangedBubble extends StatelessWidget {
                 Container(
                   height: 32,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(color: Gw.bg, borderRadius: BorderRadius.circular(16)),
+                  decoration: BoxDecoration(color: c.neutral, borderRadius: BorderRadius.circular(16)),
                   child: Center(
                     widthFactor: 1,
                     child: Text(
                       shortDate(before),
-                      style: const TextStyle(fontSize: 14, color: Gw.muted, decoration: TextDecoration.lineThrough),
+                      style: TextStyle(fontSize: 14, color: c.muted, decoration: TextDecoration.lineThrough),
                     ),
                   ),
                 ),
-              if (before != null && now != null) const Icon(Icons.arrow_forward, size: 18, color: Gw.faint),
+              if (before != null && now != null) Icon(Icons.arrow_forward, size: 18, color: c.faint),
               if (now != null)
                 Container(
                   height: 32,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(color: Gw.navy, borderRadius: BorderRadius.circular(16)),
+                  decoration: BoxDecoration(color: c.point, borderRadius: BorderRadius.circular(16)),
                   child: Center(
                     widthFactor: 1,
                     child: Text(
                       shortDate(now),
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.onPoint),
                     ),
                   ),
                 ),
             ],
           ),
-          if (more > 0) ...[const SizedBox(height: 10), Text('다른 저장 공고 $more개도 마감이 바뀌었어요', style: captionStyle)],
+          if (more > 0) ...[
+            const SizedBox(height: 10),
+            Text('다른 저장 공고 $more개도 마감이 바뀌었어요', style: captionStyle(context)),
+          ],
         ],
       ),
     );

@@ -61,16 +61,18 @@ void main() {
 
     await tester.tap(find.text('프로필'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('소프트웨어 개발'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('소프트웨어 개발'));
     await tester.pump();
     await tester.scrollUntilVisible(
-      find.text('프로필 저장'),
+      find.text('저장하기'),
       200,
       scrollable: find.descendant(of: find.byType(ProfileScreen), matching: find.byType(Scrollable)).first,
     );
-    await tester.ensureVisible(find.text('프로필 저장'));
+    await tester.ensureVisible(find.text('저장하기'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('프로필 저장'));
+    await tester.tap(find.text('저장하기'));
     await tester.pumpAndSettle();
 
     final profile = await repo.getProfile();
@@ -83,7 +85,7 @@ void main() {
     expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있어요'), findsNothing);
   });
 
-  testWidgets('상세에서 저장 → 저장 탭에 마감 변경 안내 → 저장 취소', (tester) async {
+  testWidgets('상세에서 저장 → 저장 탭에 마감 변경 안내 → 저장 취소 → 다시 열면 빈 목록', (tester) async {
     final repo = await loaded(tester);
     await tester.pumpWidget(
       GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: noBriefing),
@@ -114,10 +116,24 @@ void main() {
     await tester.tap(find.text('저장'));
     await tester.pumpAndSettle();
     expect(find.text(title), findsOneWidget);
-    expect(find.text('D-13'), findsOneWidget);
-    expect(find.textContaining('마감이 바뀌었어요 (저장 당시: 2026년 10월 28일 (수) 17:00)'), findsOneWidget);
+    expect(find.text('1개'), findsOneWidget);
+    expect(find.text('그 이후'), findsOneWidget); // 10/17(토) 기준 10/30은 다다음 주
+    expect(find.text('행사 · 17:00 마감 · D-13'), findsOneWidget);
+    expect(find.text('마감일이 바뀐 공고가 1개 있어요'), findsOneWidget);
+    expect(find.text('$title · 10월 28일(수) 17:00 → 10월 30일(금) 17:00'), findsOneWidget);
+    expect(find.text('마감일 바뀜'), findsOneWidget);
+    expect(find.text('저장할 때는 10월 28일(수) 17:00'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('저장 취소'));
+    Finder inSaved(Finder f) => find.descendant(of: find.byType(SavedScreen), matching: f);
+    await tester.tap(inSaved(find.byTooltip('저장 취소')));
+    await tester.pumpAndSettle();
+    expect(find.text('저장을 취소했어요.'), findsOneWidget);
+    expect(inSaved(find.byTooltip('저장')), findsOneWidget); // 다시 켤 수 있게 남겨 둔다
+    expect(find.text('0개'), findsOneWidget);
+
+    await tester.tap(find.text('홈'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('저장'));
     await tester.pumpAndSettle();
     expect(find.textContaining('저장한 공고가 없어요'), findsOneWidget);
   });
