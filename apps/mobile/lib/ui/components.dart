@@ -4,16 +4,26 @@ import '../data/models.dart';
 import 'format.dart';
 import 'theme.dart';
 
+/// 칩 색 조합. 색은 테마 토큰에서 고른다.
+enum PillTone { chip, neutral, point, urgent, check }
+
 /// 둥근 칩 (분류·상태·D-day)
 class Pill extends StatelessWidget {
-  const Pill(this.label, {super.key, this.background = Gw.navySoft, this.foreground = Gw.navy});
+  const Pill(this.label, {super.key, this.tone = PillTone.chip});
 
   final String label;
-  final Color background;
-  final Color foreground;
+  final PillTone tone;
 
   @override
   Widget build(BuildContext context) {
+    final c = context.gw;
+    final (background, foreground) = switch (tone) {
+      PillTone.chip => (c.chip, c.onChip),
+      PillTone.neutral => (c.neutral, c.sub),
+      PillTone.point => (c.point, c.onPoint),
+      PillTone.urgent => (c.urgentSoft, c.urgent),
+      PillTone.check => (c.checkSoft, c.check),
+    };
     return Container(
       height: 26,
       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -34,13 +44,13 @@ Widget? ddayPill(NoticeSummary n, DateTime today) {
   final left = daysLeft(n, today);
   if (left == null) return null;
   final label = left == 0 ? '오늘 마감' : 'D-$left';
-  return left <= 7 ? Pill(label, background: Gw.urgentSoft, foreground: Gw.urgent) : Pill(label);
+  return Pill(label, tone: left <= 7 ? PillTone.urgent : PillTone.chip);
 }
 
 /// 목록의 조건 상태 칩. 확인 필요는 대부분의 공고에 붙으므로 회색으로 차분하게 (D-009).
 Widget eligibilityPill(String status) => switch (status) {
   'met' => Pill(eligibilityShort(status)),
-  _ => Pill(eligibilityShort(status), background: Gw.bg, foreground: Gw.sub),
+  _ => Pill(eligibilityShort(status), tone: PillTone.neutral),
 };
 
 /// '귀띔' 말풍선 배지
@@ -51,12 +61,13 @@ class GwBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.gw;
     final r = Radius.circular(small ? 11 : 14);
     return Container(
       height: small ? 22 : 28,
       padding: EdgeInsets.symmetric(horizontal: small ? 8 : 11),
       decoration: BoxDecoration(
-        color: Gw.lime,
+        color: c.lime,
         borderRadius: BorderRadius.only(
           topLeft: r,
           topRight: r,
@@ -68,7 +79,7 @@ class GwBadge extends StatelessWidget {
         widthFactor: 1,
         child: Text(
           '귀띔',
-          style: TextStyle(fontSize: small ? 12 : 15, fontWeight: FontWeight.w700, color: Gw.limeInk),
+          style: TextStyle(fontSize: small ? 12 : 15, fontWeight: FontWeight.w700, color: c.limeInk),
         ),
       ),
     );
@@ -76,24 +87,26 @@ class GwBadge extends StatelessWidget {
 }
 
 /// 형광펜: 글자 아래쪽 58%만 칠한다. animate면 왼쪽에서 오른쪽으로 그어진다(애니메이션 줄이기 설정을 따름).
+/// 색을 주지 않으면 테마의 형광펜 색(다크는 투명한 라임)을 쓴다.
 class Marker extends StatelessWidget {
   const Marker(
     this.text, {
     super.key,
     this.style,
-    this.color = Gw.lime,
+    this.color,
     this.animate = false,
     this.delay = Duration.zero,
   });
 
   final String text;
   final TextStyle? style;
-  final Color color;
+  final Color? color;
   final bool animate;
   final Duration delay;
 
   @override
   Widget build(BuildContext context) {
+    final color = this.color ?? context.gw.marker;
     final child = Text(text, style: style);
     if (!animate || MediaQuery.maybeDisableAnimationsOf(context) == true) {
       return CustomPaint(painter: _MarkerPainter(color, 1), child: child);
@@ -126,13 +139,13 @@ class _MarkerPainter extends CustomPainter {
 }
 
 /// 문장 속 형광펜 조각. 짧은 낱말에만 쓴다 (조각 안에서는 줄바꿈되지 않음).
-InlineSpan markSpan(String text, TextStyle style, {Color color = Gw.lime}) => WidgetSpan(
+InlineSpan markSpan(String text, TextStyle style, {Color? color}) => WidgetSpan(
   alignment: PlaceholderAlignment.baseline,
   baseline: TextBaseline.alphabetic,
   child: Marker(text, style: style, color: color),
 );
 
-/// 흰 카드. bubble이면 말풍선 모양.
+/// 카드. bubble이면 말풍선 모양.
 class GwCard extends StatelessWidget {
   const GwCard({
     super.key,
@@ -151,12 +164,75 @@ class GwCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = bubble ? Gw.bubble : BorderRadius.circular(20);
     return Material(
-      color: Colors.white,
+      color: context.gw.card,
       borderRadius: radius,
       child: InkWell(
         borderRadius: radius,
         onTap: onTap,
         child: Padding(padding: padding, child: child),
+      ),
+    );
+  }
+}
+
+/// 화면 위쪽의 연두 말풍선 (귀띔 배지 + 한 줄 + 보조 문장). 저장·프로필 화면에서 쓴다.
+class TipBubble extends StatelessWidget {
+  const TipBubble({super.key, required this.title, this.detail, this.onTap});
+
+  final String title;
+  final String? detail;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    const radius = BorderRadius.only(
+      topLeft: Radius.circular(22),
+      topRight: Radius.circular(22),
+      bottomRight: Radius.circular(22),
+      bottomLeft: Radius.circular(6),
+    );
+    return Material(
+      color: c.summary,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const GwBadge(small: true),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: TextStyle(fontSize: 15, height: 1.4, fontWeight: FontWeight.w600, color: c.body),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (detail != null) ...[
+                      const SizedBox(height: 6),
+                      Text(detail!, style: TextStyle(fontSize: 13, height: 1.55, color: c.sub)),
+                    ],
+                  ],
+                ),
+              ),
+              if (onTap != null) ...[
+                const SizedBox(width: 8),
+                Icon(Icons.chevron_right, size: 20, color: c.muted),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -171,11 +247,12 @@ class SoftButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.gw;
     return TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(
-        backgroundColor: Gw.navySoft,
-        foregroundColor: Gw.navy,
+        backgroundColor: c.chip,
+        foregroundColor: c.onChip,
         minimumSize: const Size(0, 44),
         padding: const EdgeInsets.symmetric(horizontal: 16),
         shape: const StadiumBorder(),
@@ -203,7 +280,7 @@ class SectionTitle extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: Gw.ink, letterSpacing: -0.5),
+            style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: context.gw.ink, letterSpacing: -0.5),
           ),
         ),
         ?trailing,
@@ -212,4 +289,38 @@ class SectionTitle extends StatelessWidget {
   }
 }
 
-const captionStyle = TextStyle(fontSize: 13, height: 1.6, color: Gw.muted);
+/// 탭 화면 맨 위 제목 ("저장한 공고", "내 프로필")
+class ScreenHeader extends StatelessWidget {
+  const ScreenHeader(this.title, {super.key, this.trailing});
+
+  final String title;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return SizedBox(
+      height: 64,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Row(
+          children: [
+            Expanded(
+              child: Semantics(
+                header: true,
+                child: Text(
+                  title,
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.6, color: c.ink),
+                ),
+              ),
+            ),
+            if (trailing != null) Text(trailing!, style: TextStyle(fontSize: 14, color: c.muted)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 캡션 (13, 보조 글자)
+TextStyle captionStyle(BuildContext context) => TextStyle(fontSize: 13, height: 1.6, color: context.gw.muted);

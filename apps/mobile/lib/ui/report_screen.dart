@@ -203,9 +203,10 @@ class _ReportScreenState extends State<ReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.gw;
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(backgroundColor: Colors.white),
+      backgroundColor: c.card,
+      appBar: AppBar(backgroundColor: c.card),
       body: FutureBuilder(
         future: _future,
         builder: (context, snapshot) {
@@ -236,6 +237,7 @@ class _ReportScreenState extends State<ReportScreen> {
     final today = widget.today ?? DateTime.now();
     final rec = widget.recommendation;
     final changed = _savedEntry != null && _savedEntry!.deadlineChanged ? _savedEntry : null;
+    final c = context.gw;
     return Column(
       children: [
         Expanded(
@@ -251,19 +253,19 @@ class _ReportScreenState extends State<ReportScreen> {
                       spacing: 6,
                       runSpacing: 6,
                       children: [
-                        Pill(_categories[n.category] ?? n.category, background: Gw.bg, foreground: Gw.sub),
+                        Pill(_categories[n.category] ?? n.category, tone: PillTone.neutral),
                         _statusPill(n, today),
                       ],
                     ),
                     const SizedBox(height: 12),
                     Text(
                       n.title,
-                      style: const TextStyle(fontSize: 24, height: 1.42, fontWeight: FontWeight.w700, color: Gw.ink),
+                      style: TextStyle(fontSize: 24, height: 1.42, fontWeight: FontWeight.w700, color: c.ink),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       ['명지전문대 공지사항', if (n.published != null) '${shortDate(n.published!)} 게시'].join(' · '),
-                      style: const TextStyle(fontSize: 14, color: Gw.muted),
+                      style: TextStyle(fontSize: 14, color: c.muted),
                     ),
                   ],
                 ),
@@ -292,7 +294,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     height: 56,
                     child: IconButton(
                       tooltip: _saved! ? '저장 취소' : '저장',
-                      style: IconButton.styleFrom(backgroundColor: Gw.navySoft, foregroundColor: Gw.navy),
+                      style: IconButton.styleFrom(backgroundColor: c.chip, foregroundColor: c.onChip),
                       icon: Icon(_saved! ? Icons.bookmark : Icons.bookmark_border),
                       onPressed: _toggleSave,
                     ),
@@ -317,12 +319,12 @@ class _ReportScreenState extends State<ReportScreen> {
 
   Widget _statusPill(NoticeSummary n, DateTime today) {
     if (n.lifecycleStatus != 'open') {
-      return Pill(lifecycleLabel(n.lifecycleStatus), background: Gw.bg, foreground: Gw.sub);
+      return Pill(lifecycleLabel(n.lifecycleStatus), tone: PillTone.neutral);
     }
     final left = daysLeft(n, today);
     if (left == null) return const Pill('모집 중');
     final label = '모집 중 · ${left == 0 ? '오늘 마감' : 'D-$left'}';
-    return left <= urgentDays ? Pill(label, background: Gw.urgentSoft, foreground: Gw.urgent) : Pill(label);
+    return Pill(label, tone: left <= urgentDays ? PillTone.urgent : PillTone.chip);
   }
 }
 
@@ -333,12 +335,13 @@ class _SummaryBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.gw;
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 22, 20, 0),
       padding: const EdgeInsets.all(18),
-      decoration: const BoxDecoration(
-        color: Gw.summary,
-        borderRadius: BorderRadius.only(
+      decoration: BoxDecoration(
+        color: c.summary,
+        borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(22),
           topRight: Radius.circular(22),
           bottomRight: Radius.circular(22),
@@ -348,23 +351,23 @@ class _SummaryBubble extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              GwBadge(small: true),
-              SizedBox(width: 8),
+              const GwBadge(small: true),
+              const SizedBox(width: 8),
               Text(
                 '한 줄로 말하면',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Gw.sub),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.sub),
               ),
             ],
           ),
           const SizedBox(height: 10),
           Text(
             text,
-            style: const TextStyle(fontSize: 16.5, height: 1.65, fontWeight: FontWeight.w500, color: Gw.body),
+            style: TextStyle(fontSize: 16.5, height: 1.65, fontWeight: FontWeight.w500, color: c.body),
           ),
           const SizedBox(height: 8),
-          const Text('학교 공지를 바탕으로 정리했어요', style: TextStyle(fontSize: 12.5, color: Gw.muted)),
+          Text('학교 공지를 바탕으로 정리했어요', style: TextStyle(fontSize: 12.5, color: c.muted)),
         ],
       ),
     );
@@ -380,13 +383,14 @@ class _ChangeBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final before = entry.saved.savedDeadlineSnapshot;
     final now = entry.notice.applicationDeadline;
+    final c = context.gw;
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 10, 20, 0),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(color: Gw.navySoft, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(16)),
       child: Row(
         children: [
-          const Icon(Icons.alarm, color: Gw.urgent),
+          Icon(Icons.alarm, color: c.urgent),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -394,11 +398,11 @@ class _ChangeBanner extends StatelessWidget {
               children: [
                 Text(
                   '저장한 뒤 ${deadlineChangeText(entry)}',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Gw.body),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body),
                 ),
                 Text(
                   '${before == null ? '미상' : shortDate(before)} → ${now == null ? '미상' : shortDate(now)}',
-                  style: const TextStyle(fontSize: 13, color: Gw.sub),
+                  style: TextStyle(fontSize: 13, color: c.sub),
                 ),
               ],
             ),
@@ -419,9 +423,9 @@ class _Checklist extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final badge = switch (status) {
-      'met' => const Pill('조건 충족', background: Gw.navy, foreground: Colors.white),
-      'needs_check' => const Pill('확인이 필요해요', background: Gw.checkSoft, foreground: Gw.check),
-      'not_met' => const Pill('맞지 않아요', background: Gw.urgentSoft, foreground: Gw.urgent),
+      'met' => const Pill('조건 충족', tone: PillTone.point),
+      'needs_check' => const Pill('확인이 필요해요', tone: PillTone.check),
+      'not_met' => const Pill('맞지 않아요', tone: PillTone.urgent),
       _ => null,
     };
     final checks = rows.where((r) => r.state == CheckState.check).length;
@@ -438,13 +442,13 @@ class _Checklist extends StatelessWidget {
         children: [
           SectionTitle('지원 전 체크리스트', trailing: badge),
           const SizedBox(height: 8),
-          Text(intro, style: const TextStyle(fontSize: 14, height: 1.55, color: Gw.sub)),
+          Text(intro, style: TextStyle(fontSize: 14, height: 1.55, color: context.gw.sub)),
           const SizedBox(height: 8),
           for (final r in rows) _CheckLine(row: r),
           if (!notice.eligibility.extractionComplete)
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Text('첨부파일·이미지에 조건이 더 있을 수 있어요. 지원 전에 원문을 확인해 주세요.', style: captionStyle),
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('첨부파일·이미지에 조건이 더 있을 수 있어요. 지원 전에 원문을 확인해 주세요.', style: captionStyle(context)),
             ),
         ],
       ),
@@ -460,25 +464,26 @@ class _CheckLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final check = row.state == CheckState.check;
+    final c = context.gw;
     final box = switch (row.state) {
-      CheckState.met => _box(Gw.navy, const Icon(Icons.check, size: 16, color: Gw.lime, semanticLabel: '충족')),
+      CheckState.met => _box(c.point, Icon(Icons.check, size: 16, color: c.pointTick, semanticLabel: '충족')),
       CheckState.notMet => _box(
-        Gw.urgent,
-        const Icon(Icons.close, size: 16, color: Colors.white, semanticLabel: '맞지 않음'),
+        c.urgentFill,
+        Icon(Icons.close, size: 16, color: c.onUrgentFill, semanticLabel: '맞지 않음'),
       ),
       CheckState.check => Container(
         width: 24,
         height: 24,
         decoration: BoxDecoration(
-          color: const Color(0xFFFFF7EA),
-          border: Border.all(color: Gw.checkLine, width: 2),
+          color: c.checkBox,
+          border: Border.all(color: c.checkLine, width: 2),
           borderRadius: BorderRadius.circular(7),
         ),
-        child: const Icon(Icons.question_mark, size: 14, color: Gw.check, semanticLabel: '확인 필요'),
+        child: Icon(Icons.question_mark, size: 14, color: c.check, semanticLabel: '확인 필요'),
       ),
-      CheckState.info => _box(Gw.bg, const Icon(Icons.remove, size: 16, color: Gw.sub, semanticLabel: '안내')),
+      CheckState.info => _box(c.neutral, Icon(Icons.remove, size: 16, color: c.sub, semanticLabel: '안내')),
     };
-    const evidenceStyle = TextStyle(fontSize: 13.5, height: 1.5, color: Gw.sub);
+    final evidenceStyle = TextStyle(fontSize: 13.5, height: 1.5, color: c.sub);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
@@ -495,7 +500,7 @@ class _CheckLine extends StatelessWidget {
                   children: [
                     Text(
                       row.label,
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: check ? Gw.check : Gw.body),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: check ? c.check : c.body),
                     ),
                     if (row.evidence != null) ...[
                       const SizedBox(height: 4),
@@ -506,7 +511,7 @@ class _CheckLine extends StatelessWidget {
                                 style: evidenceStyle,
                                 children: [
                                   const TextSpan(text: '공고 “'),
-                                  markSpan(row.evidence!, evidenceStyle, color: check ? Gw.checkMark : Gw.lime),
+                                  markSpan(row.evidence!, evidenceStyle, color: check ? c.checkMark : null),
                                   const TextSpan(text: '”'),
                                 ],
                               ),
@@ -522,16 +527,16 @@ class _CheckLine extends StatelessWidget {
             Container(
               margin: const EdgeInsets.only(left: 36, top: 10),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: const BoxDecoration(
-                color: Gw.summary,
-                borderRadius: BorderRadius.only(
+              decoration: BoxDecoration(
+                color: c.summary,
+                borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(18),
                   topRight: Radius.circular(18),
                   bottomRight: Radius.circular(18),
                   bottomLeft: Radius.circular(5),
                 ),
               ),
-              child: Text(row.note!, style: const TextStyle(fontSize: 13.5, height: 1.55, color: Gw.body)),
+              child: Text(row.note!, style: TextStyle(fontSize: 13.5, height: 1.55, color: c.body)),
             ),
         ],
       ),
@@ -555,7 +560,7 @@ class _Reasons extends StatelessWidget {
   Widget build(BuildContext context) {
     final (words, soon) = reasonParts(recommendation);
     if (words.isEmpty && !soon) return const SizedBox.shrink();
-    const style = TextStyle(fontSize: 16, height: 1.75, color: Gw.body);
+    final style = TextStyle(fontSize: 16, height: 1.75, color: context.gw.body);
     final spans = <InlineSpan>[];
     for (var i = 0; i < words.length; i++) {
       if (i > 0) spans.add(const TextSpan(text: ', '));
@@ -576,7 +581,7 @@ class _Reasons extends StatelessWidget {
           const SizedBox(height: 12),
           Text.rich(TextSpan(style: style, children: spans)),
           const SizedBox(height: 8),
-          const Text('추천 순서를 정한 이유예요. 합격 가능성을 뜻하지 않아요.', style: captionStyle),
+          Text('추천 순서를 정한 이유예요. 합격 가능성을 뜻하지 않아요.', style: captionStyle(context)),
         ],
       ),
     );
@@ -595,11 +600,12 @@ class _Schedule extends StatelessWidget {
     final day = DateTime(today.year, today.month, today.day);
     final deadline = n.applicationDeadline;
     final left = daysLeft(n, today);
+    final c = context.gw;
     final events = <(DateTime, _Event)>[
       if (n.published != null) (n.published!.day, _event(shortDate(n.published!), sub: '게시', dot: _Dot.past)),
       if (notice.applicationStart != null)
         (notice.applicationStart!.day, _event(shortDate(notice.applicationStart!), sub: '신청 시작', dot: _Dot.past)),
-      (day, _event('${shortDay(day)} · 오늘', dot: _Dot.today, color: Gw.navy)),
+      (day, _event('${shortDay(day)} · 오늘', dot: _Dot.today, color: c.accent)),
       if (deadline != null)
         (
           deadline.day,
@@ -632,16 +638,16 @@ class _Schedule extends StatelessWidget {
               padding: const EdgeInsets.only(top: 12),
               child: Text(
                 n.deadlineNote ?? '마감일이 공고에 나와 있지 않아요. 학교 공지를 확인해 주세요.',
-                style: const TextStyle(fontSize: 14, color: Gw.sub),
+                style: TextStyle(fontSize: 14, color: c.sub),
               ),
             ),
           const SizedBox(height: 20),
           if (stale != null)
-            Text(stale, style: const TextStyle(fontSize: 13, color: Gw.urgent))
+            Text(stale, style: TextStyle(fontSize: 13, color: c.urgent))
           else if (verified != null)
             Text(
               '${verified.month}월 ${verified.day}일 ${verified.hour.toString().padLeft(2, '0')}:${verified.minute.toString().padLeft(2, '0')} 기준이에요',
-              style: captionStyle,
+              style: captionStyle(context),
             ),
         ],
       ),
@@ -679,6 +685,7 @@ class _Event extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.gw;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -687,16 +694,16 @@ class _Event extends StatelessWidget {
           style: TextStyle(
             fontSize: 15,
             fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
-            color: color ?? (bold ? Gw.ink : Gw.body),
+            color: color ?? (bold ? c.ink : c.body),
           ),
         ),
-        if (sub != null) Text(sub!, style: const TextStyle(fontSize: 13, color: Gw.muted)),
+        if (sub != null) Text(sub!, style: TextStyle(fontSize: 13, color: c.muted)),
         for (final l in lines)
           Text(
             l,
             style: TextStyle(
               fontSize: 13,
-              color: dot == _Dot.urgent && l.endsWith('남았어요') ? Gw.urgent : Gw.muted,
+              color: dot == _Dot.urgent && l.endsWith('남았어요') ? c.urgent : c.muted,
               fontWeight: dot == _Dot.urgent && l.endsWith('남았어요') ? FontWeight.w600 : FontWeight.w400,
             ),
           ),
@@ -713,34 +720,35 @@ class _TimelineItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.gw;
     final dot = switch (child.dot) {
       _Dot.past => Container(
         width: 10,
         height: 10,
         margin: const EdgeInsets.only(top: 6),
-        decoration: const BoxDecoration(color: Color(0xFFB3B8C8), shape: BoxShape.circle),
+        decoration: BoxDecoration(color: c.faint, shape: BoxShape.circle),
       ),
       _Dot.today => Container(
         width: 12,
         height: 12,
         margin: const EdgeInsets.only(top: 5),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: c.card,
           shape: BoxShape.circle,
-          border: Border.all(color: Gw.navy, width: 3),
+          border: Border.all(color: c.point, width: 3),
         ),
       ),
       _Dot.main => Container(
         width: 12,
         height: 12,
         margin: const EdgeInsets.only(top: 5),
-        decoration: const BoxDecoration(color: Gw.navy, shape: BoxShape.circle),
+        decoration: BoxDecoration(color: c.point, shape: BoxShape.circle),
       ),
       _Dot.urgent => Container(
         width: 12,
         height: 12,
         margin: const EdgeInsets.only(top: 5),
-        decoration: const BoxDecoration(color: Gw.urgent, shape: BoxShape.circle),
+        decoration: BoxDecoration(color: c.urgentFill, shape: BoxShape.circle),
       ),
     };
     return IntrinsicHeight(
@@ -754,7 +762,7 @@ class _TimelineItem extends StatelessWidget {
                 dot,
                 if (!last)
                   Expanded(
-                    child: Container(width: 2, margin: const EdgeInsets.only(top: 4), color: Gw.line),
+                    child: Container(width: 2, margin: const EdgeInsets.only(top: 4), color: c.line),
                   ),
               ],
             ),
