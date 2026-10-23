@@ -157,6 +157,8 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _body(HomeData data) {
+    final c = context.gw;
+    final caption = captionStyle(context);
     final list = data.list;
     final briefing = buildBriefing(list, data.saved, _today);
     final upcoming = [
@@ -176,7 +178,7 @@ class HomeScreenState extends State<HomeScreen> {
           _BriefingCard(briefing: briefing, today: _today, onOpen: () => _openBriefing(briefing)),
           const SizedBox(height: 28),
         ],
-        const SectionTitle('다가오는 마감', trailing: Text('앞으로 2주', style: captionStyle)),
+        SectionTitle('다가오는 마감', trailing: Text('앞으로 2주', style: caption)),
         const SizedBox(height: 12),
         GwCard(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -184,9 +186,9 @@ class HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (upcoming.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 14),
-                  child: Text('앞으로 2주 안에 마감되는 공고가 없어요.', style: TextStyle(fontSize: 15, color: Gw.sub)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Text('앞으로 2주 안에 마감되는 공고가 없어요.', style: TextStyle(fontSize: 15, color: c.sub)),
                 ),
               for (final e in upcoming)
                 _UpcomingRow(
@@ -198,7 +200,7 @@ class HomeScreenState extends State<HomeScreen> {
               if (undated > 0)
                 Padding(
                   padding: const EdgeInsets.only(top: 4, bottom: 8),
-                  child: Text('마감일이 정해지지 않은 공고 $undated개(선착순 등)는 넣지 않았어요.', style: captionStyle),
+                  child: Text('마감일이 정해지지 않은 공고 $undated개(선착순 등)는 넣지 않았어요.', style: caption),
                 ),
             ],
           ),
@@ -206,12 +208,12 @@ class HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 28),
         SectionTitle(
           list.personalized ? '나에게 맞는 공고' : '최신 공고',
-          trailing: Text(list.personalized ? '추천순' : '최신순', style: captionStyle),
+          trailing: Text(list.personalized ? '추천순' : '최신순', style: caption),
         ),
         const SizedBox(height: 12),
         if (list.items.isEmpty)
-          const GwCard(
-            child: Text('지금 보여드릴 공고가 없어요.', style: TextStyle(fontSize: 15, color: Gw.sub)),
+          GwCard(
+            child: Text('지금 보여드릴 공고가 없어요.', style: TextStyle(fontSize: 15, color: c.sub)),
           ),
         for (final e in list.items) ...[
           _NoticeCard(
@@ -228,7 +230,7 @@ class HomeScreenState extends State<HomeScreen> {
         ],
         if (list.personalized) ...[
           const SizedBox(height: 16),
-          const Text('추천 순서는 관심사·희망 직무·전공·마감 시기로 정해요. 합격 가능성을 뜻하지 않아요.', style: captionStyle),
+          Text('추천 순서는 관심사·희망 직무·전공·마감 시기로 정해요. 합격 가능성을 뜻하지 않아요.', style: caption),
         ],
       ],
     );
@@ -244,6 +246,7 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.gw;
     final p = profile;
     final who = [
       if (p?.majorId case final m?) majors[m] ?? '',
@@ -255,13 +258,13 @@ class _Header extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           shortDay(today),
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Gw.muted),
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.muted),
         ),
         const Spacer(),
         if (who.isNotEmpty)
           Text(
             who,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Gw.sub),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.sub),
           ),
       ],
     );
@@ -275,17 +278,18 @@ class _ProfilePrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.gw;
     return GwCard(
       bubble: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             '프로필을 입력하면 맞춤 추천을 받을 수 있어요',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Gw.ink),
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: c.ink),
           ),
           const SizedBox(height: 4),
-          const Text('지금은 최신 공고 순으로 보여드려요', style: TextStyle(fontSize: 14, color: Gw.sub)),
+          Text('지금은 최신 공고 순으로 보여드려요', style: TextStyle(fontSize: 14, color: c.sub)),
           if (onOpenProfile != null) ...[
             const SizedBox(height: 12),
             SoftButton(label: '프로필 입력', onPressed: onOpenProfile!),
@@ -305,7 +309,8 @@ class _BriefingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const line = TextStyle(fontSize: 15, height: 1.5, color: Gw.body);
+    final c = context.gw;
+    final line = TextStyle(fontSize: 15, height: 1.5, color: c.body);
     final urgent = briefing.urgent;
     return GwCard(
       bubble: true,
@@ -313,19 +318,19 @@ class _BriefingCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             '오늘의 귀띔',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Gw.navy),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.accent),
           ),
           const SizedBox(height: 6),
           Text.rich(
             TextSpan(
-              style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: Gw.ink, height: 1.4),
+              style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: c.ink, height: 1.4),
               children: [
                 const TextSpan(text: '오늘 챙길 소식 '),
                 markSpan(
                   '${briefing.count}가지',
-                  const TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: Gw.ink),
+                  TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: c.ink),
                 ),
               ],
             ),
@@ -367,6 +372,8 @@ class _UpcomingRow extends StatelessWidget {
     final day = n.applicationDeadline!.day;
     final left = daysLeft(n, today)!;
     final urgent = left <= urgentDays;
+    final c = context.gw;
+    final fg = urgent ? c.urgent : c.onChip;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -377,13 +384,13 @@ class _UpcomingRow extends StatelessWidget {
             Container(
               width: 44,
               height: 44,
-              decoration: BoxDecoration(color: urgent ? Gw.urgentSoft : Gw.navySoft, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: urgent ? c.urgentSoft : c.chip, shape: BoxShape.circle),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     weekdayName(day),
-                    style: TextStyle(fontSize: 11, height: 1.1, color: urgent ? Gw.urgent : Gw.navy),
+                    style: TextStyle(fontSize: 11, height: 1.1, color: fg),
                   ),
                   Text(
                     '${day.day}',
@@ -391,7 +398,7 @@ class _UpcomingRow extends StatelessWidget {
                       fontSize: 16,
                       height: 1.1,
                       fontWeight: FontWeight.w700,
-                      color: urgent ? Gw.urgent : Gw.navy,
+                      color: fg,
                     ),
                   ),
                 ],
@@ -406,7 +413,7 @@ class _UpcomingRow extends StatelessWidget {
                     n.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Gw.body, height: 1.4),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body, height: 1.4),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -416,7 +423,7 @@ class _UpcomingRow extends StatelessWidget {
                       if (n.applicationDeadline!.hasTime) '${n.applicationDeadline!.time} 마감',
                       eligibilityShort(entry.recommendation.eligibilityStatus),
                     ].join(' · '),
-                    style: const TextStyle(fontSize: 13, color: Gw.muted),
+                    style: TextStyle(fontSize: 13, color: c.muted),
                   ),
                 ],
               ),
@@ -443,6 +450,7 @@ class _NoticeCard extends StatelessWidget {
     final dday = ddayPill(n, today);
     final reason = r.reasonCodes.map(reasonText).firstWhere((t) => t.isNotEmpty, orElse: () => '');
     final deadline = n.applicationDeadline;
+    final c = context.gw;
     return GwCard(
       onTap: onTap,
       padding: const EdgeInsets.all(18),
@@ -454,25 +462,25 @@ class _NoticeCard extends StatelessWidget {
             runSpacing: 6,
             children: [
               ?dday,
-              Pill(category, background: Gw.bg, foreground: Gw.sub),
+              Pill(category, tone: PillTone.neutral),
               eligibilityPill(r.eligibilityStatus),
             ],
           ),
           const SizedBox(height: 10),
           Text(
             n.title,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Gw.ink, height: 1.45),
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: c.ink, height: 1.45),
           ),
           const SizedBox(height: 4),
           Text(
             deadline != null ? '${shortDate(deadline)}까지' : (n.deadlineNote ?? '마감일이 공고에 나와 있지 않아요'),
-            style: const TextStyle(fontSize: 14, color: Gw.sub),
+            style: TextStyle(fontSize: 14, color: c.sub),
           ),
           if (reason.isNotEmpty && r.reasonCodes.any(personalReasons.containsKey)) ...[
             const SizedBox(height: 4),
             Text(
               reason,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Gw.navy),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.accent),
             ),
           ],
         ],
@@ -490,8 +498,9 @@ class _ChangedCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = entry.notice.applicationDeadline;
+    final c = context.gw;
     return Material(
-      color: Gw.navySoft,
+      color: c.chip,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -500,7 +509,7 @@ class _ChangedCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              const Icon(Icons.alarm, color: Gw.urgent),
+              Icon(Icons.alarm, color: c.urgent),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -508,13 +517,13 @@ class _ChangedCard extends StatelessWidget {
                   children: [
                     Text(
                       '저장한 공고의 ${deadlineChangeText(entry)}',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Gw.body),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body),
                     ),
                     Text(
                       '${entry.notice.title}${now == null ? '' : ' · 이제 ${shortDate(now)}까지'}',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13, color: Gw.sub),
+                      style: TextStyle(fontSize: 13, color: c.sub),
                     ),
                   ],
                 ),
