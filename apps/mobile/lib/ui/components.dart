@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../data/models.dart';
@@ -302,3 +304,102 @@ class ScreenHeader extends StatelessWidget {
 
 /// 캡션 (13, 보조 글자)
 TextStyle captionStyle(BuildContext context) => TextStyle(fontSize: 13, height: 1.6, color: context.gw.muted);
+
+/// 하단 탭 하나
+typedef GwTab = ({IconData icon, String label});
+
+/// 떠 있는 캡슐 탭 막대 (목업 v2). 고른 탭은 라임 캡슐 안에 아이콘과 이름을 나란히, 나머지는 아이콘 아래 이름.
+/// Scaffold의 bottomNavigationBar에 extendBody와 함께 쓰고, 목록은 아래 여백(MediaQuery padding)만큼 비운다.
+class GwTabBar extends StatelessWidget {
+  const GwTabBar({super.key, required this.tabs, required this.selected, required this.onSelect});
+
+  final List<GwTab> tabs;
+  final int selected;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    // 제스처 막대나 버튼 영역이 있으면 그 위로 조금 띄운다.
+    final bottom = math.max(MediaQuery.paddingOf(context).bottom + 8, 20.0);
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.3, // 큰 글자 설정에서도 막대 높이 안에 들어가게
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, bottom),
+        child: Container(
+          height: 62,
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: c.tab,
+            borderRadius: BorderRadius.circular(31),
+            boxShadow: [BoxShadow(color: c.tabShadow, blurRadius: 24, offset: const Offset(0, 10))],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: 4,
+            children: [
+              for (final (i, tab) in tabs.indexed)
+                Expanded(
+                  flex: i == selected ? 13 : 10,
+                  child: _TabButton(tab, selected: i == selected, onTap: () => onSelect(i)),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TabButton extends StatelessWidget {
+  const _TabButton(this.tab, {required this.selected, required this.onTap});
+
+  final GwTab tab;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final color = selected ? c.limeInk : c.onTab;
+    final icon = Icon(tab.icon, size: 20, color: color);
+    final radius = BorderRadius.circular(25);
+    return MergeSemantics(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: Material(
+          color: selected ? c.lime : Colors.transparent,
+          borderRadius: radius,
+          child: InkWell(
+            borderRadius: radius,
+            onTap: onTap,
+            child: selected
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    spacing: 6,
+                    children: [
+                      icon,
+                      Text(
+                        tab.label,
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: color),
+                      ),
+                    ],
+                  )
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    spacing: 2,
+                    children: [
+                      icon,
+                      Text(
+                        tab.label,
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: color),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
