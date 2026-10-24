@@ -391,39 +391,47 @@ class _TabButton extends StatelessWidget {
       child: Semantics(
         button: true,
         selected: selected,
-        // 누른 자리에서 아이콘 쪽으로 퍼지는 둥근 리플
-        child: InkResponse(
-          radius: 36,
-          splashColor: c.tabActive.withValues(alpha: 0.14),
-          highlightColor: Colors.transparent,
-          onTapDown: (_) => onPress(true),
-          onTapUp: (_) => onPress(false),
-          onTapCancel: () => onPress(false),
-          onTap: onTap,
-          child: AnimatedScale(
-            scale: pressed ? 0.88 : 1,
-            duration: duration ~/ 2,
-            curve: Curves.easeOut,
-            child: TweenAnimationBuilder<Color?>(
-              tween: ColorTween(end: selected ? c.tabActive : c.onTab),
-              duration: duration,
-              builder: (context, color, _) => Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                spacing: 3,
-                children: [
-                  AnimatedSwitcher(
-                    duration: duration,
-                    child: Icon(selected ? tab.activeIcon : tab.icon, key: ValueKey(selected), size: 24, color: color),
-                  ),
-                  Text(
-                    tab.label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      color: color,
+        // 누르는 동안 칸이 버튼처럼 둥근 사각형으로 칠해진다.
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            splashColor: c.tabActive.withValues(alpha: 0.10),
+            highlightColor: c.tabActive.withValues(alpha: 0.08),
+            onTapDown: (_) => onPress(true),
+            onTapUp: (_) => onPress(false),
+            onTapCancel: () => onPress(false),
+            onTap: onTap,
+            child: AnimatedScale(
+              scale: pressed ? 0.92 : 1,
+              duration: duration ~/ 2,
+              curve: Curves.easeOut,
+              child: TweenAnimationBuilder<Color?>(
+                tween: ColorTween(end: selected ? c.tabActive : c.onTab),
+                duration: duration,
+                builder: (context, color, _) => Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  spacing: 3,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: duration,
+                      child: Icon(
+                        selected ? tab.activeIcon : tab.icon,
+                        key: ValueKey(selected),
+                        size: 24,
+                        color: color,
+                      ),
                     ),
-                  ),
-                ],
+                    Text(
+                      tab.label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
