@@ -44,6 +44,9 @@ class GwColors extends ThemeExtension<GwColors> {
     required this.loginCard,
     required this.loginSub,
     required this.loginInk,
+    required this.tab,
+    required this.onTab,
+    required this.tabShadow,
   });
 
   /// 바탕
@@ -123,6 +126,11 @@ class GwColors extends ThemeExtension<GwColors> {
   /// 로그인 바탕 위 제목·링크
   final Color loginInk;
 
+  /// 떠 있는 탭 막대 바탕, 고르지 않은 탭 글자, 그림자. 고른 탭은 라임 면이다.
+  final Color tab;
+  final Color onTab;
+  final Color tabShadow;
+
   static const light = GwColors(
     bg: Color(0xFFF3F4F8),
     card: Color(0xFFFFFFFF),
@@ -161,6 +169,9 @@ class GwColors extends ThemeExtension<GwColors> {
     loginCard: Color(0xFFFFFFFF),
     loginSub: Color(0xFFC9CFEA),
     loginInk: Color(0xFFFFFFFF),
+    tab: _navy,
+    onTab: Color(0xFFC9CFEA),
+    tabShadow: Color(0x47161F4A), // 28%
   );
 
   static const dark = GwColors(
@@ -201,6 +212,9 @@ class GwColors extends ThemeExtension<GwColors> {
     loginCard: Color(0xFF191D33),
     loginSub: Color(0xFFB9C2EE),
     loginInk: Color(0xFFFFFFFF),
+    tab: Color(0xFF272D52),
+    onTab: Color(0xFFA3A9C2),
+    tabShadow: Color(0x80000000), // 50%
   );
 
   static const _navy = Color(0xFF22306B);
@@ -210,7 +224,8 @@ class GwColors extends ThemeExtension<GwColors> {
   List<Color> get _all => [
     bg, card, cardSoft, neutral, ink, body, sub, muted, faint, line, cta, onCta, point, onPoint, pointTick, //
     accent, chip, onChip, lime, limeInk, marker, summary, urgent, urgentSoft, urgentFill, onUrgentFill, //
-    check, checkSoft, checkBox, checkLine, checkMark, toast, onToast, loginBg, loginCard, loginSub, loginInk,
+    check, checkSoft, checkBox, checkLine, checkMark, toast, onToast, loginBg, loginCard, loginSub, loginInk, //
+    tab, onTab, tabShadow,
   ];
 
   static GwColors _fromList(List<Color> c) {
@@ -254,6 +269,9 @@ class GwColors extends ThemeExtension<GwColors> {
       loginCard: next(),
       loginSub: next(),
       loginInk: next(),
+      tab: next(),
+      onTab: next(),
+      tabShadow: next(),
     );
   }
 

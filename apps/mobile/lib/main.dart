@@ -9,6 +9,7 @@ import 'data/api_repository.dart';
 import 'data/repository.dart';
 import 'ui/briefing_data.dart';
 import 'ui/common.dart';
+import 'ui/components.dart';
 import 'ui/home_screen.dart';
 import 'ui/profile_screen.dart';
 import 'ui/saved_screen.dart';
@@ -171,6 +172,7 @@ class _HomeShellState extends State<HomeShell> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: statusBarStyle(Theme.of(context).brightness),
       child: Scaffold(
+        extendBody: true, // 탭 막대가 화면 위에 떠 있다
         body: SafeArea(
           bottom: false,
           child: IndexedStack(
@@ -194,13 +196,13 @@ class _HomeShellState extends State<HomeShell> {
             ],
           ),
         ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _tab,
-          onDestinationSelected: _select,
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: '홈'),
-            NavigationDestination(icon: Icon(Icons.bookmark_border), selectedIcon: Icon(Icons.bookmark), label: '저장'),
-            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '프로필'),
+        bottomNavigationBar: GwTabBar(
+          selected: _tab,
+          onSelect: _select,
+          tabs: const [
+            (icon: Icons.home_rounded, label: '홈'),
+            (icon: Icons.bookmark_rounded, label: '저장'),
+            (icon: Icons.person_rounded, label: '프로필'),
           ],
         ),
       ),

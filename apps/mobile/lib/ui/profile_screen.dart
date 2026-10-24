@@ -150,7 +150,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (_universityId == null || m.id.startsWith('$_universityId.')) m,
     ];
     return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: EdgeInsets.only(bottom: 24 + MediaQuery.paddingOf(context).bottom), // 탭 막대 높이만큼
       children: [
         const ScreenHeader('내 프로필'),
         const Padding(
