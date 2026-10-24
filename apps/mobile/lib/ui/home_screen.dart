@@ -174,7 +174,7 @@ class HomeScreenState extends State<HomeScreen> {
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(16, 8, 16, 32 + MediaQuery.paddingOf(context).bottom), // 탭 막대 높이만큼
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
         _Header(profile: data.profile, majors: data.majors, today: _today),
         const SizedBox(height: 16),
