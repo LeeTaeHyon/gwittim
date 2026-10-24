@@ -3,17 +3,17 @@ import 'package:flutter/material.dart';
 import 'logo.dart';
 import 'theme.dart';
 
-/// 앱 시작 인트로 (D-011). Android 시작 화면의 빈 말풍선을 같은 자리·크기로 이어받아
+/// 앱 시작 인트로 (D-011). Android 시작 화면(네이비 바탕만)을 이어받아 말풍선이 꼬리 끝에서 튀어나오고,
 /// '귀띔'을 한 획씩 채운 뒤 사라진다. 그동안 앱은 뒤에서 먼저 뜬다.
 class Intro extends StatefulWidget {
   const Intro({super.key, required this.child});
 
   final Widget child;
 
-  /// `android/app/src/main/res/drawable/splash_bubble.xml`의 말풍선과 같은 크기 (폭 150dp)
+  /// 인트로 말풍선 높이 (폭 150)
   static const logoHeight = 93.75;
 
-  static const duration = Duration(milliseconds: 1100);
+  static const duration = Duration(milliseconds: 1250);
 
   @override
   State<Intro> createState() => _IntroState();
@@ -21,8 +21,19 @@ class Intro extends StatefulWidget {
 
 class _IntroState extends State<Intro> with SingleTickerProviderStateMixin {
   late final _controller = AnimationController(vsync: this, duration: Intro.duration);
-  late final _reveal = CurvedAnimation(parent: _controller, curve: const Interval(0.08, 0.62));
-  late final _exit = CurvedAnimation(parent: _controller, curve: const Interval(0.75, 1, curve: Curves.easeOut));
+
+  // 처음 잠깐은 바탕만 둔다. 앱이 뒤에서 첫 화면을 그리느라 프레임이 밀려도 등장이 끊기지 않게.
+  late final _pop = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0.06, 0.32, curve: Cubic(0.34, 1.36, 0.64, 1)), // 끝에서 아주 살짝 넘쳤다 돌아온다
+  );
+  late final _popScale = Tween(begin: 0.4, end: 1.0).animate(_pop);
+  late final _popOpacity = CurvedAnimation(parent: _controller, curve: const Interval(0.06, 0.2));
+  late final _reveal = CurvedAnimation(parent: _controller, curve: const Interval(0.26, 0.7));
+  late final _exit = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0.78, 1, curve: Curves.easeOut),
+  );
   late final _fade = ReverseAnimation(_exit);
   var _started = false;
   var _done = false;
@@ -44,6 +55,8 @@ class _IntroState extends State<Intro> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
+    _pop.dispose();
+    _popOpacity.dispose();
     _reveal.dispose();
     _exit.dispose();
     _controller.dispose();
@@ -68,7 +81,15 @@ class _IntroState extends State<Intro> with SingleTickerProviderStateMixin {
                 child: ColoredBox(
                   color: GwColors.light.loginBg,
                   child: Center(
-                    child: GwLogo(height: Intro.logoHeight, reveal: _reveal),
+                    // 말풍선은 꼬리 끝(왼쪽 아래)을 기준으로 커진다.
+                    child: ScaleTransition(
+                      scale: _popScale,
+                      alignment: Alignment.bottomLeft,
+                      child: FadeTransition(
+                        opacity: _popOpacity,
+                        child: GwLogo(height: Intro.logoHeight, reveal: _reveal),
+                      ),
+                    ),
                   ),
                 ),
               ),
