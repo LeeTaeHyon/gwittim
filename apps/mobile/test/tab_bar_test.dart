@@ -9,9 +9,9 @@ import 'package:gwittim/ui/profile_screen.dart';
 import 'package:gwittim/ui/theme.dart';
 
 const tabs = <GwTab>[
-  (icon: Icons.home_rounded, label: '홈'),
-  (icon: Icons.bookmark_rounded, label: '저장'),
-  (icon: Icons.person_rounded, label: '프로필'),
+  (icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: '홈'),
+  (icon: Icons.bookmark_border_rounded, activeIcon: Icons.bookmark_rounded, label: '저장'),
+  (icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: '프로필'),
 ];
 
 void main() {
@@ -34,13 +34,16 @@ void main() {
     );
   }
 
-  final capsule = find.byKey(const ValueKey('tab-capsule'));
-  Finder slot(String label) => find.ancestor(of: find.text(label), matching: find.byType(GestureDetector)).first;
+  Color? colorOf(WidgetTester tester, String label) => tester.widget<Text>(find.text(label)).style!.color;
+  const c = GwColors.light;
 
-  testWidgets('캡슐 탭: 고른 칸 가운데에 이름 폭만 한 캡슐, 누르면 미끄러져 옮겨 간다', (tester) async {
+  testWidgets('바닥에 붙은 탭: 고른 탭은 채운 아이콘과 진한 색, 누르면 색이 짧게 바뀐다', (tester) async {
     await pumpBar(tester);
-    expect(tester.getCenter(capsule).dx, moreOrLessEquals(tester.getCenter(slot('홈')).dx));
-    expect(tester.getSize(capsule).width, lessThan(tester.getSize(slot('홈')).width));
+    expect(tester.getBottomLeft(find.byType(GwTabBar)).dy, tester.getSize(find.byType(Scaffold)).height);
+    expect(colorOf(tester, '홈'), c.tabActive);
+    expect(colorOf(tester, '저장'), c.onTab);
+    expect(find.byIcon(Icons.home_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.bookmark_border_rounded), findsOneWidget);
     expect(
       tester.getSemantics(find.text('홈')),
       isSemantics(label: '홈', isButton: true, isSelected: true, hasTapAction: true),
@@ -49,26 +52,27 @@ void main() {
     await tester.tap(find.text('저장'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    final moving = tester.getCenter(capsule).dx;
-    expect(moving, greaterThan(tester.getCenter(slot('홈')).dx));
-    expect(moving, lessThan(tester.getCenter(slot('저장')).dx));
+    expect(colorOf(tester, '저장'), isNot(anyOf(c.onTab, c.tabActive))); // 바뀌는 중
 
     await tester.pumpAndSettle();
-    expect(tester.getCenter(capsule).dx, moreOrLessEquals(tester.getCenter(slot('저장')).dx));
+    expect(colorOf(tester, '저장'), c.tabActive);
+    expect(colorOf(tester, '홈'), c.onTab);
+    expect(find.byIcon(Icons.bookmark_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.home_outlined), findsOneWidget);
     expect(tester.getSemantics(find.text('저장')), isSemantics(label: '저장', isSelected: true));
   });
 
-  testWidgets('애니메이션 줄이기 설정이면 캡슐이 바로 옮겨 간다', (tester) async {
+  testWidgets('애니메이션 줄이기 설정이면 색이 바로 바뀐다', (tester) async {
     tester.platformDispatcher.accessibilityFeaturesTestValue = FakeAccessibilityFeatures(disableAnimations: true);
     addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
     await pumpBar(tester);
     await tester.tap(find.text('프로필'));
     await tester.pump();
     await tester.pump();
-    expect(tester.getCenter(capsule).dx, moreOrLessEquals(tester.getCenter(slot('프로필')).dx));
+    expect(colorOf(tester, '프로필'), c.tabActive);
   });
 
-  testWidgets('탭 막대가 떠 있어도 목록 끝은 막대 위에서 보인다', (tester) async {
+  testWidgets('목록 끝은 탭 막대에 가리지 않는다', (tester) async {
     tester.view.padding = const FakeViewPadding(bottom: 48); // 제스처 막대
     addTearDown(tester.view.reset);
     final repo = SampleNoticeRepository();

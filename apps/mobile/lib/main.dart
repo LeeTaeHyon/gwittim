@@ -176,7 +176,6 @@ class _HomeShellState extends State<HomeShell> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: statusBarStyle(Theme.of(context).brightness),
       child: Scaffold(
-        extendBody: true, // 탭 막대가 화면 위에 떠 있다
         body: SafeArea(
           bottom: false,
           child: IndexedStack(
@@ -204,9 +203,9 @@ class _HomeShellState extends State<HomeShell> {
           selected: _tab,
           onSelect: _select,
           tabs: const [
-            (icon: Icons.home_rounded, label: '홈'),
-            (icon: Icons.bookmark_rounded, label: '저장'),
-            (icon: Icons.person_rounded, label: '프로필'),
+            (icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: '홈'),
+            (icon: Icons.bookmark_border_rounded, activeIcon: Icons.bookmark_rounded, label: '저장'),
+            (icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: '프로필'),
           ],
         ),
       ),

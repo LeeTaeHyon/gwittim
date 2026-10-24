@@ -80,7 +80,8 @@ void main() {
         expect(contrast(c.onUrgentFill, c.urgentFill), greaterThanOrEqualTo(4.5));
         expect(contrast(c.onToast, c.toast), greaterThanOrEqualTo(4.5));
         expect(contrast(c.limeInk, c.lime), greaterThanOrEqualTo(4.5));
-        expect(contrast(c.onTab, c.tab), greaterThanOrEqualTo(4.5), reason: '탭 막대 글자');
+        expect(contrast(c.onTab, c.tab), greaterThanOrEqualTo(4.5), reason: '탭 글자');
+        expect(contrast(c.tabActive, c.tab), greaterThanOrEqualTo(4.5), reason: '고른 탭 글자');
         expect(contrast(c.ink, over(c.marker, c.card)), greaterThanOrEqualTo(4.5), reason: '형광펜 위 글자');
         expect(contrast(c.body, c.summary), greaterThanOrEqualTo(4.5));
         expect(contrast(c.loginInk, c.loginBg), greaterThanOrEqualTo(4.5));
