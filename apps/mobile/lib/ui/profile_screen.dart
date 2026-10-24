@@ -110,17 +110,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required bool allowNone,
     required ValueChanged<String?> onPicked,
   }) async {
-    final picked = await showModalBottomSheet<({String? id})>(
+    // 화면 가운데 팝업. 살짝 작은 크기에서 커지며 나타난다.
+    final still = MediaQuery.maybeDisableAnimationsOf(context) == true;
+    final picked = await showGeneralDialog<({String? id})>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: context.gw.card,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      clipBehavior: Clip.antiAlias,
-      sheetAnimationStyle: const AnimationStyle(
-        duration: Duration(milliseconds: 320),
-        reverseDuration: Duration(milliseconds: 240),
-      ),
-      builder: (_) => _PickerSheet(title: title, items: items, selected: selected, allowNone: allowNone),
+      barrierDismissible: true,
+      barrierLabel: '닫기',
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      transitionDuration: still ? Duration.zero : const Duration(milliseconds: 260),
+      pageBuilder: (_, _, _) => _PickerDialog(title: title, items: items, selected: selected, allowNone: allowNone),
+      transitionBuilder: (_, animation, _, child) {
+        final curved = animation.drive(CurveTween(curve: Curves.easeOutCubic));
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(scale: curved.drive(Tween(begin: 0.94, end: 1.0)), child: child),
+        );
+      },
     );
     if (picked != null && mounted) setState(() => onPicked(picked.id));
   }
@@ -356,9 +361,9 @@ class _PickRow extends StatelessWidget {
   }
 }
 
-/// 학교·학과를 고르는 아래 창. 고른 줄은 칩 색 면과 체크로 보이고, 항목이 많으면 이름으로 찾을 수 있다.
-class _PickerSheet extends StatefulWidget {
-  const _PickerSheet({required this.title, required this.items, required this.selected, required this.allowNone});
+/// 학교·학과를 고르는 가운데 팝업. 고른 줄은 칩 색 면과 체크로 보이고, 항목이 많으면 이름으로 찾을 수 있다.
+class _PickerDialog extends StatefulWidget {
+  const _PickerDialog({required this.title, required this.items, required this.selected, required this.allowNone});
 
   final String title;
   final List<DictionaryItem> items;
@@ -366,10 +371,10 @@ class _PickerSheet extends StatefulWidget {
   final bool allowNone;
 
   @override
-  State<_PickerSheet> createState() => _PickerSheetState();
+  State<_PickerDialog> createState() => _PickerDialogState();
 }
 
-class _PickerSheetState extends State<_PickerSheet> {
+class _PickerDialogState extends State<_PickerDialog> {
   late String? _current = widget.selected;
   var _query = '';
   final _selectedKey = GlobalKey();
@@ -401,75 +406,80 @@ class _PickerSheetState extends State<_PickerSheet> {
       for (final item in widget.items)
         if (query.isEmpty || item.name.contains(query)) item,
     ];
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom), // 키보드 위로
-      child: SafeArea(
-        top: false,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.75),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 10),
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(color: c.line, borderRadius: BorderRadius.circular(2)),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 18, 24, 0),
-                child: Text(
-                  '${widget.title} 선택',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: -0.6, color: c.ink),
-                ),
-              ),
-              if (widget.items.length > 8)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                  child: TextField(
-                    onChanged: (text) => setState(() => _query = text),
-                    style: TextStyle(fontSize: 15, color: c.ink),
-                    decoration: InputDecoration(
-                      hintText: '${widget.title} 이름으로 찾기',
-                      hintStyle: TextStyle(fontSize: 15, color: c.muted),
-                      prefixIcon: Icon(Icons.search_rounded, size: 20, color: c.muted),
-                      filled: true,
-                      fillColor: c.neutral,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+    // Dialog가 키보드만큼 위로 올려 준다.
+    return Dialog(
+      backgroundColor: c.card,
+      surfaceTintColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 560),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 14, 10, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${widget.title} 선택',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: -0.6, color: c.ink),
                     ),
                   ),
-                ),
-              Flexible(
-                // 찾는 동안 목록 길이가 바뀌면 창 높이도 부드럽게 따라간다.
-                child: AnimatedSize(
-                  duration: MediaQuery.maybeDisableAnimationsOf(context) == true
-                      ? Duration.zero
-                      : const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  alignment: Alignment.topCenter,
-                  child: shown.isEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 36),
-                          child: Text(
-                            '찾는 ${widget.title}가 없어요',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 15, color: c.muted),
-                          ),
-                        )
-                      : ListView(
-                          shrinkWrap: true,
-                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
-                          children: [for (final item in shown) _option(c, item)],
-                        ),
+                  IconButton(
+                    tooltip: '닫기',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(Icons.close_rounded, color: c.muted),
+                  ),
+                ],
+              ),
+            ),
+            if (widget.items.length > 8)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                child: TextField(
+                  onChanged: (text) => setState(() => _query = text),
+                  style: TextStyle(fontSize: 15, color: c.ink),
+                  decoration: InputDecoration(
+                    hintText: '${widget.title} 이름으로 찾기',
+                    hintStyle: TextStyle(fontSize: 15, color: c.muted),
+                    prefixIcon: Icon(Icons.search_rounded, size: 20, color: c.muted),
+                    filled: true,
+                    fillColor: c.neutral,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                  ),
                 ),
               ),
-            ],
-          ),
+            Flexible(
+              // 찾는 동안 목록 길이가 바뀌면 창 높이도 부드럽게 따라간다.
+              child: AnimatedSize(
+                duration: MediaQuery.maybeDisableAnimationsOf(context) == true
+                    ? Duration.zero
+                    : const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: shown.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 36),
+                        child: Text(
+                          '찾는 ${widget.title}가 없어요',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 15, color: c.muted),
+                        ),
+                      )
+                    : ListView(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
+                        children: [for (final item in shown) _option(c, item)],
+                      ),
+              ),
+            ),
+          ],
         ),
       ),
     );
