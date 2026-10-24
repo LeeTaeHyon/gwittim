@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/models.dart';
 import 'format.dart';
+import 'logo.dart';
 import 'theme.dart';
 
 /// 칩 색 조합. 색은 테마 토큰에서 고른다.
@@ -53,37 +54,14 @@ Widget eligibilityPill(String status) => switch (status) {
   _ => Pill(eligibilityShort(status), tone: PillTone.neutral),
 };
 
-/// '귀띔' 말풍선 배지
+/// '귀띔' 말풍선 배지. 앱 로고(D-011)를 줄여 쓴다.
 class GwBadge extends StatelessWidget {
   const GwBadge({super.key, this.small = false});
 
   final bool small;
 
   @override
-  Widget build(BuildContext context) {
-    final c = context.gw;
-    final r = Radius.circular(small ? 11 : 14);
-    return Container(
-      height: small ? 22 : 28,
-      padding: EdgeInsets.symmetric(horizontal: small ? 8 : 11),
-      decoration: BoxDecoration(
-        color: c.lime,
-        borderRadius: BorderRadius.only(
-          topLeft: r,
-          topRight: r,
-          bottomRight: r,
-          bottomLeft: Radius.circular(small ? 3 : 4),
-        ),
-      ),
-      child: Center(
-        widthFactor: 1,
-        child: Text(
-          '귀띔',
-          style: TextStyle(fontSize: small ? 12 : 15, fontWeight: FontWeight.w700, color: c.limeInk),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => GwLogo(height: small ? 22 : 28);
 }
 
 /// 형광펜: 글자 아래쪽 58%만 칠한다. animate면 왼쪽에서 오른쪽으로 그어진다(애니메이션 줄이기 설정을 따름).

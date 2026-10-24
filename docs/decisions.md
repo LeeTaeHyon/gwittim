@@ -540,10 +540,10 @@ SPEC·역할·기술·계약에 관한 팀 합의를 날짜순으로 남깁니�
 ### 영향
 
 - 앱만 바뀐다: Android 런처 아이콘(`mipmap-*`, `mipmap-anydpi-v26`, `drawable/ic_launcher_foreground.xml`, `values/ic_launcher_background.xml`). 서버·계약·사전은 바뀌지 않는다.
+- 앱 안의 '귀띔' 배지(`GwBadge`)와 로그인 화면 로고도 같은 로고로 바꿨다(2026-10-25, `lib/ui/logo.dart`).
 
 ### 한계·후속
 
-- 앱 안의 '귀띔' 배지(`GwBadge`)와 로그인 화면 로고는 아직 이전 알약 모양이다. 새 로고로 바꾸는 일은 따로 한다.
 - Android 13 테마 아이콘(단색)은 넣지 않았다.
 - 아이콘은 빌드로만 확인했고 실기기 홈 화면에서는 아직 보지 않았다.
 
