@@ -113,7 +113,12 @@ class SavedScreenState extends State<SavedScreen> {
         _unsaved.clear();
       });
     } catch (e) {
-      if (mounted) setState(() => _error = e);
+      if (!mounted) return;
+      if (_entries != null) {
+        showRefreshFailed(context, e); // 보이던 목록은 그대로 둔다
+      } else {
+        setState(() => _error = e);
+      }
     }
   }
 

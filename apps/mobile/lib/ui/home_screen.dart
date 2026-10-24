@@ -96,7 +96,12 @@ class HomeScreenState extends State<HomeScreen> {
       });
       _maybeShowBriefing(data);
     } catch (e) {
-      if (mounted) setState(() => _error = e);
+      if (!mounted) return;
+      if (_data != null) {
+        showRefreshFailed(context, e); // 보이던 내용은 그대로 둔다
+      } else {
+        setState(() => _error = e);
+      }
     }
   }
 

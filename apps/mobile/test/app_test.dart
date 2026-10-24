@@ -41,6 +41,19 @@ class FailingRepository implements NoticeRepository {
   Future<void> deleteSaved(String noticeId) async {}
 }
 
+/// 처음엔 정상, offline을 켜면 목록 요청이 연결 오류로 실패한다 (비행기 모드 새로고침).
+class OfflineAfterLoad extends SampleNoticeRepository {
+  bool offline = false;
+
+  @override
+  Future<RecommendationList> listRecommendations() =>
+      offline ? Future.error(const RepositoryException(RepositoryErrorKind.unavailable)) : super.listRecommendations();
+
+  @override
+  Future<List<SavedEntry>> listSaved() =>
+      offline ? Future.error(const RepositoryException(RepositoryErrorKind.unavailable)) : super.listSaved();
+}
+
 /// 에셋 읽기는 실제 비동기라 fake async 밖(runAsync)에서 미리 읽는다.
 Future<SampleNoticeRepository> loaded(WidgetTester tester, {bool personalized = true}) async {
   final repo = SampleNoticeRepository(personalized: personalized);
@@ -354,6 +367,22 @@ void main() {
     await tester.tap(find.text('프로필 입력'));
     await tester.pumpAndSettle();
     expect(find.text('내 프로필'), findsOneWidget);
+  });
+
+  testWidgets('새로고침이 실패하면 목록은 두고 연결 안내를 띄운다', (tester) async {
+    final repo = OfflineAfterLoad();
+    await tester.runAsync(repo.preload);
+    await tester.pumpWidget(
+      GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: noBriefing),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('다가오는 마감'), findsOneWidget);
+
+    repo.offline = true;
+    await tester.fling(find.text('다가오는 마감'), const Offset(0, 400), 1000);
+    await tester.pumpAndSettle();
+    expect(find.text('새로 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'), findsOneWidget);
+    expect(find.text('다가오는 마감'), findsOneWidget); // 보이던 내용은 그대로
   });
 
   testWidgets('오류 시 상세 없이 안내와 재시도', (tester) async {

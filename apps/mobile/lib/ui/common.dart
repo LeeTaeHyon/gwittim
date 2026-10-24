@@ -18,6 +18,14 @@ String errorMessage(Object error) {
   return '잠시 후 다시 시도해 주세요.';
 }
 
+/// 이미 보이는 목록을 새로 받지 못했을 때. 목록은 그대로 두고 짧게 알린다.
+void showRefreshFailed(BuildContext context, Object error) {
+  final unavailable = error is! RepositoryException || error.kind == RepositoryErrorKind.unavailable;
+  ScaffoldMessenger.maybeOf(context)
+    ?..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(unavailable ? '새로 불러오지 못했어요. 인터넷 연결을 확인해 주세요.' : errorMessage(error))));
+}
+
 class MessageView extends StatelessWidget {
   const MessageView({super.key, required this.icon, required this.message, this.onRetry});
 
