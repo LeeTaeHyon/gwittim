@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 시작 화면의 빈 말풍선 (원본: docs/brand/logo.svg). 폭 150dp로 가운데 두고, 앱의 인트로(lib/ui/intro.dart)가 같은 자리에서 글자를 채운다.
+     Android 12 이상 시작 화면 아이콘 규격(288dp, 지름 192dp 원 안)에 맞춘다. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+    <group
+        android:scaleX="0.375"
+        android:scaleY="0.375"
+        android:translateX="69"
+        android:translateY="97.125">
+        <path
+            android:fillColor="#D9F66B"
+            android:pathData="M56 0H344A56 56 0 0 1 400 56V164A56 56 0 0 1 344 220H40L0 250V56A56 56 0 0 1 56 0Z" />
+    </group>
+</vector>
