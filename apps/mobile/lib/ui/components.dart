@@ -358,11 +358,10 @@ class _GwTabBarState extends State<GwTabBar> {
     final duration = still ? Duration.zero : const Duration(milliseconds: 200);
     return MediaQuery.withClampedTextScaling(
       maxScaleFactor: 1.3, // 큰 글자 설정에서도 막대 높이 안에 들어가게
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: c.tab,
-          border: Border(top: BorderSide(color: c.line)),
-        ),
+      // 리플이 막대 바탕 위에 그려지도록 Material로 칠한다.
+      child: Material(
+        color: c.tab,
+        shape: Border(top: BorderSide(color: c.line)),
         child: SafeArea(
           top: false,
           child: SizedBox(
@@ -414,8 +413,11 @@ class _TabButton extends StatelessWidget {
       child: Semantics(
         button: true,
         selected: selected,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
+        // 누른 자리에서 아이콘 쪽으로 퍼지는 둥근 리플
+        child: InkResponse(
+          radius: 36,
+          splashColor: c.tabActive.withValues(alpha: 0.14),
+          highlightColor: Colors.transparent,
           onTapDown: (_) => onPress(true),
           onTapUp: (_) => onPress(false),
           onTapCancel: () => onPress(false),
