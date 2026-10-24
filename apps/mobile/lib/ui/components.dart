@@ -336,10 +336,11 @@ class _GwTabBarState extends State<GwTabBar> {
     final duration = still ? Duration.zero : const Duration(milliseconds: 200);
     return MediaQuery.withClampedTextScaling(
       maxScaleFactor: 1.3, // 큰 글자 설정에서도 막대 높이 안에 들어가게
-      // 리플이 막대 바탕 위에 그려지도록 Material로 칠한다.
-      child: Material(
-        color: c.tab,
-        shape: Border(top: BorderSide(color: c.line)),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: c.tab,
+          border: Border(top: BorderSide(color: c.line)),
+        ),
         child: SafeArea(
           top: false,
           child: SizedBox(
@@ -391,49 +392,58 @@ class _TabButton extends StatelessWidget {
       child: Semantics(
         button: true,
         selected: selected,
-        // 누르는 동안 칸이 버튼처럼 둥근 사각형으로 칠해진다.
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            splashColor: c.tabActive.withValues(alpha: 0.10),
-            highlightColor: c.tabActive.withValues(alpha: 0.08),
-            onTapDown: (_) => onPress(true),
-            onTapUp: (_) => onPress(false),
-            onTapCancel: () => onPress(false),
-            onTap: onTap,
-            child: AnimatedScale(
-              scale: pressed ? 0.92 : 1,
-              duration: duration ~/ 2,
-              curve: Curves.easeOut,
-              child: TweenAnimationBuilder<Color?>(
-                tween: ColorTween(end: selected ? c.tabActive : c.onTab),
-                duration: duration,
-                builder: (context, color, _) => Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  spacing: 3,
-                  children: [
-                    AnimatedSwitcher(
-                      duration: duration,
-                      child: Icon(
-                        selected ? tab.activeIcon : tab.icon,
-                        key: ValueKey(selected),
-                        size: 24,
-                        color: color,
-                      ),
-                    ),
-                    Text(
-                      tab.label,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                        color: color,
-                      ),
-                    ),
-                  ],
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => onPress(true),
+          onTapUp: (_) => onPress(false),
+          onTapCancel: () => onPress(false),
+          onTap: onTap,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // 누르는 동안 아이콘과 이름 둘레가 버튼처럼 둥근 사각형으로 칠해진다. 누르는 자리는 칸 전체.
+              AnimatedContainer(
+                duration: duration ~/ 2,
+                width: 72,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: c.tabActive.withValues(alpha: pressed ? 0.10 : 0),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-            ),
+              AnimatedScale(
+                scale: pressed ? 0.92 : 1,
+                duration: duration ~/ 2,
+                curve: Curves.easeOut,
+                child: TweenAnimationBuilder<Color?>(
+                  tween: ColorTween(end: selected ? c.tabActive : c.onTab),
+                  duration: duration,
+                  builder: (context, color, _) => Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    spacing: 3,
+                    children: [
+                      AnimatedSwitcher(
+                        duration: duration,
+                        child: Icon(
+                          selected ? tab.activeIcon : tab.icon,
+                          key: ValueKey(selected),
+                          size: 24,
+                          color: color,
+                        ),
+                      ),
+                      Text(
+                        tab.label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                          color: color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
