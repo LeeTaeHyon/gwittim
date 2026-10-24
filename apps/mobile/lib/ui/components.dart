@@ -308,7 +308,7 @@ TextStyle captionStyle(BuildContext context) => TextStyle(fontSize: 13, height: 
 typedef GwTab = ({IconData icon, IconData activeIcon, String label});
 
 /// 바닥에 붙은 하단 탭 막대. 고른 탭은 채운 아이콘과 진한 색·굵은 글자로만 구분한다(2026-10-25 팀장 결정).
-/// 색은 짧게 바뀌고, 누르는 동안 탭이 살짝 줄어든다(애니메이션 줄이기 설정을 따름).
+/// 누르면 아이콘 둘레가 칠해졌다가 천천히 사라지고, 색과 아이콘은 부드럽게 바뀐다(애니메이션 줄이기 설정을 따름).
 class GwTabBar extends StatefulWidget {
   const GwTabBar({super.key, required this.tabs, required this.selected, required this.onSelect});
 
@@ -333,7 +333,6 @@ class _GwTabBarState extends State<GwTabBar> {
   Widget build(BuildContext context) {
     final c = context.gw;
     final still = MediaQuery.maybeDisableAnimationsOf(context) == true;
-    final duration = still ? Duration.zero : const Duration(milliseconds: 200);
     return MediaQuery.withClampedTextScaling(
       maxScaleFactor: 1.3, // 큰 글자 설정에서도 막대 높이 안에 들어가게
       child: DecoratedBox(
@@ -354,7 +353,7 @@ class _GwTabBarState extends State<GwTabBar> {
                       tab,
                       selected: i == widget.selected,
                       pressed: i == _pressed,
-                      duration: duration,
+                      still: still,
                       onPress: (down) => setState(() => _pressed = down ? i : null),
                       onTap: () => _select(i),
                     ),
@@ -373,7 +372,7 @@ class _TabButton extends StatelessWidget {
     this.tab, {
     required this.selected,
     required this.pressed,
-    required this.duration,
+    required this.still,
     required this.onPress,
     required this.onTap,
   });
@@ -381,13 +380,18 @@ class _TabButton extends StatelessWidget {
   final GwTab tab;
   final bool selected;
   final bool pressed;
-  final Duration duration;
+
+  /// 애니메이션 줄이기 설정
+  final bool still;
   final ValueChanged<bool> onPress;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
+    Duration ms(int milliseconds) => still ? Duration.zero : Duration(milliseconds: milliseconds);
+    // 누를 때는 빠르게, 뗄 때와 색이 바뀔 때는 천천히
+    final change = ms(320);
     return MergeSemantics(
       child: Semantics(
         button: true,
@@ -403,7 +407,8 @@ class _TabButton extends StatelessWidget {
             children: [
               // 누르는 동안 아이콘과 이름 둘레가 버튼처럼 둥근 사각형으로 칠해진다. 누르는 자리는 칸 전체.
               AnimatedContainer(
-                duration: duration ~/ 2,
+                duration: pressed ? ms(90) : ms(450),
+                curve: pressed ? Curves.easeOut : Curves.easeOutCubic,
                 width: 72,
                 height: 52,
                 decoration: BoxDecoration(
@@ -413,17 +418,20 @@ class _TabButton extends StatelessWidget {
               ),
               AnimatedScale(
                 scale: pressed ? 0.92 : 1,
-                duration: duration ~/ 2,
-                curve: Curves.easeOut,
+                duration: pressed ? ms(120) : ms(360),
+                curve: pressed ? Curves.easeOut : Curves.easeOutCubic,
                 child: TweenAnimationBuilder<Color?>(
                   tween: ColorTween(end: selected ? c.tabActive : c.onTab),
-                  duration: duration,
+                  duration: change,
+                  curve: Curves.easeOutCubic,
                   builder: (context, color, _) => Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     spacing: 3,
                     children: [
                       AnimatedSwitcher(
-                        duration: duration,
+                        duration: change,
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
                         child: Icon(
                           selected ? tab.activeIcon : tab.icon,
                           key: ValueKey(selected),
