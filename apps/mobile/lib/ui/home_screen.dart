@@ -96,7 +96,12 @@ class HomeScreenState extends State<HomeScreen> {
       });
       _maybeShowBriefing(data);
     } catch (e) {
-      if (mounted) setState(() => _error = e);
+      if (!mounted) return;
+      if (_data != null) {
+        showRefreshFailed(context, e); // 보이던 내용은 그대로 둔다
+      } else {
+        setState(() => _error = e);
+      }
     }
   }
 
@@ -328,10 +333,7 @@ class _BriefingCard extends StatelessWidget {
               style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: c.ink, height: 1.4),
               children: [
                 const TextSpan(text: '오늘 챙길 소식 '),
-                markSpan(
-                  '${briefing.count}가지',
-                  TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: c.ink),
-                ),
+                markSpan('${briefing.count}가지', TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: c.ink)),
               ],
             ),
           ),
@@ -388,18 +390,10 @@ class _UpcomingRow extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    weekdayName(day),
-                    style: TextStyle(fontSize: 11, height: 1.1, color: fg),
-                  ),
+                  Text(weekdayName(day), style: TextStyle(fontSize: 11, height: 1.1, color: fg)),
                   Text(
                     '${day.day}',
-                    style: TextStyle(
-                      fontSize: 16,
-                      height: 1.1,
-                      fontWeight: FontWeight.w700,
-                      color: fg,
-                    ),
+                    style: TextStyle(fontSize: 16, height: 1.1, fontWeight: FontWeight.w700, color: fg),
                   ),
                 ],
               ),

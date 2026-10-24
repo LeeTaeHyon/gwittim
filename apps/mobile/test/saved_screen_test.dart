@@ -108,12 +108,10 @@ void main() {
         saved('week2', deadline: '2026-10-24'),
         saved('week1', deadline: '2026-10-21'),
       ], today);
-      expect([for (final (g, _) in groups) g], [
-        SavedGroup.thisWeek,
-        SavedGroup.later,
-        SavedGroup.noDeadline,
-        SavedGroup.past,
-      ]);
+      expect(
+        [for (final (g, _) in groups) g],
+        [SavedGroup.thisWeek, SavedGroup.later, SavedGroup.noDeadline, SavedGroup.past],
+      );
       expect([for (final e in groups.first.$2) e.notice.noticeId], ['week1', 'week2']);
     });
 

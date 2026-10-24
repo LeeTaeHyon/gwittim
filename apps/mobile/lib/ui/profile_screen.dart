@@ -144,7 +144,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _body(_ProfileData data) {
     final c = context.gw;
     final caption = captionStyle(context);
-    final names = {for (final i in [...data.universities, ...data.majors]) i.id: i.name};
+    final names = {
+      for (final i in [...data.universities, ...data.majors]) i.id: i.name,
+    };
     final majors = [
       for (final m in data.majors)
         if (_universityId == null || m.id.startsWith('$_universityId.')) m,
@@ -305,7 +307,10 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.gw.sub));
+    return Text(
+      text,
+      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.gw.sub),
+    );
   }
 }
 
@@ -324,7 +329,9 @@ class _PickRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         height: 54,
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line))),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: c.line)),
+        ),
         child: Row(
           children: [
             Text(label, style: TextStyle(fontSize: 15, color: c.muted)),
@@ -371,7 +378,10 @@ class _PickerSheet extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-              child: Text(title, style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: c.ink)),
+              child: Text(
+                title,
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: c.ink),
+              ),
             ),
             Flexible(
               child: ListView(
@@ -380,10 +390,7 @@ class _PickerSheet extends StatelessWidget {
                   for (final o in options)
                     ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-                      title: Text(
-                        o.name,
-                        style: TextStyle(fontSize: 16, color: o.id.isEmpty ? c.muted : c.body),
-                      ),
+                      title: Text(o.name, style: TextStyle(fontSize: 16, color: o.id.isEmpty ? c.muted : c.body)),
                       selected: (o.id.isEmpty ? null : o.id) == selected,
                       trailing: (o.id.isEmpty ? null : o.id) == selected ? Icon(Icons.check, color: c.accent) : null,
                       onTap: () => Navigator.of(context).pop((id: o.id.isEmpty ? null : o.id)),
@@ -508,7 +515,12 @@ class _ChoiceChips extends StatelessWidget {
 }
 
 class _RoundButton extends StatelessWidget {
-  const _RoundButton({required this.label, required this.background, required this.foreground, required this.onPressed});
+  const _RoundButton({
+    required this.label,
+    required this.background,
+    required this.foreground,
+    required this.onPressed,
+  });
 
   final String label;
   final Color background;

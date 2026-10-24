@@ -336,7 +336,12 @@ ThemeData gwittimTheme([Brightness brightness = Brightness.light]) {
     bottomSheetTheme: BottomSheetThemeData(backgroundColor: c.card, dragHandleColor: c.faint),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: c.toast,
-      contentTextStyle: TextStyle(fontFamily: 'Pretendard', fontSize: 15, fontWeight: FontWeight.w600, color: c.onToast),
+      contentTextStyle: TextStyle(
+        fontFamily: 'Pretendard',
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        color: c.onToast,
+      ),
       behavior: SnackBarBehavior.floating,
       shape: const StadiumBorder(),
     ),
