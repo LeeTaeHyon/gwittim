@@ -15,35 +15,57 @@ const tabs = <GwTab>[
 ];
 
 void main() {
-  testWidgets('캡슐 탭: 누르면 그 탭을 고르고, 고른 탭만 라임 면', (tester) async {
-    final picked = <int>[];
-    await tester.pumpWidget(
+  /// 탭을 누르면 고른 탭이 바뀌는 막대
+  Future<void> pumpBar(WidgetTester tester) {
+    var selected = 0;
+    return tester.pumpWidget(
       MaterialApp(
         theme: gwittimTheme(),
-        home: Scaffold(
-          bottomNavigationBar: GwTabBar(tabs: tabs, selected: 0, onSelect: picked.add),
+        home: StatefulBuilder(
+          builder: (context, setState) => Scaffold(
+            bottomNavigationBar: GwTabBar(
+              tabs: tabs,
+              selected: selected,
+              onSelect: (i) => setState(() => selected = i),
+            ),
+          ),
         ),
       ),
     );
-    await tester.tap(find.text('저장'));
-    expect(picked, [1]);
+  }
 
-    Color? fill(String label) =>
-        tester.widget<Material>(find.ancestor(of: find.text(label), matching: find.byType(Material)).first).color;
-    expect(fill('홈'), GwColors.light.lime);
-    expect(fill('저장'), Colors.transparent);
+  final capsule = find.byKey(const ValueKey('tab-capsule'));
+  Finder slot(String label) => find.ancestor(of: find.text(label), matching: find.byType(GestureDetector)).first;
+
+  testWidgets('캡슐 탭: 고른 칸 가운데에 이름 폭만 한 캡슐, 누르면 미끄러져 옮겨 간다', (tester) async {
+    await pumpBar(tester);
+    expect(tester.getCenter(capsule).dx, moreOrLessEquals(tester.getCenter(slot('홈')).dx));
+    expect(tester.getSize(capsule).width, lessThan(tester.getSize(slot('홈')).width));
     expect(
       tester.getSemantics(find.text('홈')),
-      matchesSemantics(
-        label: '홈',
-        isButton: true,
-        isSelected: true,
-        hasSelectedState: true,
-        hasTapAction: true,
-        isFocusable: true,
-        hasFocusAction: true,
-      ),
+      isSemantics(label: '홈', isButton: true, isSelected: true, hasTapAction: true),
     );
+
+    await tester.tap(find.text('저장'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    final moving = tester.getCenter(capsule).dx;
+    expect(moving, greaterThan(tester.getCenter(slot('홈')).dx));
+    expect(moving, lessThan(tester.getCenter(slot('저장')).dx));
+
+    await tester.pumpAndSettle();
+    expect(tester.getCenter(capsule).dx, moreOrLessEquals(tester.getCenter(slot('저장')).dx));
+    expect(tester.getSemantics(find.text('저장')), isSemantics(label: '저장', isSelected: true));
+  });
+
+  testWidgets('애니메이션 줄이기 설정이면 캡슐이 바로 옮겨 간다', (tester) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue = FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await pumpBar(tester);
+    await tester.tap(find.text('프로필'));
+    await tester.pump();
+    await tester.pump();
+    expect(tester.getCenter(capsule).dx, moreOrLessEquals(tester.getCenter(slot('프로필')).dx));
   });
 
   testWidgets('탭 막대가 떠 있어도 목록 끝은 막대 위에서 보인다', (tester) async {

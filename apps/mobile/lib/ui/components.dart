@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/models.dart';
 import 'format.dart';
@@ -308,9 +309,10 @@ TextStyle captionStyle(BuildContext context) => TextStyle(fontSize: 13, height: 
 /// 하단 탭 하나
 typedef GwTab = ({IconData icon, String label});
 
-/// 떠 있는 캡슐 탭 막대 (목업 v2). 고른 탭은 라임 캡슐 안에 아이콘과 이름을 나란히, 나머지는 아이콘 아래 이름.
+/// 떠 있는 캡슐 탭 막대 (목업 v2). 칸은 똑같이 나누고, 고른 탭에만 이름 폭에 맞춘 라임 캡슐을 둔다.
+/// 탭을 바꾸면 캡슐이 미끄러져 옮겨 가고, 누르는 동안 살짝 작아진다(애니메이션 줄이기 설정을 따름).
 /// Scaffold의 bottomNavigationBar에 extendBody와 함께 쓰고, 목록은 아래 여백(MediaQuery padding)만큼 비운다.
-class GwTabBar extends StatelessWidget {
+class GwTabBar extends StatefulWidget {
   const GwTabBar({super.key, required this.tabs, required this.selected, required this.onSelect});
 
   final List<GwTab> tabs;
@@ -318,8 +320,40 @@ class GwTabBar extends StatelessWidget {
   final ValueChanged<int> onSelect;
 
   @override
+  State<GwTabBar> createState() => _GwTabBarState();
+}
+
+class _GwTabBarState extends State<GwTabBar> {
+  static const _gap = 4.0;
+  static const _selectedLabel = TextStyle(fontSize: 14, fontWeight: FontWeight.w700);
+  static const _label = TextStyle(fontSize: 12, fontWeight: FontWeight.w500);
+
+  /// 누르고 있는 탭
+  int? _pressed;
+
+  /// 캡슐 폭: 좌우 여백 16 + 아이콘 20 + 간격 6 + 이름
+  double _capsuleWidth(BuildContext context, String label) {
+    final painter = TextPainter(
+      text: TextSpan(text: label, style: DefaultTextStyle.of(context).style.merge(_selectedLabel)),
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final width = 16 + 20 + 6 + painter.width + 16;
+    painter.dispose();
+    return width;
+  }
+
+  void _select(int i) {
+    if (i != widget.selected) HapticFeedback.selectionClick();
+    widget.onSelect(i);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = context.gw;
+    final still = MediaQuery.maybeDisableAnimationsOf(context) == true;
+    Duration ms(int milliseconds) => still ? Duration.zero : Duration(milliseconds: milliseconds);
     // 제스처 막대나 버튼 영역이 있으면 그 위로 조금 띄운다.
     final bottom = math.max(MediaQuery.paddingOf(context).bottom + 8, 20.0);
     return MediaQuery.withClampedTextScaling(
@@ -334,16 +368,50 @@ class GwTabBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(31),
             boxShadow: [BoxShadow(color: c.tabShadow, blurRadius: 24, offset: const Offset(0, 10))],
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 4,
-            children: [
-              for (final (i, tab) in tabs.indexed)
-                Expanded(
-                  flex: i == selected ? 13 : 10,
-                  child: _TabButton(tab, selected: i == selected, onTap: () => onSelect(i)),
-                ),
-            ],
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final count = widget.tabs.length;
+              final slot = (box.maxWidth - _gap * (count - 1)) / count;
+              final width = math.min(_capsuleWidth(context, widget.tabs[widget.selected].label), slot);
+              return Stack(
+                children: [
+                  AnimatedPositioned(
+                    duration: ms(280),
+                    curve: Curves.easeOutCubic,
+                    left: widget.selected * (slot + _gap) + (slot - width) / 2,
+                    width: width,
+                    top: 0,
+                    bottom: 0,
+                    child: AnimatedScale(
+                      scale: _pressed == widget.selected ? 0.94 : 1,
+                      duration: ms(120),
+                      curve: Curves.easeOut,
+                      child: DecoratedBox(
+                        key: const ValueKey('tab-capsule'),
+                        decoration: BoxDecoration(color: c.lime, borderRadius: BorderRadius.circular(25)),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: _gap,
+                    children: [
+                      for (final (i, tab) in widget.tabs.indexed)
+                        Expanded(
+                          child: _TabButton(
+                            tab,
+                            selected: i == widget.selected,
+                            pressed: i == _pressed,
+                            duration: ms(200),
+                            onPress: (down) => setState(() => _pressed = down ? i : null),
+                            onTap: () => _select(i),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -352,10 +420,20 @@ class GwTabBar extends StatelessWidget {
 }
 
 class _TabButton extends StatelessWidget {
-  const _TabButton(this.tab, {required this.selected, required this.onTap});
+  const _TabButton(
+    this.tab, {
+    required this.selected,
+    required this.pressed,
+    required this.duration,
+    required this.onPress,
+    required this.onTap,
+  });
 
   final GwTab tab;
   final bool selected;
+  final bool pressed;
+  final Duration duration;
+  final ValueChanged<bool> onPress;
   final VoidCallback onTap;
 
   @override
@@ -363,40 +441,35 @@ class _TabButton extends StatelessWidget {
     final c = context.gw;
     final color = selected ? c.limeInk : c.onTab;
     final icon = Icon(tab.icon, size: 20, color: color);
-    final radius = BorderRadius.circular(25);
+    // 고른 탭은 아이콘 옆에, 나머지는 아이콘 아래에 이름. 바뀔 때 겹쳐 흐려지며 넘어간다.
+    final content = selected
+        ? Row(
+            key: const ValueKey(true),
+            mainAxisAlignment: MainAxisAlignment.center,
+            spacing: 6,
+            children: [icon, Text(tab.label, style: _GwTabBarState._selectedLabel.copyWith(color: color))],
+          )
+        : Column(
+            key: const ValueKey(false),
+            mainAxisAlignment: MainAxisAlignment.center,
+            spacing: 2,
+            children: [icon, Text(tab.label, style: _GwTabBarState._label.copyWith(color: color))],
+          );
     return MergeSemantics(
       child: Semantics(
         button: true,
         selected: selected,
-        child: Material(
-          color: selected ? c.lime : Colors.transparent,
-          borderRadius: radius,
-          child: InkWell(
-            borderRadius: radius,
-            onTap: onTap,
-            child: selected
-                ? Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    spacing: 6,
-                    children: [
-                      icon,
-                      Text(
-                        tab.label,
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: color),
-                      ),
-                    ],
-                  )
-                : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    spacing: 2,
-                    children: [
-                      icon,
-                      Text(
-                        tab.label,
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: color),
-                      ),
-                    ],
-                  ),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => onPress(true),
+          onTapUp: (_) => onPress(false),
+          onTapCancel: () => onPress(false),
+          onTap: onTap,
+          child: AnimatedScale(
+            scale: pressed ? (selected ? 0.94 : 0.88) : 1, // 고른 탭은 캡슐과 같이 줄어든다
+            duration: duration ~/ 2,
+            curve: Curves.easeOut,
+            child: AnimatedSwitcher(duration: duration, child: content),
           ),
         ),
       ),
