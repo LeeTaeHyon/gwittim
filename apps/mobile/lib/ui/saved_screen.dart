@@ -217,7 +217,7 @@ class SavedScreenState extends State<SavedScreen> {
             hasScrollBody: false,
             child: Container(
               margin: const EdgeInsets.only(top: 16),
-              padding: const EdgeInsets.fromLTRB(20, 26, 20, 32),
+              padding: EdgeInsets.fromLTRB(20, 26, 20, 32 + MediaQuery.paddingOf(context).bottom), // 탭 막대 높이만큼
               decoration: BoxDecoration(
                 color: c.card,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
