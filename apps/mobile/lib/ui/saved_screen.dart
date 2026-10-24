@@ -318,10 +318,7 @@ class _SavedRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              width: 34,
-              child: _DateColumn(notice: n, group: group, today: today),
-            ),
+            SizedBox(width: 34, child: _DateColumn(notice: n, group: group, today: today)),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -437,7 +434,9 @@ class _DateColumn extends StatelessWidget {
       );
     }
     final left = daysLeft(notice, today);
-    final color = group == SavedGroup.past ? c.muted : (left != null && left <= urgentDays ? c.urgent : c.accent);
+    final color = group == SavedGroup.past
+        ? c.muted
+        : (left != null && left <= urgentDays ? c.urgent : c.accent);
     final week = group == SavedGroup.thisWeek || group == SavedGroup.nextWeek;
     return Column(
       children: [

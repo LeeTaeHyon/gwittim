@@ -67,10 +67,7 @@ class _AuthGateState extends State<AuthGate> {
             themeController: _theme,
           );
         }
-        return GwMaterialApp(
-          themeController: _theme,
-          home: SignInScreen(auth: widget.auth),
-        );
+        return GwMaterialApp(themeController: _theme, home: SignInScreen(auth: widget.auth));
       },
     );
   }
@@ -157,7 +154,11 @@ class _SignInScreenState extends State<SignInScreen> {
                       const SizedBox(height: 10),
                       Padding(
                         padding: const EdgeInsets.only(left: 12),
-                        child: _ExampleBubble(kicker: '저장한 공고', kickerColor: c.accent, text: '발표회 마감이 3일 늦춰졌어요'),
+                        child: _ExampleBubble(
+                          kicker: '저장한 공고',
+                          kickerColor: c.accent,
+                          text: '발표회 마감이 3일 늦춰졌어요',
+                        ),
                       ),
                       const Spacer(),
                       const SizedBox(height: 36),
@@ -244,10 +245,7 @@ class _ExampleBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              kicker,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kickerColor),
-            ),
+            Text(kicker, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kickerColor)),
             const SizedBox(height: 3),
             // 화면 높이 계산(IntrinsicHeight) 안에 있어서 형광펜 위젯 대신 글자 바탕색을 쓴다.
             Text.rich(

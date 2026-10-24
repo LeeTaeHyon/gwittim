@@ -178,7 +178,9 @@ class _UrgentBubble extends StatelessWidget {
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: d == start ? c.point : (d.difference(start).inDays == left ? c.urgentFill : null),
+                          color: d == start
+                              ? c.point
+                              : (d.difference(start).inDays == left ? c.urgentFill : null),
                         ),
                         child: Text(
                           '${d.day}',

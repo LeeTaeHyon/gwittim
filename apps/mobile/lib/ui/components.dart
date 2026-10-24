@@ -89,7 +89,14 @@ class GwBadge extends StatelessWidget {
 /// 형광펜: 글자 아래쪽 58%만 칠한다. animate면 왼쪽에서 오른쪽으로 그어진다(애니메이션 줄이기 설정을 따름).
 /// 색을 주지 않으면 테마의 형광펜 색(다크는 투명한 라임)을 쓴다.
 class Marker extends StatelessWidget {
-  const Marker(this.text, {super.key, this.style, this.color, this.animate = false, this.delay = Duration.zero});
+  const Marker(
+    this.text, {
+    super.key,
+    this.style,
+    this.color,
+    this.animate = false,
+    this.delay = Duration.zero,
+  });
 
   final String text;
   final TextStyle? style;
@@ -219,7 +226,10 @@ class TipBubble extends StatelessWidget {
                   ],
                 ),
               ),
-              if (onTap != null) ...[const SizedBox(width: 8), Icon(Icons.chevron_right, size: 20, color: c.muted)],
+              if (onTap != null) ...[
+                const SizedBox(width: 8),
+                Icon(Icons.chevron_right, size: 20, color: c.muted),
+              ],
             ],
           ),
         ),
