@@ -159,7 +159,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 8),
                 Text('시스템 설정을 고르면 기기 화면 모드를 따라가요.', style: caption),
                 if (widget.onSignOut case final signOut?) ...[
-                  Padding(padding: const EdgeInsets.symmetric(vertical: 20), child: Divider(height: 1, color: c.line)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    child: Divider(height: 1, color: c.line),
+                  ),
                   const _FieldLabel('계정'),
                   const SizedBox(height: 10),
                   Container(
@@ -189,7 +192,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _RoundButton(label: '로그아웃', background: c.chip, foreground: c.onChip, onPressed: signOut),
+                        child: _RoundButton(
+                          label: '로그아웃',
+                          background: c.chip,
+                          foreground: c.onChip,
+                          onPressed: signOut,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -459,7 +467,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
   Widget _page(GwColors c) {
     final caption = captionStyle(context);
-    final names = {for (final i in [...widget.universities, ...widget.majors]) i.id: i.name};
+    final names = {
+      for (final i in [...widget.universities, ...widget.majors]) i.id: i.name,
+    };
     final majors = [
       for (final m in widget.majors)
         if (_universityId == null || m.id.startsWith('$_universityId.')) m,
@@ -582,10 +592,7 @@ class _StepDots extends StatelessWidget {
                 curve: Curves.easeOutCubic,
                 width: i == step ? 20 : 8,
                 height: 8,
-                decoration: BoxDecoration(
-                  color: i <= step ? c.cta : c.line,
-                  borderRadius: BorderRadius.circular(4),
-                ),
+                decoration: BoxDecoration(color: i <= step ? c.cta : c.line, borderRadius: BorderRadius.circular(4)),
               ),
             ],
           ],
@@ -822,7 +829,9 @@ class _PickerDialogState extends State<_PickerDialog> {
 }
 
 /// 하나만 고르는 칸. allowEmpty면 고른 칸을 다시 눌러 비울 수 있다.
-class _Segments<T> extends StatelessWidget {
+/// 고른 칸의 바탕은 하나뿐이고, 다른 칸을 고르면 그쪽으로 양옆으로 미끄러진다. 비우면 그 자리에서 흐려진다
+/// (애니메이션 줄이기 설정이면 바로 바뀜).
+class _Segments<T> extends StatefulWidget {
   const _Segments({required this.options, required this.selected, required this.onChanged, this.allowEmpty = false});
 
   final List<(T, String)> options;
@@ -831,48 +840,98 @@ class _Segments<T> extends StatelessWidget {
   final ValueChanged<T?> onChanged;
 
   @override
+  State<_Segments<T>> createState() => _SegmentsState<T>();
+}
+
+class _SegmentsState<T> extends State<_Segments<T>> {
+  /// 비웠을 때 바탕이 흐려지며 머무는 자리
+  late int _last = _index.clamp(0, widget.options.length - 1);
+
+  int get _index => widget.options.indexWhere((o) => o.$1 == widget.selected);
+
+  @override
+  void didUpdateWidget(_Segments<T> old) {
+    super.didUpdateWidget(old);
+    if (_index >= 0) _last = _index;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = context.gw;
+    final move = MediaQuery.maybeDisableAnimationsOf(context) == true
+        ? Duration.zero
+        : const Duration(milliseconds: 320);
+    const gap = 4.0;
+    final on = _index >= 0;
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(color: c.neutral, borderRadius: BorderRadius.circular(16)),
-      child: Row(
-        children: [
-          for (final (i, (value, label)) in options.indexed)
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(left: i == 0 ? 0 : 4),
-                child: Semantics(
-                  button: true,
-                  selected: value == selected,
-                  inMutuallyExclusiveGroup: true,
-                  child: Material(
-                    color: value == selected ? c.cta : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () => onChanged(value == selected && allowEmpty ? null : value),
-                      child: SizedBox(
-                        height: 44,
-                        child: Center(
-                          child: Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w700,
-                              color: value == selected ? c.onCta : c.sub,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final n = widget.options.length;
+          final width = (box.maxWidth - gap * (n - 1)) / n;
+          return Stack(
+            children: [
+              AnimatedPositioned(
+                key: const ValueKey('segment-thumb'),
+                duration: move,
+                curve: Curves.easeOutCubic,
+                left: _last * (width + gap),
+                top: 0,
+                bottom: 0,
+                width: width,
+                child: AnimatedOpacity(
+                  opacity: on ? 1 : 0,
+                  duration: move,
+                  curve: Curves.easeOutCubic,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(color: c.cta, borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  // 칸 너비를 바탕과 똑같이 둬야 바탕이 칸에 딱 맞는다.
+                  for (final (i, (value, label)) in widget.options.indexed) ...[
+                    if (i > 0) const SizedBox(width: gap),
+                    SizedBox(
+                      width: width,
+                      child: Semantics(
+                        button: true,
+                        selected: value == widget.selected,
+                        inMutuallyExclusiveGroup: true,
+                        child: Material(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => widget.onChanged(value == widget.selected && widget.allowEmpty ? null : value),
+                            child: SizedBox(
+                              height: 44,
+                              child: Center(
+                                child: AnimatedDefaultTextStyle(
+                                  duration: move,
+                                  curve: Curves.easeOutCubic,
+                                  style: TextStyle(
+                                    fontFamily: 'Pretendard',
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: value == widget.selected ? c.onCta : c.sub,
+                                  ),
+                                  child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  ],
+                ],
               ),
-            ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
