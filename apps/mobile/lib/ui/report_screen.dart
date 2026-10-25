@@ -203,31 +203,32 @@ class _ReportScreenState extends State<ReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.gw;
-    return Scaffold(
-      backgroundColor: c.card,
-      appBar: AppBar(backgroundColor: c.card),
-      body: FutureBuilder(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return MessageView(
-              icon: Icons.cloud_off,
-              message: errorMessage(snapshot.error!),
-              onRetry: () => setState(() {
-                _future = widget.repository.getNotice(widget.noticeId);
-              }),
-            );
-          }
-          final notice = snapshot.data;
-          if (notice == null) {
-            return const MessageView(icon: Icons.search_off, message: '공고를 찾을 수 없어요.');
-          }
-          return _body(notice);
-        },
+    // 스크롤하면 위 막대에 공고 제목이 나타난다.
+    return FutureBuilder(
+      future: _future,
+      builder: (context, snapshot) => Scaffold(
+        backgroundColor: context.gw.card,
+        appBar: GwTopBar(title: snapshot.hasError ? null : snapshot.data?.summary.title),
+        body: Builder(
+          builder: (context) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return MessageView.error(
+                snapshot.error!,
+                onRetry: () => setState(() {
+                  _future = widget.repository.getNotice(widget.noticeId);
+                }),
+              );
+            }
+            final notice = snapshot.data;
+            if (notice == null) {
+              return const MessageView(title: '공고를 찾을 수 없어요', detail: '학교 공지에서 지워졌거나 아직 정리 중일 수 있어요.');
+            }
+            return _body(notice);
+          },
+        ),
       ),
     );
   }

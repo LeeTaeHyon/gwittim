@@ -32,20 +32,17 @@ class BriefingScreen extends StatelessWidget {
         ),
       if (briefing.changed.isNotEmpty) _ChangedBubble(entry: briefing.changed.first, more: briefing.changed.length - 1),
     ];
+    // 아래 버튼 뒤로 목록이 이어지고, 버튼 위 24는 바탕색으로 흐려진다. 마지막 항목 아래에는 버튼 높이만큼 비운다.
     return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(tooltip: '브리핑 닫기', icon: const Icon(Icons.close), onPressed: () => Navigator.of(context).pop()),
-        ],
-      ),
+      extendBody: true,
+      appBar: GwTopBar(onClose: () => Navigator.of(context).pop(), closeLabel: '브리핑 닫기'),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 0, 16, 24),
+        padding: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.paddingOf(context).bottom + 8),
         children: [
           _Rise(
             delay: 0,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -84,23 +81,45 @@ class BriefingScreen extends StatelessWidget {
             ),
           ),
           for (var i = 0; i < sections.length; i++) ...[
-            _Rise(
-              delay: 300 + i * 250,
-              child: Padding(padding: const EdgeInsets.only(right: 18), child: sections[i]),
-            ),
+            _Rise(delay: 300 + i * 250, child: sections[i]),
             const SizedBox(height: 14),
           ],
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-            child: Text('추천 순서는 관심사·희망 직무·전공·마감 시기로 정해요. 합격 가능성을 뜻하지 않아요.', style: captionStyle(context)),
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+            child: Text(
+              '추천 순서는 관심사·희망 직무·전공·마감 시기로 정해요. 합격 가능성을 뜻하지 않아요.',
+              style: TextStyle(fontSize: 12.5, height: 1.6, color: c.muted),
+            ),
           ),
         ],
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-          child: FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('확인했어요')),
-        ),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          IgnorePointer(
+            child: Container(
+              height: 24,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [c.bg.withValues(alpha: 0), c.bg],
+                ),
+              ),
+            ),
+          ),
+          ColoredBox(
+            color: c.bg,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                child: FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('확인했어요')),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -178,9 +197,7 @@ class _UrgentBubble extends StatelessWidget {
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: d == start
-                              ? c.point
-                              : (d.difference(start).inDays == left ? c.urgentFill : null),
+                          color: d == start ? c.point : (d.difference(start).inDays == left ? c.urgentFill : null),
                         ),
                         child: Text(
                           '${d.day}',

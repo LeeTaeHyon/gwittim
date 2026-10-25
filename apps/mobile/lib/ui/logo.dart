@@ -23,6 +23,53 @@ class GwLogo extends StatelessWidget {
   }
 }
 
+/// 글자 없는 로고 말풍선. 오류·빈 화면의 그림과 로딩 표시에 쓴다.
+/// dots가 있으면 말풍선 안에 점 세 개를 차례로 깜빡인다(0~1 반복 진행도).
+class GwBubbleMark extends StatelessWidget {
+  const GwBubbleMark({super.key, required this.height, required this.color, this.dotColor, this.dots});
+
+  final double height;
+  final Color color;
+  final Color? dotColor;
+  final Animation<double>? dots;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(size: Size(height * 400 / 250, height), painter: _BubblePainter(color, dotColor, dots));
+  }
+}
+
+class _BubblePainter extends CustomPainter {
+  _BubblePainter(this.color, this.dotColor, this.dots) : super(repaint: dots);
+
+  final Color color;
+  final Color? dotColor;
+  final Animation<double>? dots;
+
+  static final _bubble = svgPath(logoBubbleData);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.scale(size.width / 400, size.height / 250);
+    canvas.drawPath(_bubble, Paint()..color = color);
+    final dotColor = this.dotColor;
+    if (dotColor == null) return;
+    // 점 하나가 밝아졌다 흐려지는 동안 다음 점이 이어서 밝아진다.
+    final t = dots?.value;
+    for (var i = 0; i < 3; i++) {
+      var alpha = 1.0;
+      if (t != null) {
+        final phase = ((t - i * 0.2) % 1 + 1) % 1;
+        alpha = 0.3 + 0.7 * (phase < 0.4 ? Curves.easeInOut.transform(1 - (phase - 0.2).abs() / 0.2) : 0);
+      }
+      canvas.drawCircle(Offset(130 + i * 70.0, 110), 22, Paint()..color = dotColor.withValues(alpha: alpha));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BubblePainter old) => old.color != color || old.dotColor != dotColor || old.dots != dots;
+}
+
 /// `docs/brand/logo.svg`의 path 데이터 (viewBox 0 0 400 250). 원본을 고치면 여기도 같이 고친다.
 @visibleForTesting
 const logoBubbleData = 'M56 0H344A56 56 0 0 1 400 56V164A56 56 0 0 1 344 220H40L0 250V56A56 56 0 0 1 56 0Z';

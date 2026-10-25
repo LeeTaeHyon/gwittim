@@ -68,14 +68,7 @@ class GwBadge extends StatelessWidget {
 /// 형광펜: 글자 아래쪽 58%만 칠한다. animate면 왼쪽에서 오른쪽으로 그어진다(애니메이션 줄이기 설정을 따름).
 /// 색을 주지 않으면 테마의 형광펜 색(다크는 투명한 라임)을 쓴다.
 class Marker extends StatelessWidget {
-  const Marker(
-    this.text, {
-    super.key,
-    this.style,
-    this.color,
-    this.animate = false,
-    this.delay = Duration.zero,
-  });
+  const Marker(this.text, {super.key, this.style, this.color, this.animate = false, this.delay = Duration.zero});
 
   final String text;
   final TextStyle? style;
@@ -205,10 +198,7 @@ class TipBubble extends StatelessWidget {
                   ],
                 ),
               ),
-              if (onTap != null) ...[
-                const SizedBox(width: 8),
-                Icon(Icons.chevron_right, size: 20, color: c.muted),
-              ],
+              if (onTap != null) ...[const SizedBox(width: 8), Icon(Icons.chevron_right, size: 20, color: c.muted)],
             ],
           ),
         ),
@@ -219,10 +209,13 @@ class TipBubble extends StatelessWidget {
 
 /// 카드 안 작은 보조 버튼 ("공고 보기 >")
 class SoftButton extends StatelessWidget {
-  const SoftButton({super.key, required this.label, required this.onPressed});
+  const SoftButton({super.key, required this.label, required this.onPressed, this.icon = Icons.chevron_right_rounded});
 
   final String label;
   final VoidCallback onPressed;
+
+  /// 글자 뒤 아이콘. null이면 글자만.
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -240,7 +233,10 @@ class SoftButton extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [Text(label), const SizedBox(width: 2), const Icon(Icons.chevron_right, size: 18)],
+        children: [
+          Text(label),
+          if (icon != null) ...[const SizedBox(width: 2), Icon(icon, size: 18)],
+        ],
       ),
     );
   }
@@ -452,6 +448,161 @@ class _TabButton extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 화면이 들어오고 나가는 움직임. 탭 전환과 같은 곡선과 시간(320ms)을 쓴다.
+/// 옆 화면(공고 리포트)은 오른쪽에서 48 밀려 들어오며 나타나고, rise면(하루 첫 브리핑) 아래에서 올라온다.
+Widget gwTransition(Animation<double> animation, Widget child, {bool rise = false}) {
+  return AnimatedBuilder(
+    animation: animation,
+    child: child,
+    builder: (context, child) {
+      final raw = animation.value;
+      final t = Curves.easeOutCubic.transform(raw);
+      final shift = 48 * (1 - t);
+      return Opacity(
+        opacity: Curves.easeOut.transform(((raw - 0.1) / 0.9).clamp(0.0, 1.0)),
+        child: Transform.translate(offset: rise ? Offset(0, shift) : Offset(shift, 0), child: child),
+      );
+    },
+  );
+}
+
+/// 공통 화면 이동. 애니메이션 줄이기 설정이면 바로 바뀐다.
+Route<T> gwRoute<T>(BuildContext context, WidgetBuilder builder, {bool rise = false}) {
+  final duration = MediaQuery.maybeDisableAnimationsOf(context) == true
+      ? Duration.zero
+      : const Duration(milliseconds: 320);
+  return PageRouteBuilder<T>(
+    fullscreenDialog: rise,
+    transitionDuration: duration,
+    reverseTransitionDuration: duration,
+    pageBuilder: (context, _, _) => builder(context),
+    transitionsBuilder: (_, animation, _, child) => gwTransition(animation, child, rise: rise),
+  );
+}
+
+/// 테마의 기본 화면 이동도 gwRoute와 같게 둔다. 아래에 깔린 화면은 움직이지 않는다.
+class GwPageTransitions extends PageTransitionsBuilder {
+  const GwPageTransitions();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) => gwTransition(animation, child, rise: route.fullscreenDialog);
+}
+
+/// 화면 위 막대. 스크롤하기 전에는 비어 있고, 내용이 막대 밑으로 들어가면 card 바탕과 구분선이 생기며
+/// title이 한 줄로 나타난다. onClose가 있으면 오른쪽에 닫기(✕), 없으면 왼쪽에 뒤로(←).
+class GwTopBar extends StatefulWidget implements PreferredSizeWidget {
+  const GwTopBar({super.key, this.title, this.onClose, this.closeLabel = '닫기', this.actions = const []});
+
+  final String? title;
+  final VoidCallback? onClose;
+  final String closeLabel;
+  final List<Widget> actions;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(56);
+
+  @override
+  State<GwTopBar> createState() => _GwTopBarState();
+}
+
+class _GwTopBarState extends State<GwTopBar> {
+  ScrollNotificationObserverState? _observer;
+  bool _under = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _observer?.removeListener(_onScroll);
+    _observer = ScrollNotificationObserver.maybeOf(context)?..addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _observer?.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  void _onScroll(ScrollNotification n) {
+    if (n is! ScrollUpdateNotification || n.depth != 0 || n.metrics.axis != Axis.vertical) return;
+    final under = n.metrics.extentBefore > 0;
+    if (under != _under) setState(() => _under = under);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final change = MediaQuery.maybeDisableAnimationsOf(context) == true
+        ? Duration.zero
+        : const Duration(milliseconds: 320);
+    final iconColor = c.ink;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: statusBarStyle(Theme.of(context).brightness),
+      child: AnimatedContainer(
+        duration: change,
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: c.card.withValues(alpha: _under ? 1 : 0),
+          border: Border(
+            bottom: BorderSide(color: c.line.withValues(alpha: _under ? 1 : 0)),
+          ),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: SizedBox(
+            height: 56,
+            child: Row(
+              children: [
+                if (widget.onClose == null && (ModalRoute.of(context)?.canPop ?? false))
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: IconButton(
+                      tooltip: '뒤로',
+                      icon: Icon(Icons.arrow_back_rounded, color: iconColor),
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
+                  )
+                else
+                  const SizedBox(width: 20),
+                Expanded(
+                  child: AnimatedOpacity(
+                    opacity: _under && widget.title != null ? 1 : 0,
+                    duration: change,
+                    curve: Curves.easeOutCubic,
+                    child: Text(
+                      widget.title ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.ink),
+                    ),
+                  ),
+                ),
+                ...widget.actions,
+                if (widget.onClose case final close?)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: IconButton(
+                      tooltip: widget.closeLabel,
+                      icon: Icon(Icons.close_rounded, color: iconColor),
+                      onPressed: close,
+                    ),
+                  )
+                else
+                  const SizedBox(width: 8),
+              ],
+            ),
           ),
         ),
       ),
