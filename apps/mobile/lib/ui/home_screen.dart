@@ -7,7 +7,10 @@ import 'briefing_screen.dart';
 import 'common.dart';
 import 'components.dart';
 import 'format.dart';
+import 'icons.dart';
+import 'notices_screen.dart';
 import 'report_screen.dart';
+import 'skeleton.dart';
 import 'theme.dart';
 
 /// 홈에 필요한 응답 묶음. 저장 목록·프로필을 못 읽어도 추천은 보여준다.
@@ -27,8 +30,8 @@ class HomeData {
   final Map<String, String> majors;
 }
 
-/// 홈 (D-009): 오늘의 귀띔 → 다가오는 마감 → 나에게 맞는 공고 → 저장한 공고 마감 변경.
-/// 추천 순서는 서버가 정한 그대로 보여준다.
+/// 홈 (D-009): 오늘의 귀띔(숫자 요약) → 다가오는 마감 → 나에게 맞는 공고 상위 3개 → 저장한 공고 마감 변경.
+/// 추천 순서는 서버가 정한 그대로 보여주고, 전체 목록은 공고 탭에 있다 (2026-10-25 팀장 결정 Q1 B·Q3).
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
@@ -37,6 +40,7 @@ class HomeScreen extends StatefulWidget {
     required this.briefingStore,
     this.today,
     this.onOpenProfile,
+    this.onShowAll,
   });
 
   final NoticeRepository repository;
@@ -46,6 +50,9 @@ class HomeScreen extends StatefulWidget {
   /// 테스트용. 기본은 기기 날짜.
   final DateTime? today;
   final VoidCallback? onOpenProfile;
+
+  /// '나에게 맞는 공고' 전체 보기 (공고 탭)
+  final VoidCallback? onShowAll;
 
   @override
   State<HomeScreen> createState() => HomeScreenState();
@@ -120,17 +127,15 @@ class HomeScreenState extends State<HomeScreen> {
 
   void _openBriefing(Briefing briefing) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => BriefingScreen(briefing: briefing, today: _today, onOpenNotice: _openNotice),
-      ),
+      gwRoute(context, (_) => BriefingScreen(briefing: briefing, today: _today, onOpenNotice: _openNotice), rise: true),
     );
   }
 
   Future<void> _openNotice(NoticeSummary notice, Recommendation? recommendation) async {
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ReportScreen(
+      gwRoute(
+        context,
+        (_) => ReportScreen(
           repository: widget.repository,
           noticeId: notice.noticeId,
           recommendation: recommendation,
@@ -147,16 +152,15 @@ class HomeScreenState extends State<HomeScreen> {
     final data = _data;
     if (data == null) {
       if (_error != null) {
-        return MessageView(
-          icon: Icons.cloud_off,
-          message: errorMessage(_error!),
+        return MessageView.error(
+          _error!,
           onRetry: () {
             setState(() => _error = null);
             reload();
           },
         );
       }
-      return const Center(child: CircularProgressIndicator());
+      return const HomeSkeleton();
     }
     return RefreshIndicator(onRefresh: reload, child: _body(data));
   }
@@ -176,11 +180,15 @@ class HomeScreenState extends State<HomeScreen> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
-        _Header(profile: data.profile, majors: data.majors, today: _today),
+        _Header(profile: data.profile, majors: data.majors, today: _today, onOpenProfile: widget.onOpenProfile),
         const SizedBox(height: 16),
         if (!list.personalized) ...[_ProfilePrompt(onOpenProfile: widget.onOpenProfile), const SizedBox(height: 12)],
         if (!briefing.isEmpty) ...[
-          _BriefingCard(briefing: briefing, today: _today, onOpen: () => _openBriefing(briefing)),
+          _BriefingCard(
+            briefing: briefing,
+            urgentCount: list.items.where((e) => (daysLeft(e.notice, _today) ?? 99) <= urgentDays).length,
+            onOpen: () => _openBriefing(briefing),
+          ),
           const SizedBox(height: 28),
         ],
         SectionTitle('다가오는 마감', trailing: Text('앞으로 2주', style: caption)),
@@ -204,8 +212,23 @@ class HomeScreenState extends State<HomeScreen> {
                 ),
               if (undated > 0)
                 Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 8),
-                  child: Text('마감일이 정해지지 않은 공고 $undated개(선착순 등)는 넣지 않았어요.', style: caption),
+                  padding: const EdgeInsets.only(top: 6, bottom: 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Icon(Icons.info_outline_rounded, size: 15, color: c.muted),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '마감일이 정해지지 않은 공고 $undated개(선착순 등)는 넣지 않았어요.',
+                          style: TextStyle(fontSize: 13, height: 1.5, color: c.muted),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
             ],
           ),
@@ -213,15 +236,17 @@ class HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 28),
         SectionTitle(
           list.personalized ? '나에게 맞는 공고' : '최신 공고',
-          trailing: Text(list.personalized ? '추천순' : '최신순', style: caption),
+          trailing: list.items.length > _homeCount && widget.onShowAll != null
+              ? _ShowAll(onTap: widget.onShowAll!)
+              : Text(list.personalized ? '추천순' : '최신순', style: caption),
         ),
         const SizedBox(height: 12),
         if (list.items.isEmpty)
           GwCard(
             child: Text('지금 보여드릴 공고가 없어요.', style: TextStyle(fontSize: 15, color: c.sub)),
           ),
-        for (final e in list.items) ...[
-          _NoticeCard(
+        for (final e in list.items.take(_homeCount)) ...[
+          NoticeCard(
             entry: e,
             category: data.categories[e.notice.category] ?? e.notice.category,
             today: _today,
@@ -233,21 +258,46 @@ class HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 8),
           _ChangedCard(entry: s, onTap: () => _openNotice(s.notice, null)),
         ],
-        if (list.personalized) ...[
-          const SizedBox(height: 16),
-          Text('추천 순서는 관심사·희망 직무·전공·마감 시기로 정해요. 합격 가능성을 뜻하지 않아요.', style: caption),
-        ],
       ],
     );
   }
 }
 
+/// 홈에 보이는 맞춤 공고 수. 나머지는 공고 탭에서 본다.
+const _homeCount = 3;
+
+class _ShowAll extends StatelessWidget {
+  const _ShowAll({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return TextButton(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        foregroundColor: c.sub,
+        minimumSize: const Size(48, 40),
+        padding: const EdgeInsets.only(left: 10, right: 4),
+        shape: const StadiumBorder(),
+        textStyle: const TextStyle(fontFamily: 'Pretendard', fontSize: 14, fontWeight: FontWeight.w600),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Text('전체 보기'), Icon(Icons.chevron_right_rounded, size: 18)],
+      ),
+    );
+  }
+}
+
 class _Header extends StatelessWidget {
-  const _Header({required this.profile, required this.majors, required this.today});
+  const _Header({required this.profile, required this.majors, required this.today, this.onOpenProfile});
 
   final UserProfile? profile;
   final Map<String, String> majors;
   final DateTime today;
+  final VoidCallback? onOpenProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -265,11 +315,21 @@ class _Header extends StatelessWidget {
           shortDay(today),
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.muted),
         ),
-        const Spacer(),
-        if (who.isNotEmpty)
-          Text(
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
             who,
+            textAlign: TextAlign.end,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.sub),
+          ),
+        ),
+        if (onOpenProfile != null)
+          IconButton(
+            tooltip: '내 정보',
+            onPressed: onOpenProfile,
+            icon: GwIcon(GwGlyph.profile, color: c.ink),
           ),
       ],
     );
@@ -305,18 +365,20 @@ class _ProfilePrompt extends StatelessWidget {
   }
 }
 
+/// 오늘의 귀띔: 숫자 요약만 보이고 공고 제목은 다시 쓰지 않는다 (2026-10-25 팀장 결정 Q3).
 class _BriefingCard extends StatelessWidget {
-  const _BriefingCard({required this.briefing, required this.today, required this.onOpen});
+  const _BriefingCard({required this.briefing, required this.urgentCount, required this.onOpen});
 
   final Briefing briefing;
-  final DateTime today;
+
+  /// 7일 안에 마감되는 공고 수
+  final int urgentCount;
   final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
-    final line = TextStyle(fontSize: 15, height: 1.5, color: c.body);
-    final urgent = briefing.urgent;
+    final headline = TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: c.ink, height: 1.4);
     return GwCard(
       bubble: true,
       onTap: onOpen,
@@ -330,27 +392,33 @@ class _BriefingCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text.rich(
             TextSpan(
-              style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: c.ink, height: 1.4),
+              style: headline,
               children: [
                 const TextSpan(text: '오늘 챙길 소식 '),
-                markSpan(
-                  '${briefing.count}가지',
-                  TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: c.ink),
+                markSpan('${briefing.count}가지', headline),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _Stat(count: urgentCount, label: '마감 임박', urgent: urgentCount > 0),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _Stat(count: briefing.related.length, label: '맞춤 공고'),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _Stat(count: briefing.changed.length, label: '마감 바뀐\n저장 공고'),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
-          if (urgent != null)
-            Text(
-              '• ${urgent.notice.title} 마감 ${_dday(urgent.notice, today)}',
-              style: line,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          if (briefing.related.isNotEmpty) Text('• 관심 분야·직무·전공 관련 공고 ${briefing.related.length}개', style: line),
-          if (briefing.changed.isNotEmpty) Text('• 저장한 공고 ${briefing.changed.length}개 마감이 바뀜', style: line),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           SoftButton(label: '브리핑 보기', onPressed: onOpen),
         ],
       ),
@@ -358,9 +426,38 @@ class _BriefingCard extends StatelessWidget {
   }
 }
 
-String _dday(NoticeSummary n, DateTime today) {
-  final left = daysLeft(n, today);
-  return left == null ? '' : (left == 0 ? '오늘' : 'D-$left');
+class _Stat extends StatelessWidget {
+  const _Stat({required this.count, required this.label, this.urgent = false});
+
+  final int count;
+  final String label;
+  final bool urgent;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return MergeSemantics(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+        decoration: BoxDecoration(color: c.neutral, borderRadius: BorderRadius.circular(14)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$count개',
+              style: TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+                color: count == 0 ? c.muted : (urgent ? c.urgent : c.ink),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(label, maxLines: 2, style: TextStyle(fontSize: 12, height: 1.35, color: c.sub)),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _UpcomingRow extends StatelessWidget {
@@ -393,18 +490,10 @@ class _UpcomingRow extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    weekdayName(day),
-                    style: TextStyle(fontSize: 11, height: 1.1, color: fg),
-                  ),
+                  Text(weekdayName(day), style: TextStyle(fontSize: 11, height: 1.1, color: fg)),
                   Text(
                     '${day.day}',
-                    style: TextStyle(
-                      fontSize: 16,
-                      height: 1.1,
-                      fontWeight: FontWeight.w700,
-                      color: fg,
-                    ),
+                    style: TextStyle(fontSize: 16, height: 1.1, fontWeight: FontWeight.w700, color: fg),
                   ),
                 ],
               ),
@@ -421,13 +510,22 @@ class _UpcomingRow extends StatelessWidget {
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body, height: 1.4),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    [
-                      category,
-                      left == 0 ? '오늘 마감' : 'D-$left',
-                      if (n.applicationDeadline!.hasTime) '${n.applicationDeadline!.time} 마감',
-                      eligibilityShort(entry.recommendation.eligibilityStatus),
-                    ].join(' · '),
+                  // 남은 날과 시각을 앞에 굵게, 분류와 확인 필요는 뒤에 흐리게
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: [
+                            left == 0 ? '오늘 마감' : 'D-$left',
+                            if (n.applicationDeadline!.hasTime) '${n.applicationDeadline!.time} 마감',
+                          ].join(' · '),
+                          style: TextStyle(fontWeight: FontWeight.w600, color: urgent ? c.urgent : c.sub),
+                        ),
+                        TextSpan(text: ' · $category'),
+                        if (entry.recommendation.eligibilityStatus != 'met')
+                          TextSpan(text: ' · ${eligibilityShort(entry.recommendation.eligibilityStatus)}'),
+                      ],
+                    ),
                     style: TextStyle(fontSize: 13, color: c.muted),
                   ),
                 ],
@@ -435,60 +533,6 @@ class _UpcomingRow extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _NoticeCard extends StatelessWidget {
-  const _NoticeCard({required this.entry, required this.category, required this.today, required this.onTap});
-
-  final RecommendationEntry entry;
-  final String category;
-  final DateTime today;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final n = entry.notice;
-    final r = entry.recommendation;
-    final dday = ddayPill(n, today);
-    final reason = r.reasonCodes.map(reasonText).firstWhere((t) => t.isNotEmpty, orElse: () => '');
-    final deadline = n.applicationDeadline;
-    final c = context.gw;
-    return GwCard(
-      onTap: onTap,
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              ?dday,
-              Pill(category, tone: PillTone.neutral),
-              eligibilityPill(r.eligibilityStatus),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            n.title,
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: c.ink, height: 1.45),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            deadline != null ? '${shortDate(deadline)}까지' : (n.deadlineNote ?? '마감일이 공고에 나와 있지 않아요'),
-            style: TextStyle(fontSize: 14, color: c.sub),
-          ),
-          if (reason.isNotEmpty && r.reasonCodes.any(personalReasons.containsKey)) ...[
-            const SizedBox(height: 4),
-            Text(
-              reason,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.accent),
-            ),
-          ],
-        ],
       ),
     );
   }
@@ -514,7 +558,7 @@ class _ChangedCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(Icons.alarm, color: c.urgent),
+              Icon(Icons.alarm_rounded, color: c.urgent),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

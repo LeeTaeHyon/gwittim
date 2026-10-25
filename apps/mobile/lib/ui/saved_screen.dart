@@ -6,16 +6,21 @@ import 'briefing_data.dart';
 import 'common.dart';
 import 'components.dart';
 import 'format.dart';
+import 'icons.dart';
 import 'report_screen.dart';
+import 'skeleton.dart';
 import 'theme.dart';
 
 /// 저장한 공고 (D-010). 마감 기준으로 묶고, 최신 공고 상태와 저장 이후 바뀐 마감을 함께 보인다 (SPEC §6).
 class SavedScreen extends StatefulWidget {
-  const SavedScreen({super.key, required this.repository, required this.openUrl, this.today});
+  const SavedScreen({super.key, required this.repository, required this.openUrl, this.today, this.onBrowse});
 
   final NoticeRepository repository;
   final OpenUrl openUrl;
   final DateTime? today;
+
+  /// 빈 화면의 '공고 둘러보기'
+  final VoidCallback? onBrowse;
 
   @override
   State<SavedScreen> createState() => SavedScreenState();
@@ -165,8 +170,9 @@ class SavedScreenState extends State<SavedScreen> {
 
   Future<void> _open(SavedEntry e) async {
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ReportScreen(
+      gwRoute(
+        context,
+        (_) => ReportScreen(
           repository: widget.repository,
           noticeId: e.notice.noticeId,
           openUrl: widget.openUrl,
@@ -182,16 +188,15 @@ class SavedScreenState extends State<SavedScreen> {
     final entries = _entries;
     if (entries == null) {
       if (_error != null) {
-        return MessageView(
-          icon: Icons.cloud_off,
-          message: errorMessage(_error!),
+        return MessageView.error(
+          _error!,
           onRetry: () {
             setState(() => _error = null);
             reload();
           },
         );
       }
-      return const Center(child: CircularProgressIndicator());
+      return const SavedSkeleton();
     }
     final c = context.gw;
     final changed = deadlineChangedEntries(entries);
@@ -213,57 +218,58 @@ class SavedScreenState extends State<SavedScreen> {
                 ),
               ),
             ),
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: Container(
-              margin: const EdgeInsets.only(top: 16),
-              padding: const EdgeInsets.fromLTRB(20, 26, 20, 32),
-              decoration: BoxDecoration(
-                color: c.card,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          if (entries.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: MessageView(
+                title: '아직 저장한 공고가 없어요',
+                detail: '공고 리포트에서 북마크를 누르면 여기에 모여요.',
+                action: widget.onBrowse == null ? null : (label: '공고 둘러보기', onPressed: widget.onBrowse!),
               ),
-              child: entries.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.only(top: 40),
-                      child: Text(
-                        '저장한 공고가 없어요.\n공고 리포트에서 북마크를 누르면 여기에 모여요.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 15, height: 1.6, color: c.sub),
-                      ),
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (final (i, (group, list)) in groupSaved(entries, _today).indexed) ...[
-                          Padding(
-                            padding: EdgeInsets.only(top: i == 0 ? 0 : 18),
-                            child: Semantics(
-                              header: true,
-                              child: Text(
-                                group.title,
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.muted),
-                              ),
-                            ),
+            )
+          else
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Container(
+                margin: const EdgeInsets.only(top: 16),
+                padding: const EdgeInsets.fromLTRB(20, 26, 20, 32),
+                decoration: BoxDecoration(
+                  color: c.card,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final (i, (group, list)) in groupSaved(entries, _today).indexed) ...[
+                      Padding(
+                        padding: EdgeInsets.only(top: i == 0 ? 0 : 18),
+                        child: Semantics(
+                          header: true,
+                          child: Text(
+                            group.title,
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.muted),
                           ),
-                          for (final e in list)
-                            _SavedRow(
-                              key: ValueKey(e.notice.noticeId),
-                              entry: e,
-                              group: group,
-                              category: _categories[e.notice.category] ?? e.notice.category,
-                              today: _today,
-                              saved: !_unsaved.contains(e.notice.noticeId),
-                              onTap: e.notice.lifecycleStatus == 'removed' ? null : () => _open(e),
-                              onToggle: () => _toggle(e),
-                              onDismiss: () => _dismiss(e),
-                            ),
-                        ],
-                        const SizedBox(height: 20),
-                        Text('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 바뀌어요.', style: captionStyle(context)),
-                      ],
-                    ),
+                        ),
+                      ),
+                      for (final e in list)
+                        _SavedRow(
+                          key: ValueKey(e.notice.noticeId),
+                          entry: e,
+                          group: group,
+                          category: _categories[e.notice.category] ?? e.notice.category,
+                          today: _today,
+                          saved: !_unsaved.contains(e.notice.noticeId),
+                          onTap: e.notice.lifecycleStatus == 'removed' ? null : () => _open(e),
+                          onToggle: () => _toggle(e),
+                          onDismiss: () => _dismiss(e),
+                        ),
+                    ],
+                    const SizedBox(height: 20),
+                    Text('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 바뀌어요.', style: captionStyle(context)),
+                  ],
+                ),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -318,7 +324,10 @@ class _SavedRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(width: 34, child: _DateColumn(notice: n, group: group, today: today)),
+            SizedBox(
+              width: 34,
+              child: _DateColumn(notice: n, group: group, today: today),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -340,7 +349,7 @@ class _SavedRow extends StatelessWidget {
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.urgent),
                     )
                   else
-                    Text(_metaLine(n), style: meta),
+                    Text.rich(_meta(n, c), style: meta),
                   if (changed) ...[
                     const SizedBox(height: 6),
                     Wrap(
@@ -376,8 +385,8 @@ class _SavedRow extends StatelessWidget {
                 tooltip: saved ? '저장 취소' : '저장',
                 isSelected: saved,
                 onPressed: onToggle,
-                icon: Icon(Icons.bookmark_border, color: c.muted),
-                selectedIcon: Icon(Icons.bookmark, color: c.point),
+                icon: GwIcon(GwGlyph.saved, color: c.muted),
+                selectedIcon: GwIcon(GwGlyph.saved, filled: true, color: c.point),
               ),
           ],
         ),
@@ -385,12 +394,11 @@ class _SavedRow extends StatelessWidget {
     );
   }
 
-  /// 분류 · (확인된 시각) · D-day. 확정 마감이 없으면 원문 설명.
-  String _metaLine(NoticeSummary n) {
+  /// 마감 상태를 앞에 굵게(D-day · 확인된 시각), 분류는 뒤에 흐리게. 확정 마감이 없으면 원문 설명.
+  TextSpan _meta(NoticeSummary n, GwColors c) {
     final deadline = n.applicationDeadline;
     final left = daysLeft(n, today);
-    return [
-      category,
+    final lead = [
       if (n.lifecycleStatus == 'closed')
         '모집이 끝났어요'
       else if (deadline == null)
@@ -398,12 +406,27 @@ class _SavedRow extends StatelessWidget {
       else if (deadline.day.isBefore(DateTime(today.year, today.month, today.day)))
         '마감일이 지났어요'
       else ...[
-        if (deadline.hasTime) '${deadline.time} 마감',
         if (left != null) left == 0 ? '오늘 마감' : 'D-$left',
+        if (deadline.hasTime) '${deadline.time} 마감',
       ],
-      if (n.lifecycleStatus == 'unknown') '모집 상태 미확인',
     ].join(' · ');
+    return TextSpan(
+      children: [
+        if (lead.isNotEmpty) ...[
+          TextSpan(
+            text: lead,
+            style: left == null
+                ? null
+                : TextStyle(fontWeight: FontWeight.w600, color: left <= urgentDays ? c.urgent : c.sub),
+          ),
+          const TextSpan(text: ' · '),
+        ],
+        TextSpan(text: category),
+        if (n.lifecycleStatus == 'unknown') const TextSpan(text: ' · 모집 상태 미확인'),
+      ],
+    );
   }
+
 }
 
 /// 왼쪽 마감 날짜. 이번 주·다음 주는 요일, 그 밖은 달을 함께 보인다.
@@ -420,7 +443,7 @@ class _DateColumn extends StatelessWidget {
     if (notice.lifecycleStatus == 'removed') {
       return Padding(
         padding: const EdgeInsets.only(top: 2),
-        child: Icon(Icons.delete_outline, size: 20, color: c.faint),
+        child: Icon(Icons.delete_outline_rounded, size: 20, color: c.faint),
       );
     }
     final deadline = notice.applicationDeadline;
@@ -434,9 +457,7 @@ class _DateColumn extends StatelessWidget {
       );
     }
     final left = daysLeft(notice, today);
-    final color = group == SavedGroup.past
-        ? c.muted
-        : (left != null && left <= urgentDays ? c.urgent : c.accent);
+    final color = group == SavedGroup.past ? c.muted : (left != null && left <= urgentDays ? c.urgent : c.accent);
     final week = group == SavedGroup.thisWeek || group == SavedGroup.nextWeek;
     return Column(
       children: [
