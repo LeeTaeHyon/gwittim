@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 원본: docs/brand/app-icon.svg. 말풍선 폭 54dp로 안전 영역(지름 66dp) 안에 둔다. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.135"
+        android:scaleY="0.135"
+        android:translateX="27"
+        android:translateY="38.34">
+        <path
+            android:fillColor="#D9F66B"
+            android:pathData="M56 0H344A56 56 0 0 1 400 56V164A56 56 0 0 1 344 220H40L0 250V56A56 56 0 0 1 56 0Z" />
+        <group
+            android:scaleX="1.15"
+            android:scaleY="1.15"
+            android:translateX="72"
+            android:translateY="40">
+            <path
+                android:fillColor="#1C2757"
+                android:pathData="M2 6H64V42H51V17H2ZM0 56H80V67H47V116H34V67H0ZM86 0H100V120H86ZM118 4H150V14H130V30H152V40H118ZM160 4H192V14H172V30H194V40H160ZM118 56H200V66H118ZM208 0H222V68H208ZM130 78H214A8 8 0 0 1 222 86V112A8 8 0 0 1 214 120H132L122 128V86A8 8 0 0 1 130 78ZM136 88A2 2 0 0 0 134 90V110H208A2 2 0 0 0 210 108V90A2 2 0 0 0 208 88Z" />
+        </group>
+    </group>
+</vector>
