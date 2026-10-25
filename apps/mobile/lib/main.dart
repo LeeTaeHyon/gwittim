@@ -9,6 +9,7 @@ import 'data/api_repository.dart';
 import 'data/repository.dart';
 import 'ui/briefing_data.dart';
 import 'ui/common.dart';
+import 'ui/components.dart';
 import 'ui/home_screen.dart';
 import 'ui/intro.dart';
 import 'ui/profile_screen.dart';
@@ -159,14 +160,61 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMixin {
   final _homeKey = GlobalKey<HomeScreenState>();
   final _savedKey = GlobalKey<SavedScreenState>();
   int _tab = 0;
 
+  /// 탭을 바꾸는 동안 밀려나는 화면과 방향 (오른쪽 탭으로 가면 1)
+  int? _leaving;
+  int _direction = 1;
+
+  /// 탭을 바꾸면 지금 화면은 반대쪽으로 밀려나며 흐려지고, 새 화면은 고른 쪽에서 들어온다.
+  late final _switch = AnimationController(vsync: this, duration: const Duration(milliseconds: 320), value: 1)
+    ..addStatusListener((status) {
+      if (status == AnimationStatus.completed && _leaving != null) setState(() => _leaving = null);
+    });
+
   void _select(int i) {
     if (i == 1) _savedKey.currentState?.reload();
-    setState(() => _tab = i);
+    if (i == _tab) return;
+    final animate = MediaQuery.maybeDisableAnimationsOf(context) != true;
+    setState(() {
+      _direction = i > _tab ? 1 : -1;
+      _leaving = animate ? _tab : null;
+      _tab = i;
+    });
+    if (animate) _switch.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _switch.dispose();
+    super.dispose();
+  }
+
+  /// 탭 화면 하나. 위젯 구조는 늘 같게 두어 화면 상태가 유지된다.
+  Widget _page(int i, Widget screen) {
+    return Offstage(
+      offstage: i != _tab && i != _leaving,
+      child: AnimatedBuilder(
+        animation: _switch,
+        child: screen,
+        builder: (context, child) {
+          final raw = _switch.value;
+          final t = Curves.easeOutCubic.transform(raw);
+          final entering = i == _tab;
+          final opacity = entering
+              ? Curves.easeOut.transform(((raw - 0.2) / 0.8).clamp(0.0, 1.0))
+              : 1 - Curves.easeOut.transform((raw / 0.4).clamp(0.0, 1.0));
+          final dx = entering ? _direction * 48 * (1 - t) : -_direction * 48 * t;
+          return Opacity(
+            opacity: i == _tab || i == _leaving ? opacity : 1,
+            child: Transform.translate(offset: Offset(i == _tab || i == _leaving ? dx : 0, 0), child: child),
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -177,34 +225,42 @@ class _HomeShellState extends State<HomeShell> {
       child: Scaffold(
         body: SafeArea(
           bottom: false,
-          child: IndexedStack(
-            index: _tab,
+          child: Stack(
             children: [
-              HomeScreen(
-                key: _homeKey,
-                repository: widget.repository,
-                openUrl: widget.openUrl,
-                briefingStore: widget.briefingStore,
-                today: widget.today,
-                onOpenProfile: () => _select(2),
+              _page(
+                0,
+                HomeScreen(
+                  key: _homeKey,
+                  repository: widget.repository,
+                  openUrl: widget.openUrl,
+                  briefingStore: widget.briefingStore,
+                  today: widget.today,
+                  onOpenProfile: () => _select(2),
+                ),
               ),
-              SavedScreen(key: _savedKey, repository: widget.repository, openUrl: widget.openUrl, today: widget.today),
-              ProfileScreen(
-                repository: widget.repository,
-                themeController: widget.themeController,
-                onSaved: () => _homeKey.currentState?.reload(),
-                onSignOut: widget.onSignOut,
+              _page(
+                1,
+                SavedScreen(key: _savedKey, repository: widget.repository, openUrl: widget.openUrl, today: widget.today),
+              ),
+              _page(
+                2,
+                ProfileScreen(
+                  repository: widget.repository,
+                  themeController: widget.themeController,
+                  onSaved: () => _homeKey.currentState?.reload(),
+                  onSignOut: widget.onSignOut,
+                ),
               ),
             ],
           ),
         ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _tab,
-          onDestinationSelected: _select,
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: '홈'),
-            NavigationDestination(icon: Icon(Icons.bookmark_border), selectedIcon: Icon(Icons.bookmark), label: '저장'),
-            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '프로필'),
+        bottomNavigationBar: GwTabBar(
+          selected: _tab,
+          onSelect: _select,
+          tabs: const [
+            (icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: '홈'),
+            (icon: Icons.bookmark_border_rounded, activeIcon: Icons.bookmark_rounded, label: '저장'),
+            (icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: '프로필'),
           ],
         ),
       ),
