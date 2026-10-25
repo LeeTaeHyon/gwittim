@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/models.dart';
 import 'format.dart';
@@ -302,3 +303,158 @@ class ScreenHeader extends StatelessWidget {
 
 /// 캡션 (13, 보조 글자)
 TextStyle captionStyle(BuildContext context) => TextStyle(fontSize: 13, height: 1.6, color: context.gw.muted);
+
+/// 하단 탭 하나. 고르면 icon 대신 activeIcon(채운 모양)을 쓴다.
+typedef GwTab = ({IconData icon, IconData activeIcon, String label});
+
+/// 바닥에 붙은 하단 탭 막대. 고른 탭은 채운 아이콘과 진한 색·굵은 글자로만 구분한다(2026-10-25 팀장 결정).
+/// 누르면 아이콘 둘레가 칠해졌다가 천천히 사라지고, 색과 아이콘은 부드럽게 바뀐다(애니메이션 줄이기 설정을 따름).
+class GwTabBar extends StatefulWidget {
+  const GwTabBar({super.key, required this.tabs, required this.selected, required this.onSelect});
+
+  final List<GwTab> tabs;
+  final int selected;
+  final ValueChanged<int> onSelect;
+
+  @override
+  State<GwTabBar> createState() => _GwTabBarState();
+}
+
+class _GwTabBarState extends State<GwTabBar> {
+  /// 누르고 있는 탭
+  int? _pressed;
+
+  void _select(int i) {
+    if (i != widget.selected) HapticFeedback.selectionClick();
+    widget.onSelect(i);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final still = MediaQuery.maybeDisableAnimationsOf(context) == true;
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.3, // 큰 글자 설정에서도 막대 높이 안에 들어가게
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: c.tab,
+          border: Border(top: BorderSide(color: c.line)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SizedBox(
+            height: 64,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final (i, tab) in widget.tabs.indexed)
+                  Expanded(
+                    child: _TabButton(
+                      tab,
+                      selected: i == widget.selected,
+                      pressed: i == _pressed,
+                      still: still,
+                      onPress: (down) => setState(() => _pressed = down ? i : null),
+                      onTap: () => _select(i),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TabButton extends StatelessWidget {
+  const _TabButton(
+    this.tab, {
+    required this.selected,
+    required this.pressed,
+    required this.still,
+    required this.onPress,
+    required this.onTap,
+  });
+
+  final GwTab tab;
+  final bool selected;
+  final bool pressed;
+
+  /// 애니메이션 줄이기 설정
+  final bool still;
+  final ValueChanged<bool> onPress;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    Duration ms(int milliseconds) => still ? Duration.zero : Duration(milliseconds: milliseconds);
+    // 누를 때는 빠르게, 뗄 때와 색이 바뀔 때는 천천히
+    final change = ms(320);
+    return MergeSemantics(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => onPress(true),
+          onTapUp: (_) => onPress(false),
+          onTapCancel: () => onPress(false),
+          onTap: onTap,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // 누르는 동안 아이콘과 이름 둘레가 버튼처럼 둥근 사각형으로 칠해진다. 누르는 자리는 칸 전체.
+              AnimatedContainer(
+                duration: pressed ? ms(90) : ms(450),
+                curve: pressed ? Curves.easeOut : Curves.easeOutCubic,
+                width: 72,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: c.tabActive.withValues(alpha: pressed ? 0.10 : 0),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              AnimatedScale(
+                scale: pressed ? 0.92 : 1,
+                duration: pressed ? ms(120) : ms(360),
+                curve: pressed ? Curves.easeOut : Curves.easeOutCubic,
+                child: TweenAnimationBuilder<Color?>(
+                  tween: ColorTween(end: selected ? c.tabActive : c.onTab),
+                  duration: change,
+                  curve: Curves.easeOutCubic,
+                  builder: (context, color, _) => Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    spacing: 3,
+                    children: [
+                      AnimatedSwitcher(
+                        duration: change,
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        child: Icon(
+                          selected ? tab.activeIcon : tab.icon,
+                          key: ValueKey(selected),
+                          size: 24,
+                          color: color,
+                        ),
+                      ),
+                      Text(
+                        tab.label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                          color: color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

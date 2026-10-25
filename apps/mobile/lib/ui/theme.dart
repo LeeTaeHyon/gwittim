@@ -44,6 +44,9 @@ class GwColors extends ThemeExtension<GwColors> {
     required this.loginCard,
     required this.loginSub,
     required this.loginInk,
+    required this.tab,
+    required this.onTab,
+    required this.tabActive,
   });
 
   /// 바탕
@@ -123,6 +126,11 @@ class GwColors extends ThemeExtension<GwColors> {
   /// 로그인 바탕 위 제목·링크
   final Color loginInk;
 
+  /// 하단 탭 막대 바탕, 고르지 않은 탭, 고른 탭 (아이콘·글자색). 다크에서도 라임 글자는 쓰지 않는다.
+  final Color tab;
+  final Color onTab;
+  final Color tabActive;
+
   static const light = GwColors(
     bg: Color(0xFFF3F4F8),
     card: Color(0xFFFFFFFF),
@@ -161,6 +169,9 @@ class GwColors extends ThemeExtension<GwColors> {
     loginCard: Color(0xFFFFFFFF),
     loginSub: Color(0xFFC9CFEA),
     loginInk: Color(0xFFFFFFFF),
+    tab: Color(0xFFFFFFFF),
+    onTab: Color(0xFF646B80),
+    tabActive: _navy,
   );
 
   static const dark = GwColors(
@@ -201,6 +212,9 @@ class GwColors extends ThemeExtension<GwColors> {
     loginCard: Color(0xFF191D33),
     loginSub: Color(0xFFB9C2EE),
     loginInk: Color(0xFFFFFFFF),
+    tab: Color(0xFF191D33),
+    onTab: Color(0xFF8C93AE),
+    tabActive: Color(0xFFC9D2FF),
   );
 
   static const _navy = Color(0xFF22306B);
@@ -210,7 +224,8 @@ class GwColors extends ThemeExtension<GwColors> {
   List<Color> get _all => [
     bg, card, cardSoft, neutral, ink, body, sub, muted, faint, line, cta, onCta, point, onPoint, pointTick, //
     accent, chip, onChip, lime, limeInk, marker, summary, urgent, urgentSoft, urgentFill, onUrgentFill, //
-    check, checkSoft, checkBox, checkLine, checkMark, toast, onToast, loginBg, loginCard, loginSub, loginInk,
+    check, checkSoft, checkBox, checkLine, checkMark, toast, onToast, loginBg, loginCard, loginSub, loginInk, //
+    tab, onTab, tabActive,
   ];
 
   static GwColors _fromList(List<Color> c) {
@@ -254,6 +269,9 @@ class GwColors extends ThemeExtension<GwColors> {
       loginCard: next(),
       loginSub: next(),
       loginInk: next(),
+      tab: next(),
+      onTab: next(),
+      tabActive: next(),
     );
   }
 
