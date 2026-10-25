@@ -153,6 +153,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   builder: (context, mode, _) => _Segments<ThemeMode>(
                     options: const [(ThemeMode.system, '시스템 설정'), (ThemeMode.light, '라이트'), (ThemeMode.dark, '다크')],
                     selected: mode,
+                    // 테마가 바뀌면 앱 전체가 다시 그려지므로, 바탕이 다 미끄러진 뒤에 바꾼다.
+                    changeAfterSlide: true,
                     onChanged: (m) => widget.themeController.select(m ?? ThemeMode.system),
                   ),
                 ),
@@ -832,12 +834,21 @@ class _PickerDialogState extends State<_PickerDialog> {
 /// 고른 칸의 바탕은 하나뿐이고, 다른 칸을 고르면 그쪽으로 양옆으로 미끄러진다. 비우면 그 자리에서 흐려진다
 /// (애니메이션 줄이기 설정이면 바로 바뀜).
 class _Segments<T> extends StatefulWidget {
-  const _Segments({required this.options, required this.selected, required this.onChanged, this.allowEmpty = false});
+  const _Segments({
+    required this.options,
+    required this.selected,
+    required this.onChanged,
+    this.allowEmpty = false,
+    this.changeAfterSlide = false,
+  });
 
   final List<(T, String)> options;
   final T? selected;
   final bool allowEmpty;
   final ValueChanged<T?> onChanged;
+
+  /// 바탕이 다 미끄러진 뒤에 onChanged를 부른다 (테마처럼 바꾸는 데 무거운 값)
+  final bool changeAfterSlide;
 
   @override
   State<_Segments<T>> createState() => _SegmentsState<T>();
@@ -847,20 +858,44 @@ class _SegmentsState<T> extends State<_Segments<T>> {
   /// 비웠을 때 바탕이 흐려지며 머무는 자리
   late int _last = _index.clamp(0, widget.options.length - 1);
 
-  int get _index => widget.options.indexWhere((o) => o.$1 == widget.selected);
+  /// changeAfterSlide일 때 미끄러지는 동안 먼저 보이는 값
+  ({T? value})? _pending;
+
+  T? get _shown => _pending == null ? widget.selected : _pending!.value;
+
+  int get _index => widget.options.indexWhere((o) => o.$1 == _shown);
 
   @override
   void didUpdateWidget(_Segments<T> old) {
     super.didUpdateWidget(old);
+    if (_pending != null && widget.selected == _pending!.value) _pending = null;
     if (_index >= 0) _last = _index;
+  }
+
+  void _tap(T value, bool still) {
+    final next = value == _shown && widget.allowEmpty ? null : value;
+    if (!widget.changeAfterSlide || still || next == _shown) {
+      widget.onChanged(next);
+      return;
+    }
+    setState(() {
+      _pending = (value: next);
+      if (_index >= 0) _last = _index;
+    });
+  }
+
+  void _slid() {
+    final pending = _pending;
+    if (pending == null) return;
+    _pending = null;
+    widget.onChanged(pending.value);
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
-    final move = MediaQuery.maybeDisableAnimationsOf(context) == true
-        ? Duration.zero
-        : const Duration(milliseconds: 320);
+    final still = MediaQuery.maybeDisableAnimationsOf(context) == true;
+    final move = still ? Duration.zero : const Duration(milliseconds: 320);
     const gap = 4.0;
     final on = _index >= 0;
     return Container(
@@ -877,6 +912,7 @@ class _SegmentsState<T> extends State<_Segments<T>> {
                 duration: move,
                 curve: Curves.easeOutCubic,
                 left: _last * (width + gap),
+                onEnd: _slid,
                 top: 0,
                 bottom: 0,
                 width: width,
@@ -898,14 +934,14 @@ class _SegmentsState<T> extends State<_Segments<T>> {
                       width: width,
                       child: Semantics(
                         button: true,
-                        selected: value == widget.selected,
+                        selected: value == _shown,
                         inMutuallyExclusiveGroup: true,
                         child: Material(
                           color: Colors.transparent,
                           borderRadius: BorderRadius.circular(12),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(12),
-                            onTap: () => widget.onChanged(value == widget.selected && widget.allowEmpty ? null : value),
+                            onTap: () => _tap(value, still),
                             child: SizedBox(
                               height: 44,
                               child: Center(
@@ -916,7 +952,7 @@ class _SegmentsState<T> extends State<_Segments<T>> {
                                     fontFamily: 'Pretendard',
                                     fontSize: 14.5,
                                     fontWeight: FontWeight.w700,
-                                    color: value == widget.selected ? c.onCta : c.sub,
+                                    color: value == _shown ? c.onCta : c.sub,
                                   ),
                                   child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
                                 ),
