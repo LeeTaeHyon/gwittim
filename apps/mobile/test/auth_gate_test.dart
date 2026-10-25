@@ -96,7 +96,7 @@ void main() {
     auth.start();
     await tester.pumpAndSettle();
 
-    expect(find.text('귀띔'), findsOneWidget);
+    expect(find.bySemanticsLabel('귀띔'), findsOneWidget); // 직접 그린 로고 (D-011)
     expect(find.text('몰랐던 기회를\n먼저 귀띔해 드려요'), findsOneWidget);
     expect(find.byType(GoogleSignInButton), findsOneWidget);
     expect(find.descendant(of: find.byType(GoogleSignInButton), matching: find.byType(GoogleLogo)), findsOneWidget);

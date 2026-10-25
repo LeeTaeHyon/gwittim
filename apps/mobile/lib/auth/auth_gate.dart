@@ -4,6 +4,7 @@ import '../data/repository.dart';
 import '../main.dart';
 import '../ui/briefing_data.dart';
 import '../ui/common.dart';
+import '../ui/logo.dart';
 import '../ui/theme.dart';
 import 'auth_service.dart';
 import 'google_sign_in_button.dart';
@@ -117,7 +118,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: 60),
-                      const Align(alignment: Alignment.centerLeft, child: _LogoBubble()),
+                      const Align(alignment: Alignment.centerLeft, child: GwLogo(height: 56)),
                       const SizedBox(height: 28),
                       Semantics(
                         header: true,
@@ -180,36 +181,6 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 큰 말풍선 로고
-class _LogoBubble extends StatelessWidget {
-  const _LogoBubble();
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gw;
-    return Container(
-      height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 18),
-      decoration: BoxDecoration(
-        color: c.lime,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(23),
-          topRight: Radius.circular(23),
-          bottomRight: Radius.circular(23),
-          bottomLeft: Radius.circular(7),
-        ),
-      ),
-      child: Center(
-        widthFactor: 1,
-        child: Text(
-          '귀띔',
-          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -1, color: c.limeInk),
         ),
       ),
     );
