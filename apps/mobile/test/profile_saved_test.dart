@@ -111,7 +111,7 @@ void main() {
       'evidence': '2026. 10. 28.(수) 17:00까지',
     });
 
-    await tester.pageBack();
+    await tester.tap(find.byTooltip('뒤로'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('저장'));
     await tester.pumpAndSettle();

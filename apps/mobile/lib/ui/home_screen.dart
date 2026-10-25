@@ -120,17 +120,15 @@ class HomeScreenState extends State<HomeScreen> {
 
   void _openBriefing(Briefing briefing) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => BriefingScreen(briefing: briefing, today: _today, onOpenNotice: _openNotice),
-      ),
+      gwRoute(context, (_) => BriefingScreen(briefing: briefing, today: _today, onOpenNotice: _openNotice), rise: true),
     );
   }
 
   Future<void> _openNotice(NoticeSummary notice, Recommendation? recommendation) async {
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ReportScreen(
+      gwRoute(
+        context,
+        (_) => ReportScreen(
           repository: widget.repository,
           noticeId: notice.noticeId,
           recommendation: recommendation,
@@ -147,9 +145,8 @@ class HomeScreenState extends State<HomeScreen> {
     final data = _data;
     if (data == null) {
       if (_error != null) {
-        return MessageView(
-          icon: Icons.cloud_off,
-          message: errorMessage(_error!),
+        return MessageView.error(
+          _error!,
           onRetry: () {
             setState(() => _error = null);
             reload();
@@ -333,10 +330,7 @@ class _BriefingCard extends StatelessWidget {
               style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: c.ink, height: 1.4),
               children: [
                 const TextSpan(text: '오늘 챙길 소식 '),
-                markSpan(
-                  '${briefing.count}가지',
-                  TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: c.ink),
-                ),
+                markSpan('${briefing.count}가지', TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: c.ink)),
               ],
             ),
           ),
@@ -393,18 +387,10 @@ class _UpcomingRow extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    weekdayName(day),
-                    style: TextStyle(fontSize: 11, height: 1.1, color: fg),
-                  ),
+                  Text(weekdayName(day), style: TextStyle(fontSize: 11, height: 1.1, color: fg)),
                   Text(
                     '${day.day}',
-                    style: TextStyle(
-                      fontSize: 16,
-                      height: 1.1,
-                      fontWeight: FontWeight.w700,
-                      color: fg,
-                    ),
+                    style: TextStyle(fontSize: 16, height: 1.1, fontWeight: FontWeight.w700, color: fg),
                   ),
                 ],
               ),

@@ -139,9 +139,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return MessageView(
-            icon: Icons.cloud_off,
-            message: errorMessage(snapshot.error!),
+          return MessageView.error(
+            snapshot.error!,
             onRetry: () => setState(() {
               _future = _load();
             }),
@@ -155,7 +154,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _body(_ProfileData data) {
     final c = context.gw;
     final caption = captionStyle(context);
-    final names = {for (final i in [...data.universities, ...data.majors]) i.id: i.name};
+    final names = {
+      for (final i in [...data.universities, ...data.majors]) i.id: i.name,
+    };
     final majors = [
       for (final m in data.majors)
         if (_universityId == null || m.id.startsWith('$_universityId.')) m,
@@ -316,7 +317,10 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.gw.sub));
+    return Text(
+      text,
+      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.gw.sub),
+    );
   }
 }
 
@@ -335,7 +339,9 @@ class _PickRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         height: 54,
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line))),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: c.line)),
+        ),
         child: Row(
           children: [
             Text(label, style: TextStyle(fontSize: 15, color: c.muted)),
@@ -640,7 +646,12 @@ class _ChoiceChips extends StatelessWidget {
 }
 
 class _RoundButton extends StatelessWidget {
-  const _RoundButton({required this.label, required this.background, required this.foreground, required this.onPressed});
+  const _RoundButton({
+    required this.label,
+    required this.background,
+    required this.foreground,
+    required this.onPressed,
+  });
 
   final String label;
   final Color background;
