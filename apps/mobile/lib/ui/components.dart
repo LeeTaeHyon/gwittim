@@ -1,8 +1,11 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/models.dart';
 import 'format.dart';
+import 'icons.dart';
 import 'logo.dart';
 import 'theme.dart';
 
@@ -68,14 +71,7 @@ class GwBadge extends StatelessWidget {
 /// 형광펜: 글자 아래쪽 58%만 칠한다. animate면 왼쪽에서 오른쪽으로 그어진다(애니메이션 줄이기 설정을 따름).
 /// 색을 주지 않으면 테마의 형광펜 색(다크는 투명한 라임)을 쓴다.
 class Marker extends StatelessWidget {
-  const Marker(
-    this.text, {
-    super.key,
-    this.style,
-    this.color,
-    this.animate = false,
-    this.delay = Duration.zero,
-  });
+  const Marker(this.text, {super.key, this.style, this.color, this.animate = false, this.delay = Duration.zero});
 
   final String text;
   final TextStyle? style;
@@ -205,10 +201,7 @@ class TipBubble extends StatelessWidget {
                   ],
                 ),
               ),
-              if (onTap != null) ...[
-                const SizedBox(width: 8),
-                Icon(Icons.chevron_right, size: 20, color: c.muted),
-              ],
+              if (onTap != null) ...[const SizedBox(width: 8), Icon(Icons.chevron_right_rounded, size: 20, color: c.muted)],
             ],
           ),
         ),
@@ -219,10 +212,13 @@ class TipBubble extends StatelessWidget {
 
 /// 카드 안 작은 보조 버튼 ("공고 보기 >")
 class SoftButton extends StatelessWidget {
-  const SoftButton({super.key, required this.label, required this.onPressed});
+  const SoftButton({super.key, required this.label, required this.onPressed, this.icon = Icons.chevron_right_rounded});
 
   final String label;
   final VoidCallback onPressed;
+
+  /// 글자 뒤 아이콘. null이면 글자만.
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -240,7 +236,10 @@ class SoftButton extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [Text(label), const SizedBox(width: 2), const Icon(Icons.chevron_right, size: 18)],
+        children: [
+          Text(label),
+          if (icon != null) ...[const SizedBox(width: 2), Icon(icon, size: 18)],
+        ],
       ),
     );
   }
@@ -304,11 +303,15 @@ class ScreenHeader extends StatelessWidget {
 /// 캡션 (13, 보조 글자)
 TextStyle captionStyle(BuildContext context) => TextStyle(fontSize: 13, height: 1.6, color: context.gw.muted);
 
-/// 하단 탭 하나. 고르면 icon 대신 activeIcon(채운 모양)을 쓴다.
-typedef GwTab = ({IconData icon, IconData activeIcon, String label});
+/// 하단 탭 하나. 고르면 채운 아이콘을 쓴다.
+typedef GwTab = ({GwGlyph glyph, String label});
 
-/// 바닥에 붙은 하단 탭 막대. 고른 탭은 채운 아이콘과 진한 색·굵은 글자로만 구분한다(2026-10-25 팀장 결정).
-/// 누르면 아이콘 둘레가 칠해졌다가 천천히 사라지고, 색과 아이콘은 부드럽게 바뀐다(애니메이션 줄이기 설정을 따름).
+/// 고른 탭 아이콘 아래 라임 점의 위쪽 위치 (아이콘 8~32, 이름 42~)
+const _dotTop = 35.0;
+
+/// 바닥에 붙은 하단 탭 막대. 고른 탭은 채운 아이콘과 진한 색·굵은 글자, 아이콘 아래 라임 점으로 구분한다.
+/// 누르면 아이콘 둘레가 칠해졌다가 천천히 사라지고, 색과 아이콘은 부드럽게 바뀐다. 점은 고른 탭으로
+/// 옮겨 가며 가로로 늘었다 줄어든다(애니메이션 줄이기 설정을 따름).
 class GwTabBar extends StatefulWidget {
   const GwTabBar({super.key, required this.tabs, required this.selected, required this.onSelect});
 
@@ -320,9 +323,31 @@ class GwTabBar extends StatefulWidget {
   State<GwTabBar> createState() => _GwTabBarState();
 }
 
-class _GwTabBarState extends State<GwTabBar> {
+class _GwTabBarState extends State<GwTabBar> with SingleTickerProviderStateMixin {
   /// 누르고 있는 탭
   int? _pressed;
+
+  /// 점이 떠난 탭
+  late int _from = widget.selected;
+  late final _dot = AnimationController(vsync: this, duration: const Duration(milliseconds: 320), value: 1);
+
+  @override
+  void didUpdateWidget(GwTabBar old) {
+    super.didUpdateWidget(old);
+    if (old.selected == widget.selected) return;
+    _from = old.selected;
+    if (MediaQuery.maybeDisableAnimationsOf(context) == true) {
+      _dot.value = 1;
+    } else {
+      _dot.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _dot.dispose();
+    super.dispose();
+  }
 
   void _select(int i) {
     if (i != widget.selected) HapticFeedback.selectionClick();
@@ -344,21 +369,48 @@ class _GwTabBarState extends State<GwTabBar> {
           top: false,
           child: SizedBox(
             height: 64,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final (i, tab) in widget.tabs.indexed)
-                  Expanded(
-                    child: _TabButton(
-                      tab,
-                      selected: i == widget.selected,
-                      pressed: i == _pressed,
-                      still: still,
-                      onPress: (down) => setState(() => _pressed = down ? i : null),
-                      onTap: () => _select(i),
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final slot = box.maxWidth / widget.tabs.length;
+                return Stack(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final (i, tab) in widget.tabs.indexed)
+                          Expanded(
+                            child: _TabButton(
+                              tab,
+                              selected: i == widget.selected,
+                              pressed: i == _pressed,
+                              still: still,
+                              onPress: (down) => setState(() => _pressed = down ? i : null),
+                              onTap: () => _select(i),
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
-              ],
+                    AnimatedBuilder(
+                      animation: _dot,
+                      builder: (context, _) {
+                        final t = _dot.value;
+                        final x = slot * (_from + (widget.selected - _from) * Curves.easeOutCubic.transform(t) + 0.5);
+                        final width = 4 + 8 * math.sin(math.pi * t);
+                        return Positioned(
+                          key: const ValueKey('tab-dot'),
+                          top: _dotTop,
+                          left: x - width / 2,
+                          width: width,
+                          height: 4,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(color: c.lime, borderRadius: BorderRadius.circular(2)),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -424,21 +476,17 @@ class _TabButton extends StatelessWidget {
                   tween: ColorTween(end: selected ? c.tabActive : c.onTab),
                   duration: change,
                   curve: Curves.easeOutCubic,
+                  // 아이콘 위치를 정해 두어야 막대에 걸친 점이 아이콘 바로 아래에 온다.
                   builder: (context, color, _) => Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    spacing: 3,
                     children: [
+                      const SizedBox(height: 8),
                       AnimatedSwitcher(
                         duration: change,
                         switchInCurve: Curves.easeOutCubic,
                         switchOutCurve: Curves.easeInCubic,
-                        child: Icon(
-                          selected ? tab.activeIcon : tab.icon,
-                          key: ValueKey(selected),
-                          size: 24,
-                          color: color,
-                        ),
+                        child: GwIcon(tab.glyph, key: ValueKey(selected), filled: selected, color: color),
                       ),
+                      const SizedBox(height: 10),
                       Text(
                         tab.label,
                         style: TextStyle(
@@ -452,6 +500,161 @@ class _TabButton extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 화면이 들어오고 나가는 움직임. 탭 전환과 같은 곡선과 시간(320ms)을 쓴다.
+/// 옆 화면(공고 리포트)은 오른쪽에서 48 밀려 들어오며 나타나고, rise면(하루 첫 브리핑) 아래에서 올라온다.
+Widget gwTransition(Animation<double> animation, Widget child, {bool rise = false}) {
+  return AnimatedBuilder(
+    animation: animation,
+    child: child,
+    builder: (context, child) {
+      final raw = animation.value;
+      final t = Curves.easeOutCubic.transform(raw);
+      final shift = 48 * (1 - t);
+      return Opacity(
+        opacity: Curves.easeOut.transform(((raw - 0.1) / 0.9).clamp(0.0, 1.0)),
+        child: Transform.translate(offset: rise ? Offset(0, shift) : Offset(shift, 0), child: child),
+      );
+    },
+  );
+}
+
+/// 공통 화면 이동. 애니메이션 줄이기 설정이면 바로 바뀐다.
+Route<T> gwRoute<T>(BuildContext context, WidgetBuilder builder, {bool rise = false}) {
+  final duration = MediaQuery.maybeDisableAnimationsOf(context) == true
+      ? Duration.zero
+      : const Duration(milliseconds: 320);
+  return PageRouteBuilder<T>(
+    fullscreenDialog: rise,
+    transitionDuration: duration,
+    reverseTransitionDuration: duration,
+    pageBuilder: (context, _, _) => builder(context),
+    transitionsBuilder: (_, animation, _, child) => gwTransition(animation, child, rise: rise),
+  );
+}
+
+/// 테마의 기본 화면 이동도 gwRoute와 같게 둔다. 아래에 깔린 화면은 움직이지 않는다.
+class GwPageTransitions extends PageTransitionsBuilder {
+  const GwPageTransitions();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) => gwTransition(animation, child, rise: route.fullscreenDialog);
+}
+
+/// 화면 위 막대. 스크롤하기 전에는 비어 있고, 내용이 막대 밑으로 들어가면 card 바탕과 구분선이 생기며
+/// title이 한 줄로 나타난다. onClose가 있으면 오른쪽에 닫기(✕), 없으면 왼쪽에 뒤로(←).
+class GwTopBar extends StatefulWidget implements PreferredSizeWidget {
+  const GwTopBar({super.key, this.title, this.onClose, this.closeLabel = '닫기', this.actions = const []});
+
+  final String? title;
+  final VoidCallback? onClose;
+  final String closeLabel;
+  final List<Widget> actions;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(56);
+
+  @override
+  State<GwTopBar> createState() => _GwTopBarState();
+}
+
+class _GwTopBarState extends State<GwTopBar> {
+  ScrollNotificationObserverState? _observer;
+  bool _under = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _observer?.removeListener(_onScroll);
+    _observer = ScrollNotificationObserver.maybeOf(context)?..addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _observer?.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  void _onScroll(ScrollNotification n) {
+    if (n is! ScrollUpdateNotification || n.depth != 0 || n.metrics.axis != Axis.vertical) return;
+    final under = n.metrics.extentBefore > 0;
+    if (under != _under) setState(() => _under = under);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final change = MediaQuery.maybeDisableAnimationsOf(context) == true
+        ? Duration.zero
+        : const Duration(milliseconds: 320);
+    final iconColor = c.ink;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: statusBarStyle(Theme.of(context).brightness),
+      child: AnimatedContainer(
+        duration: change,
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: c.card.withValues(alpha: _under ? 1 : 0),
+          border: Border(
+            bottom: BorderSide(color: c.line.withValues(alpha: _under ? 1 : 0)),
+          ),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: SizedBox(
+            height: 56,
+            child: Row(
+              children: [
+                if (widget.onClose == null && (ModalRoute.of(context)?.canPop ?? false))
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: IconButton(
+                      tooltip: '뒤로',
+                      icon: Icon(Icons.arrow_back_rounded, color: iconColor),
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
+                  )
+                else
+                  const SizedBox(width: 20),
+                Expanded(
+                  child: AnimatedOpacity(
+                    opacity: _under && widget.title != null ? 1 : 0,
+                    duration: change,
+                    curve: Curves.easeOutCubic,
+                    child: Text(
+                      widget.title ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.ink),
+                    ),
+                  ),
+                ),
+                ...widget.actions,
+                if (widget.onClose case final close?)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: IconButton(
+                      tooltip: widget.closeLabel,
+                      icon: Icon(Icons.close_rounded, color: iconColor),
+                      onPressed: close,
+                    ),
+                  )
+                else
+                  const SizedBox(width: 8),
+              ],
+            ),
           ),
         ),
       ),

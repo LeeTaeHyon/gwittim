@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'components.dart';
+
 /// D-010 색 토큰. 화면은 색을 직접 쓰지 않고 `context.gw`의 역할 이름만 쓴다.
 /// 라이트·다크 값은 D-010 표를 따르고, 표에 없는 보조 값은 목업 v2(다크 줄)의 값을 쓴다.
 @immutable
@@ -352,9 +354,19 @@ ThemeData gwittimTheme([Brightness brightness = Brightness.light]) {
       ),
     ),
     bottomSheetTheme: BottomSheetThemeData(backgroundColor: c.card, dragHandleColor: c.faint),
+    // 당겨서 새로고침 표시
+    progressIndicatorTheme: ProgressIndicatorThemeData(color: c.cta, refreshBackgroundColor: c.card),
+    pageTransitionsTheme: PageTransitionsTheme(
+      builders: {for (final p in TargetPlatform.values) p: const GwPageTransitions()},
+    ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: c.toast,
-      contentTextStyle: TextStyle(fontFamily: 'Pretendard', fontSize: 15, fontWeight: FontWeight.w600, color: c.onToast),
+      contentTextStyle: TextStyle(
+        fontFamily: 'Pretendard',
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        color: c.onToast,
+      ),
       behavior: SnackBarBehavior.floating,
       shape: const StadiumBorder(),
     ),

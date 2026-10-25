@@ -164,9 +164,9 @@ void main() {
 
       expect(find.text('마감일이 바뀐 공고가 1개 있어요'), findsOneWidget);
       expect(find.text('공고 soon · 10월 21일(수) → 10월 23일(금)'), findsOneWidget);
-      expect(find.text('공모전 · D-3'), findsOneWidget); // 날짜만 확인된 마감은 시각 없이
-      expect(find.text('공모전 · 선착순 마감 (정원 도달 시 조기 종료)'), findsOneWidget);
-      expect(find.text('공모전 · 모집이 끝났어요'), findsOneWidget);
+      expect(find.text('D-3 · 공모전'), findsOneWidget); // 날짜만 확인된 마감은 시각 없이, 남은 날이 앞
+      expect(find.text('선착순 마감 (정원 도달 시 조기 종료) · 공모전'), findsOneWidget);
+      expect(find.text('모집이 끝났어요 · 공모전'), findsOneWidget);
       expect(find.text('학교 공지에서 삭제됐어요'), findsOneWidget);
       expect(find.text('목록에서 지우기'), findsOneWidget);
       expect(find.text('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 바뀌어요.'), findsOneWidget);

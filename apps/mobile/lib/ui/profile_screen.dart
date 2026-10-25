@@ -4,9 +4,11 @@ import '../data/models.dart';
 import '../data/repository.dart';
 import 'common.dart';
 import 'components.dart';
+import 'skeleton.dart';
 import 'theme.dart';
 
-/// 프로필 입력·수정 (D-010): 학적 → 관심 분야 → 희망 직무 → 저장하기 → 화면 → 계정.
+/// 내 정보 (D-010, 2026-10-25 팀장 결정 Q5 B·Q6 A): 요약 카드 → 안내 → 설정(화면·계정).
+/// 고치기는 학적 → 관심 분야 → 희망 직무 세 단계 화면에서 하고, 마지막 단계의 '저장하기'로 저장한다.
 /// 성적·소득·주민등록번호·학번·학생증은 받지 않는다 (SPEC §5).
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -38,21 +40,20 @@ class _ProfileData {
   final List<DictionaryItem> majors;
   final List<DictionaryItem> interests;
   final List<DictionaryItem> roles;
+
+  _ProfileData withProfile(UserProfile p) => _ProfileData(p, universities, majors, interests, roles);
 }
 
 /// P0 대상 학교는 명지전문대 하나 (D-005 #6). 저장된 학교가 없을 때만 쓴다.
 const _p0University = 'mjc';
 
+const _statusNames = {'enrolled': '재학', 'on_leave': '휴학', 'graduated': '졸업'};
+
 class _ProfileScreenState extends State<ProfileScreen> {
   late Future<_ProfileData> _future = _load();
 
-  String? _universityId;
-  String? _majorId;
-  int? _grade;
-  String? _status;
-  Set<String> _interests = {};
-  Set<String> _roles = {};
-  bool _saving = false;
+  /// 저장한 뒤 다시 받지 않고 바꿔 끼운 내용
+  _ProfileData? _data;
 
   Future<_ProfileData> _load() async {
     final r = widget.repository;
@@ -63,37 +64,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await r.dictionary('interests'),
       await r.dictionary('roles'),
     );
-    final p = data.profile;
-    _universityId = p?.universityId ?? _p0University;
-    _majorId = p?.majorId;
-    _grade = p?.grade;
-    _status = p?.enrollmentStatus;
-    _interests = {...?p?.interestIds};
-    _roles = {...?p?.targetRoleIds};
+    _data = data;
     return data;
   }
 
-  Future<void> _save() async {
-    setState(() => _saving = true);
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await widget.repository.updateProfile(
-        UserProfile(
-          universityId: _universityId,
-          majorId: _majorId,
-          grade: _grade,
-          enrollmentStatus: _status,
-          interestIds: _interests.toList()..sort(),
-          targetRoleIds: _roles.toList()..sort(),
+  Future<void> _edit(_ProfileData data) async {
+    final saved = await Navigator.of(context).push<UserProfile>(
+      gwRoute(
+        context,
+        (_) => ProfileEditScreen._(
+          repository: widget.repository,
+          profile: data.profile,
+          universities: data.universities,
+          majors: data.majors,
+          interests: data.interests,
+          roles: data.roles,
         ),
-      );
-      widget.onSaved();
-      messenger.showSnackBar(const SnackBar(content: Text('프로필을 저장했어요.')));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(errorMessage(e))));
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
+      ),
+    );
+    if (saved == null || !mounted) return;
+    setState(() => _data = data.withProfile(saved));
+    widget.onSaved();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('프로필을 저장했어요.')));
   }
 
   /// 프로필·저장 데이터 삭제는 아직 서버 인터페이스가 없다 (D-010 한계). 화면 버튼만 둔다.
@@ -101,6 +95,292 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(content: Text('탈퇴는 아직 준비 중이에요.')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: const GwTopBar(title: '내 정보'),
+      body: FutureBuilder(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const ProfileSkeleton();
+          }
+          if (snapshot.hasError) {
+            return MessageView.error(
+              snapshot.error!,
+              onRetry: () => setState(() {
+                _future = _load();
+              }),
+            );
+          }
+          return _body(_data ?? snapshot.data!);
+        },
+      ),
+    );
+  }
+
+  Widget _body(_ProfileData data) {
+    final c = context.gw;
+    final caption = captionStyle(context);
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 32),
+      children: [
+        const ScreenHeader('내 정보'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _SummaryCard(data: data, onEdit: () => _edit(data)),
+        ),
+        const SizedBox(height: 12),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 12),
+          child: TipBubble(title: '입력한 정보는 추천에만 써요', detail: '지원 조건 비교와 추천 순서에만 쓰고, 성적·학번은 받지 않아요.'),
+        ),
+        const SizedBox(height: 32),
+        const Padding(padding: EdgeInsets.symmetric(horizontal: 24), child: SectionTitle('설정')),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: GwCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _FieldLabel('화면'),
+                const SizedBox(height: 10),
+                ValueListenableBuilder(
+                  valueListenable: widget.themeController,
+                  builder: (context, mode, _) => _Segments<ThemeMode>(
+                    options: const [(ThemeMode.system, '시스템 설정'), (ThemeMode.light, '라이트'), (ThemeMode.dark, '다크')],
+                    selected: mode,
+                    // 테마가 바뀌면 앱 전체가 다시 그려지므로, 바탕이 다 미끄러진 뒤에 바꾼다.
+                    changeAfterSlide: true,
+                    onChanged: (m) => widget.themeController.select(m ?? ThemeMode.system),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text('시스템 설정을 고르면 기기 화면 모드를 따라가요.', style: caption),
+                if (widget.onSignOut case final signOut?) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    child: Divider(height: 1, color: c.line),
+                  ),
+                  const _FieldLabel('계정'),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(color: c.cardSoft, borderRadius: BorderRadius.circular(18)),
+                    child: Row(
+                      children: [
+                        Icon(Icons.account_circle_rounded, size: 32, color: c.muted),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Google 계정으로 로그인했어요',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body),
+                              ),
+                              const SizedBox(height: 2),
+                              Text('다른 사람은 내 프로필을 볼 수 없어요', style: TextStyle(fontSize: 13, color: c.muted)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _RoundButton(
+                          label: '로그아웃',
+                          background: c.chip,
+                          foreground: c.onChip,
+                          onPressed: signOut,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _RoundButton(
+                          label: '탈퇴하기',
+                          background: c.urgentSoft,
+                          foreground: c.urgent,
+                          onPressed: _withdraw,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text('탈퇴하면 프로필과 저장한 공고가 지워져요. 공고 자체는 그대로 남아요.', style: caption),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 맨 위 요약 카드: 학적 한 줄, 관심 분야 2개·희망 직무 1개(넘으면 +N), 고치기 버튼.
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({required this.data, required this.onEdit});
+
+  final _ProfileData data;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final p = data.profile;
+    String? name(List<DictionaryItem> items, String? id) => items.where((i) => i.id == id).firstOrNull?.name;
+    final empty =
+        p == null ||
+        (p.majorId == null &&
+            p.grade == null &&
+            p.enrollmentStatus == null &&
+            p.interestIds.isEmpty &&
+            p.targetRoleIds.isEmpty);
+    final school = [
+      ?name(data.universities, p?.universityId),
+      ?name(data.majors, p?.majorId),
+      if (p?.grade case final g?) '$g학년',
+    ].join(' ');
+    final line = [if (school.isNotEmpty) school, ?_statusNames[p?.enrollmentStatus]].join(' · ');
+    return GwCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            empty ? '아직 입력하지 않았어요' : line,
+            style: TextStyle(fontSize: 17, height: 1.45, fontWeight: FontWeight.w700, color: c.ink),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            empty ? '학적과 관심 분야를 입력하면 맞춤 추천을 받을 수 있어요.' : '추천과 지원 조건 비교에 쓰는 정보예요.',
+            style: TextStyle(fontSize: 14, height: 1.5, color: c.sub),
+          ),
+          if (!empty) ...[
+            const SizedBox(height: 14),
+            _SummaryRow(label: '관심 분야', names: [for (final id in p.interestIds) ?name(data.interests, id)], show: 2),
+            const SizedBox(height: 8),
+            _SummaryRow(label: '희망 직무', names: [for (final id in p.targetRoleIds) ?name(data.roles, id)], show: 1),
+          ],
+          const SizedBox(height: 16),
+          SoftButton(label: empty ? '입력하기' : '고치기', onPressed: onEdit),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({required this.label, required this.names, required this.show});
+
+  final String label;
+  final List<String> names;
+
+  /// 칩으로 보일 개수. 나머지는 +N
+  final int show;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 72,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(label, style: TextStyle(fontSize: 13, color: c.muted)),
+          ),
+        ),
+        Expanded(
+          child: names.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text('선택 안 함', style: TextStyle(fontSize: 14, color: c.muted)),
+                )
+              : Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final n in names.take(show)) Pill(n),
+                    if (names.length > show) Pill('+${names.length - show}', tone: PillTone.neutral),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 프로필 고치기: 학적 → 관심 분야 → 희망 직무. 위에 진행 점, 아래에 '다음'·'저장하기' 고정 버튼.
+/// 저장에 성공하면 저장한 프로필을 돌려주며 닫히고, 실패하면 알리고 입력은 남긴다.
+class ProfileEditScreen extends StatefulWidget {
+  const ProfileEditScreen._({
+    required this.repository,
+    required this.profile,
+    required this.universities,
+    required this.majors,
+    required this.interests,
+    required this.roles,
+  });
+
+  final NoticeRepository repository;
+  final UserProfile? profile;
+  final List<DictionaryItem> universities;
+  final List<DictionaryItem> majors;
+  final List<DictionaryItem> interests;
+  final List<DictionaryItem> roles;
+
+  @override
+  State<ProfileEditScreen> createState() => _ProfileEditScreenState();
+}
+
+const _steps = ['학적', '관심 분야', '희망 직무'];
+
+class _ProfileEditScreenState extends State<ProfileEditScreen> {
+  late String? _universityId = widget.profile?.universityId ?? _p0University;
+  late String? _majorId = widget.profile?.majorId;
+  late int? _grade = widget.profile?.grade;
+  late String? _status = widget.profile?.enrollmentStatus;
+  late Set<String> _interests = {...?widget.profile?.interestIds};
+  late Set<String> _roles = {...?widget.profile?.targetRoleIds};
+  int _step = 0;
+
+  /// 단계가 바뀐 방향 (다음이면 1)
+  int _direction = 1;
+  bool _saving = false;
+
+  void _go(int step) => setState(() {
+    _direction = step > _step ? 1 : -1;
+    _step = step;
+  });
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final profile = UserProfile(
+      universityId: _universityId,
+      majorId: _majorId,
+      grade: _grade,
+      enrollmentStatus: _status,
+      interestIds: _interests.toList()..sort(),
+      targetRoleIds: _roles.toList()..sort(),
+    );
+    try {
+      await widget.repository.updateProfile(profile);
+      if (mounted) Navigator.of(context).pop(profile);
+    } catch (e) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(errorMessage(e))));
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _pick({
@@ -132,179 +412,194 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return MessageView(
-            icon: Icons.cloud_off,
-            message: errorMessage(snapshot.error!),
-            onRetry: () => setState(() {
-              _future = _load();
-            }),
-          );
-        }
-        return _body(snapshot.data!);
+    final c = context.gw;
+    final still = MediaQuery.maybeDisableAnimationsOf(context) == true;
+    final last = _step == _steps.length - 1;
+    // 뒤로 가기는 앞 단계로, 첫 단계에서는 저장하지 않고 닫는다.
+    return PopScope(
+      canPop: _step == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _go(_step - 1);
       },
+      // 학년·재학 칸의 neutral 바탕이 보이도록 카드 바탕 위에 둔다.
+      child: Scaffold(
+        backgroundColor: c.card,
+        appBar: GwTopBar(title: _steps[_step]),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+              child: _StepDots(step: _step, count: _steps.length),
+            ),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: still ? Duration.zero : const Duration(milliseconds: 320),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  final entering = child.key == ValueKey(_step);
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: animation.drive(
+                        Tween(begin: Offset((entering ? _direction : -_direction) * 0.12, 0), end: Offset.zero),
+                      ),
+                      child: child,
+                    ),
+                  );
+                },
+                child: KeyedSubtree(key: ValueKey(_step), child: _page(c)),
+              ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+            child: FilledButton(
+              onPressed: _saving ? null : (last ? _save : () => _go(_step + 1)),
+              child: Text(last ? '저장하기' : '다음'),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _body(_ProfileData data) {
-    final c = context.gw;
+  Widget _page(GwColors c) {
     final caption = captionStyle(context);
-    final names = {for (final i in [...data.universities, ...data.majors]) i.id: i.name};
+    final names = {
+      for (final i in [...widget.universities, ...widget.majors]) i.id: i.name,
+    };
     final majors = [
-      for (final m in data.majors)
+      for (final m in widget.majors)
         if (_universityId == null || m.id.startsWith('$_universityId.')) m,
     ];
+    final (title, detail, body) = switch (_step) {
+      0 => (
+        '학적',
+        '비워 둔 항목은 지원 조건을 "확인 필요"로 보여 드려요. 고른 칸을 다시 누르면 비울 수 있어요.',
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _PickRow(
+              label: '학교',
+              value: names[_universityId],
+              onTap: () => _pick(
+                title: '학교',
+                items: widget.universities,
+                selected: _universityId,
+                allowNone: false,
+                onPicked: (id) {
+                  if (id != _universityId) _majorId = null;
+                  _universityId = id;
+                },
+              ),
+            ),
+            _PickRow(
+              label: '학과',
+              value: names[_majorId],
+              onTap: () => _pick(
+                title: '학과',
+                items: majors,
+                selected: _majorId,
+                allowNone: true,
+                onPicked: (id) => _majorId = id,
+              ),
+            ),
+            const SizedBox(height: 18),
+            const _FieldLabel('학년'),
+            const SizedBox(height: 8),
+            _Segments<int>(
+              options: const [(1, '1학년'), (2, '2학년'), (3, '3학년'), (4, '4학년')],
+              selected: _grade,
+              allowEmpty: true,
+              onChanged: (g) => setState(() => _grade = g),
+            ),
+            const SizedBox(height: 18),
+            const _FieldLabel('재학 상태'),
+            const SizedBox(height: 8),
+            _Segments<String>(
+              options: const [('enrolled', '재학'), ('on_leave', '휴학'), ('graduated', '졸업')],
+              selected: _status,
+              allowEmpty: true,
+              onChanged: (s) => setState(() => _status = s),
+            ),
+          ],
+        ),
+      ),
+      1 => (
+        '관심 분야',
+        '고른 분야와 관련된 공고를 먼저 보여 드려요.',
+        _ChoiceChips(items: widget.interests, selected: _interests, onChanged: (s) => setState(() => _interests = s)),
+      ),
+      _ => (
+        '희망 직무',
+        '고른 직무와 관련된 공고를 먼저 보여 드려요.',
+        _ChoiceChips(items: widget.roles, selected: _roles, onChanged: (s) => setState(() => _roles = s)),
+      ),
+    };
+    final count = switch (_step) {
+      1 => _interests.length,
+      2 => _roles.length,
+      _ => null,
+    };
     return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
       children: [
-        const ScreenHeader('내 프로필'),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12),
-          child: TipBubble(title: '입력한 정보는 추천에만 써요', detail: '지원 조건 비교와 추천 순서에만 쓰고, 성적·학번은 받지 않아요.'),
+        Row(
+          children: [
+            Expanded(
+              child: Semantics(
+                header: true,
+                child: Text(
+                  title,
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.6, color: c.ink),
+                ),
+              ),
+            ),
+            if (count != null) Text('$count개 선택', style: caption),
+          ],
         ),
-        Container(
-          margin: const EdgeInsets.only(top: 16),
-          padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
-          decoration: BoxDecoration(
-            color: c.card,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SectionTitle('학적'),
-              const SizedBox(height: 10),
-              _PickRow(
-                label: '학교',
-                value: names[_universityId],
-                onTap: () => _pick(
-                  title: '학교',
-                  items: data.universities,
-                  selected: _universityId,
-                  allowNone: false,
-                  onPicked: (id) {
-                    if (id != _universityId) _majorId = null;
-                    _universityId = id;
-                  },
-                ),
-              ),
-              _PickRow(
-                label: '학과',
-                value: names[_majorId],
-                onTap: () => _pick(
-                  title: '학과',
-                  items: majors,
-                  selected: _majorId,
-                  allowNone: true,
-                  onPicked: (id) => _majorId = id,
-                ),
-              ),
-              const SizedBox(height: 18),
-              _FieldLabel('학년'),
-              const SizedBox(height: 8),
-              _Segments<int>(
-                options: const [(1, '1학년'), (2, '2학년'), (3, '3학년'), (4, '4학년')],
-                selected: _grade,
-                allowEmpty: true,
-                onChanged: (g) => setState(() => _grade = g),
-              ),
-              const SizedBox(height: 18),
-              _FieldLabel('재학 상태'),
-              const SizedBox(height: 8),
-              _Segments<String>(
-                options: const [('enrolled', '재학'), ('on_leave', '휴학'), ('graduated', '졸업')],
-                selected: _status,
-                allowEmpty: true,
-                onChanged: (s) => setState(() => _status = s),
-              ),
-              const SizedBox(height: 8),
-              Text('비워 둔 항목은 지원 조건을 "확인 필요"로 보여 드려요. 고른 칸을 다시 누르면 비울 수 있어요.', style: caption),
-              const SizedBox(height: 36),
-              SectionTitle('관심 분야', trailing: Text('${_interests.length}개 선택', style: caption)),
-              const SizedBox(height: 6),
-              Text('고른 분야와 관련된 공고를 먼저 보여 드려요.', style: caption),
-              const SizedBox(height: 12),
-              _ChoiceChips(
-                items: data.interests,
-                selected: _interests,
-                onChanged: (s) => setState(() => _interests = s),
-              ),
-              const SizedBox(height: 36),
-              SectionTitle('희망 직무', trailing: Text('${_roles.length}개 선택', style: caption)),
-              const SizedBox(height: 12),
-              _ChoiceChips(items: data.roles, selected: _roles, onChanged: (s) => setState(() => _roles = s)),
-              const SizedBox(height: 28),
-              FilledButton(onPressed: _saving ? null : _save, child: const Text('저장하기')),
-              const SizedBox(height: 44),
-              const SectionTitle('화면'),
-              const SizedBox(height: 12),
-              ValueListenableBuilder(
-                valueListenable: widget.themeController,
-                builder: (context, mode, _) => _Segments<ThemeMode>(
-                  options: const [(ThemeMode.system, '시스템 설정'), (ThemeMode.light, '라이트'), (ThemeMode.dark, '다크')],
-                  selected: mode,
-                  onChanged: (m) => widget.themeController.select(m ?? ThemeMode.system),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text('시스템 설정을 고르면 기기 화면 모드를 따라가요.', style: caption),
-              if (widget.onSignOut case final signOut?) ...[
-                const SizedBox(height: 40),
-                const SectionTitle('계정'),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(color: c.cardSoft, borderRadius: BorderRadius.circular(18)),
-                  child: Row(
-                    children: [
-                      Icon(Icons.account_circle_outlined, size: 32, color: c.muted),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Google 계정으로 로그인했어요',
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body),
-                            ),
-                            const SizedBox(height: 2),
-                            Text('다른 사람은 내 프로필을 볼 수 없어요', style: TextStyle(fontSize: 13, color: c.muted)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _RoundButton(label: '로그아웃', background: c.chip, foreground: c.onChip, onPressed: signOut),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _RoundButton(
-                        label: '탈퇴하기',
-                        background: c.urgentSoft,
-                        foreground: c.urgent,
-                        onPressed: _withdraw,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text('탈퇴하면 프로필과 저장한 공고가 지워져요. 공고 자체는 그대로 남아요.', style: caption),
-              ],
-            ],
-          ),
-        ),
+        const SizedBox(height: 6),
+        Text(detail, style: caption),
+        const SizedBox(height: 16),
+        body,
       ],
+    );
+  }
+}
+
+/// 단계 진행 표시. 지금 단계는 길쭉한 점으로 보인다.
+class _StepDots extends StatelessWidget {
+  const _StepDots({required this.step, required this.count});
+
+  final int step;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final still = MediaQuery.maybeDisableAnimationsOf(context) == true;
+    return Semantics(
+      label: '${step + 1}/$count단계',
+      child: ExcludeSemantics(
+        child: Row(
+          children: [
+            for (var i = 0; i < count; i++) ...[
+              if (i > 0) const SizedBox(width: 6),
+              AnimatedContainer(
+                duration: still ? Duration.zero : const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+                width: i == step ? 20 : 8,
+                height: 8,
+                decoration: BoxDecoration(color: i <= step ? c.cta : c.line, borderRadius: BorderRadius.circular(4)),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -316,11 +611,14 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.gw.sub));
+    return Text(
+      text,
+      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.gw.sub),
+    );
   }
 }
 
-/// 학교·학과 줄. 누르면 아래에서 고르는 창이 열린다.
+/// 학교·학과 줄. 누르면 가운데 선택 팝업이 열린다.
 class _PickRow extends StatelessWidget {
   const _PickRow({required this.label, required this.value, required this.onTap});
 
@@ -335,7 +633,9 @@ class _PickRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         height: 54,
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line))),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: c.line)),
+        ),
         child: Row(
           children: [
             Text(label, style: TextStyle(fontSize: 15, color: c.muted)),
@@ -353,7 +653,7 @@ class _PickRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            Icon(Icons.chevron_right, size: 20, color: c.muted),
+            Icon(Icons.chevron_right_rounded, size: 20, color: c.muted),
           ],
         ),
       ),
@@ -531,57 +831,143 @@ class _PickerDialogState extends State<_PickerDialog> {
 }
 
 /// 하나만 고르는 칸. allowEmpty면 고른 칸을 다시 눌러 비울 수 있다.
-class _Segments<T> extends StatelessWidget {
-  const _Segments({required this.options, required this.selected, required this.onChanged, this.allowEmpty = false});
+/// 고른 칸의 바탕은 하나뿐이고, 다른 칸을 고르면 그쪽으로 양옆으로 미끄러진다. 비우면 그 자리에서 흐려진다
+/// (애니메이션 줄이기 설정이면 바로 바뀜).
+class _Segments<T> extends StatefulWidget {
+  const _Segments({
+    required this.options,
+    required this.selected,
+    required this.onChanged,
+    this.allowEmpty = false,
+    this.changeAfterSlide = false,
+  });
 
   final List<(T, String)> options;
   final T? selected;
   final bool allowEmpty;
   final ValueChanged<T?> onChanged;
 
+  /// 바탕이 다 미끄러진 뒤에 onChanged를 부른다 (테마처럼 바꾸는 데 무거운 값)
+  final bool changeAfterSlide;
+
+  @override
+  State<_Segments<T>> createState() => _SegmentsState<T>();
+}
+
+class _SegmentsState<T> extends State<_Segments<T>> {
+  /// 비웠을 때 바탕이 흐려지며 머무는 자리
+  late int _last = _index.clamp(0, widget.options.length - 1);
+
+  /// changeAfterSlide일 때 미끄러지는 동안 먼저 보이는 값
+  ({T? value})? _pending;
+
+  T? get _shown => _pending == null ? widget.selected : _pending!.value;
+
+  int get _index => widget.options.indexWhere((o) => o.$1 == _shown);
+
+  @override
+  void didUpdateWidget(_Segments<T> old) {
+    super.didUpdateWidget(old);
+    if (_pending != null && widget.selected == _pending!.value) _pending = null;
+    if (_index >= 0) _last = _index;
+  }
+
+  void _tap(T value, bool still) {
+    final next = value == _shown && widget.allowEmpty ? null : value;
+    if (!widget.changeAfterSlide || still || next == _shown) {
+      widget.onChanged(next);
+      return;
+    }
+    setState(() {
+      _pending = (value: next);
+      if (_index >= 0) _last = _index;
+    });
+  }
+
+  void _slid() {
+    final pending = _pending;
+    if (pending == null) return;
+    _pending = null;
+    widget.onChanged(pending.value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
+    final still = MediaQuery.maybeDisableAnimationsOf(context) == true;
+    final move = still ? Duration.zero : const Duration(milliseconds: 320);
+    const gap = 4.0;
+    final on = _index >= 0;
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(color: c.neutral, borderRadius: BorderRadius.circular(16)),
-      child: Row(
-        children: [
-          for (final (i, (value, label)) in options.indexed)
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(left: i == 0 ? 0 : 4),
-                child: Semantics(
-                  button: true,
-                  selected: value == selected,
-                  inMutuallyExclusiveGroup: true,
-                  child: Material(
-                    color: value == selected ? c.cta : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () => onChanged(value == selected && allowEmpty ? null : value),
-                      child: SizedBox(
-                        height: 44,
-                        child: Center(
-                          child: Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w700,
-                              color: value == selected ? c.onCta : c.sub,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final n = widget.options.length;
+          final width = (box.maxWidth - gap * (n - 1)) / n;
+          return Stack(
+            children: [
+              AnimatedPositioned(
+                key: const ValueKey('segment-thumb'),
+                duration: move,
+                curve: Curves.easeOutCubic,
+                left: _last * (width + gap),
+                onEnd: _slid,
+                top: 0,
+                bottom: 0,
+                width: width,
+                child: AnimatedOpacity(
+                  opacity: on ? 1 : 0,
+                  duration: move,
+                  curve: Curves.easeOutCubic,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(color: c.cta, borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  // 칸 너비를 바탕과 똑같이 둬야 바탕이 칸에 딱 맞는다.
+                  for (final (i, (value, label)) in widget.options.indexed) ...[
+                    if (i > 0) const SizedBox(width: gap),
+                    SizedBox(
+                      width: width,
+                      child: Semantics(
+                        button: true,
+                        selected: value == _shown,
+                        inMutuallyExclusiveGroup: true,
+                        child: Material(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => _tap(value, still),
+                            child: SizedBox(
+                              height: 44,
+                              child: Center(
+                                child: AnimatedDefaultTextStyle(
+                                  duration: move,
+                                  curve: Curves.easeOutCubic,
+                                  style: TextStyle(
+                                    fontFamily: 'Pretendard',
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: value == _shown ? c.onCta : c.sub,
+                                  ),
+                                  child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  ],
+                ],
               ),
-            ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -621,7 +1007,7 @@ class _ChoiceChips extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (on) ...[Icon(Icons.check, size: 16, color: c.onCta), const SizedBox(width: 5)],
+                          if (on) ...[Icon(Icons.check_rounded, size: 16, color: c.onCta), const SizedBox(width: 5)],
                           Text(
                             item.name,
                             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: on ? c.onCta : c.body),
@@ -640,7 +1026,12 @@ class _ChoiceChips extends StatelessWidget {
 }
 
 class _RoundButton extends StatelessWidget {
-  const _RoundButton({required this.label, required this.background, required this.foreground, required this.onPressed});
+  const _RoundButton({
+    required this.label,
+    required this.background,
+    required this.foreground,
+    required this.onPressed,
+  });
 
   final String label;
   final Color background;

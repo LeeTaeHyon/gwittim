@@ -5,6 +5,7 @@ import '../main.dart';
 import '../ui/briefing_data.dart';
 import '../ui/common.dart';
 import '../ui/logo.dart';
+import '../ui/skeleton.dart';
 import '../ui/theme.dart';
 import 'auth_service.dart';
 import 'google_sign_in_button.dart';
@@ -56,7 +57,7 @@ class _AuthGateState extends State<AuthGate> {
           // 로그인 화면과 같은 테마를 써야 테마 전환 애니메이션이 깨지지 않는다.
           return GwMaterialApp(
             themeController: _theme,
-            home: const Scaffold(body: Center(child: CircularProgressIndicator())),
+            home: const Scaffold(body: Center(child: GwLoadingLogo())),
           );
         }
         if (snapshot.data!) {
@@ -168,7 +169,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.lock_outline, size: 15, color: c.loginSub),
+                          Icon(Icons.lock_outline_rounded, size: 15, color: c.loginSub),
                           const SizedBox(width: 6),
                           Text('성적·학번은 묻지 않아요', style: TextStyle(fontSize: 13, color: c.loginSub)),
                         ],

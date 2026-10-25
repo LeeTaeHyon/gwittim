@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../data/repository.dart';
+import 'components.dart';
+import 'logo.dart';
+import 'theme.dart';
 
 /// 원문 열기 (url_launcher). 테스트에서는 바꿔 끼운다.
 typedef OpenUrl = Future<bool> Function(Uri url);
@@ -26,54 +29,55 @@ void showRefreshFailed(BuildContext context, Object error) {
     ..showSnackBar(SnackBar(content: Text(unavailable ? '새로 불러오지 못했어요. 인터넷 연결을 확인해 주세요.' : errorMessage(error))));
 }
 
+/// 빈 화면의 오류·안내. 글자 없는 로고 말풍선 그림, 한 줄 제목, 한 줄 설명, 앱 버튼.
 class MessageView extends StatelessWidget {
-  const MessageView({super.key, required this.icon, required this.message, this.onRetry});
+  const MessageView({super.key, required this.title, this.detail, this.onRetry, this.action});
 
-  final IconData icon;
-  final String message;
+  final String title;
+  final String? detail;
   final VoidCallback? onRetry;
+
+  /// 다시 시도 대신 다음 행동 버튼 ('공고 둘러보기' 등)
+  final ({String label, VoidCallback onPressed})? action;
+
+  /// 불러오기 실패. 상세 오류는 보이지 않고 errorMessage 문구만 보인다.
+  factory MessageView.error(Object error, {Key? key, VoidCallback? onRetry}) =>
+      MessageView(key: key, title: '불러오지 못했어요', detail: errorMessage(error), onRetry: onRetry);
 
   @override
   Widget build(BuildContext context) {
+    final c = context.gw;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: Theme.of(context).colorScheme.outline),
-            const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center),
+            // 라이트의 neutral은 화면 바탕과 같은 색이라, 바탕과 카드 어디서나 보이는 line으로 칠한다.
+            ExcludeSemantics(child: GwBubbleMark(height: 44, color: c.line)),
+            const SizedBox(height: 18),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 17, height: 1.45, fontWeight: FontWeight.w600, color: c.ink),
+            ),
+            if (detail != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                detail!,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 15, height: 1.5, color: c.sub),
+              ),
+            ],
             if (onRetry != null) ...[
-              const SizedBox(height: 16),
-              FilledButton.tonal(onPressed: onRetry, child: const Text('다시 시도')),
+              const SizedBox(height: 18),
+              SoftButton(label: '다시 시도', icon: null, onPressed: onRetry!),
+            ] else if (action case final a?) ...[
+              const SizedBox(height: 18),
+              SoftButton(label: a.label, onPressed: a.onPressed),
             ],
           ],
         ),
-      ),
-    );
-  }
-}
-
-class StatusChip extends StatelessWidget {
-  const StatusChip({super.key, required this.label, this.warning = false});
-
-  final String label;
-  final bool warning;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: warning ? scheme.tertiaryContainer : scheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall
-            ?.copyWith(color: warning ? scheme.onTertiaryContainer : scheme.onSecondaryContainer),
       ),
     );
   }
