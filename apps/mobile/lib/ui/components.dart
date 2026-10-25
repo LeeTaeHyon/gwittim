@@ -1,8 +1,11 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/models.dart';
 import 'format.dart';
+import 'icons.dart';
 import 'logo.dart';
 import 'theme.dart';
 
@@ -198,7 +201,7 @@ class TipBubble extends StatelessWidget {
                   ],
                 ),
               ),
-              if (onTap != null) ...[const SizedBox(width: 8), Icon(Icons.chevron_right, size: 20, color: c.muted)],
+              if (onTap != null) ...[const SizedBox(width: 8), Icon(Icons.chevron_right_rounded, size: 20, color: c.muted)],
             ],
           ),
         ),
@@ -300,11 +303,15 @@ class ScreenHeader extends StatelessWidget {
 /// 캡션 (13, 보조 글자)
 TextStyle captionStyle(BuildContext context) => TextStyle(fontSize: 13, height: 1.6, color: context.gw.muted);
 
-/// 하단 탭 하나. 고르면 icon 대신 activeIcon(채운 모양)을 쓴다.
-typedef GwTab = ({IconData icon, IconData activeIcon, String label});
+/// 하단 탭 하나. 고르면 채운 아이콘을 쓴다.
+typedef GwTab = ({GwGlyph glyph, String label});
 
-/// 바닥에 붙은 하단 탭 막대. 고른 탭은 채운 아이콘과 진한 색·굵은 글자로만 구분한다(2026-10-25 팀장 결정).
-/// 누르면 아이콘 둘레가 칠해졌다가 천천히 사라지고, 색과 아이콘은 부드럽게 바뀐다(애니메이션 줄이기 설정을 따름).
+/// 고른 탭 아이콘 아래 라임 점의 위쪽 위치 (아이콘 8~32, 이름 42~)
+const _dotTop = 35.0;
+
+/// 바닥에 붙은 하단 탭 막대. 고른 탭은 채운 아이콘과 진한 색·굵은 글자, 아이콘 아래 라임 점으로 구분한다.
+/// 누르면 아이콘 둘레가 칠해졌다가 천천히 사라지고, 색과 아이콘은 부드럽게 바뀐다. 점은 고른 탭으로
+/// 옮겨 가며 가로로 늘었다 줄어든다(애니메이션 줄이기 설정을 따름).
 class GwTabBar extends StatefulWidget {
   const GwTabBar({super.key, required this.tabs, required this.selected, required this.onSelect});
 
@@ -316,9 +323,31 @@ class GwTabBar extends StatefulWidget {
   State<GwTabBar> createState() => _GwTabBarState();
 }
 
-class _GwTabBarState extends State<GwTabBar> {
+class _GwTabBarState extends State<GwTabBar> with SingleTickerProviderStateMixin {
   /// 누르고 있는 탭
   int? _pressed;
+
+  /// 점이 떠난 탭
+  late int _from = widget.selected;
+  late final _dot = AnimationController(vsync: this, duration: const Duration(milliseconds: 320), value: 1);
+
+  @override
+  void didUpdateWidget(GwTabBar old) {
+    super.didUpdateWidget(old);
+    if (old.selected == widget.selected) return;
+    _from = old.selected;
+    if (MediaQuery.maybeDisableAnimationsOf(context) == true) {
+      _dot.value = 1;
+    } else {
+      _dot.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _dot.dispose();
+    super.dispose();
+  }
 
   void _select(int i) {
     if (i != widget.selected) HapticFeedback.selectionClick();
@@ -340,21 +369,48 @@ class _GwTabBarState extends State<GwTabBar> {
           top: false,
           child: SizedBox(
             height: 64,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final (i, tab) in widget.tabs.indexed)
-                  Expanded(
-                    child: _TabButton(
-                      tab,
-                      selected: i == widget.selected,
-                      pressed: i == _pressed,
-                      still: still,
-                      onPress: (down) => setState(() => _pressed = down ? i : null),
-                      onTap: () => _select(i),
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final slot = box.maxWidth / widget.tabs.length;
+                return Stack(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final (i, tab) in widget.tabs.indexed)
+                          Expanded(
+                            child: _TabButton(
+                              tab,
+                              selected: i == widget.selected,
+                              pressed: i == _pressed,
+                              still: still,
+                              onPress: (down) => setState(() => _pressed = down ? i : null),
+                              onTap: () => _select(i),
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
-              ],
+                    AnimatedBuilder(
+                      animation: _dot,
+                      builder: (context, _) {
+                        final t = _dot.value;
+                        final x = slot * (_from + (widget.selected - _from) * Curves.easeOutCubic.transform(t) + 0.5);
+                        final width = 4 + 8 * math.sin(math.pi * t);
+                        return Positioned(
+                          key: const ValueKey('tab-dot'),
+                          top: _dotTop,
+                          left: x - width / 2,
+                          width: width,
+                          height: 4,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(color: c.lime, borderRadius: BorderRadius.circular(2)),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -420,21 +476,17 @@ class _TabButton extends StatelessWidget {
                   tween: ColorTween(end: selected ? c.tabActive : c.onTab),
                   duration: change,
                   curve: Curves.easeOutCubic,
+                  // 아이콘 위치를 정해 두어야 막대에 걸친 점이 아이콘 바로 아래에 온다.
                   builder: (context, color, _) => Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    spacing: 3,
                     children: [
+                      const SizedBox(height: 8),
                       AnimatedSwitcher(
                         duration: change,
                         switchInCurve: Curves.easeOutCubic,
                         switchOutCurve: Curves.easeInCubic,
-                        child: Icon(
-                          selected ? tab.activeIcon : tab.icon,
-                          key: ValueKey(selected),
-                          size: 24,
-                          color: color,
-                        ),
+                        child: GwIcon(tab.glyph, key: ValueKey(selected), filled: selected, color: color),
                       ),
+                      const SizedBox(height: 10),
                       Text(
                         tab.label,
                         style: TextStyle(

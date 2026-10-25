@@ -36,62 +36,65 @@ class BriefingScreen extends StatelessWidget {
     return Scaffold(
       extendBody: true,
       appBar: GwTopBar(onClose: () => Navigator.of(context).pop(), closeLabel: '브리핑 닫기'),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.paddingOf(context).bottom + 8),
-        children: [
-          _Rise(
-            delay: 0,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const GwBadge(),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${today.month}월 ${today.day}일 ${weekdayName(today)}요일',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.muted),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Text('오늘 챙길 소식이', style: headline),
-                  Text.rich(
-                    TextSpan(
-                      style: headline,
+      // 여백은 Scaffold가 아래 버튼 높이를 더한 MediaQuery에서 읽는다.
+      body: Builder(
+        builder: (context) => ListView(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.paddingOf(context).bottom + 8),
+          children: [
+            _Rise(
+              delay: 0,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        WidgetSpan(
-                          alignment: PlaceholderAlignment.baseline,
-                          baseline: TextBaseline.alphabetic,
-                          child: Marker(
-                            '${briefing.count}가지',
-                            style: headline,
-                            animate: true,
-                            delay: const Duration(milliseconds: 450),
-                          ),
+                        const GwBadge(),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${today.month}월 ${today.day}일 ${weekdayName(today)}요일',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.muted),
                         ),
-                        const TextSpan(text: ' 있어요'),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 14),
+                    Text('오늘 챙길 소식이', style: headline),
+                    Text.rich(
+                      TextSpan(
+                        style: headline,
+                        children: [
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.baseline,
+                            baseline: TextBaseline.alphabetic,
+                            child: Marker(
+                              '${briefing.count}가지',
+                              style: headline,
+                              animate: true,
+                              delay: const Duration(milliseconds: 450),
+                            ),
+                          ),
+                          const TextSpan(text: ' 있어요'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          for (var i = 0; i < sections.length; i++) ...[
-            _Rise(delay: 300 + i * 250, child: sections[i]),
-            const SizedBox(height: 14),
-          ],
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
-            child: Text(
-              '추천 순서는 관심사·희망 직무·전공·마감 시기로 정해요. 합격 가능성을 뜻하지 않아요.',
-              style: TextStyle(fontSize: 12.5, height: 1.6, color: c.muted),
+            for (var i = 0; i < sections.length; i++) ...[
+              _Rise(delay: 300 + i * 250, child: sections[i]),
+              const SizedBox(height: 14),
+            ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+              child: Text(
+                '추천 순서는 관심사·희망 직무·전공·마감 시기로 정해요. 합격 가능성을 뜻하지 않아요.',
+                style: TextStyle(fontSize: 12.5, height: 1.6, color: c.muted),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
@@ -228,7 +231,7 @@ class _UrgentBubble extends StatelessWidget {
             const SizedBox(height: 16),
             Row(
               children: [
-                Icon(Icons.help_outline, size: 18, color: c.check),
+                Icon(Icons.help_outline_rounded, size: 18, color: c.check),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text('지원 조건 중 직접 확인할 것이 있어요', style: TextStyle(fontSize: 14, color: c.sub)),
@@ -356,7 +359,7 @@ class _ChangedBubble extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (before != null && now != null) Icon(Icons.arrow_forward, size: 18, color: c.faint),
+              if (before != null && now != null) Icon(Icons.arrow_forward_rounded, size: 18, color: c.faint),
               if (now != null)
                 Container(
                   height: 32,

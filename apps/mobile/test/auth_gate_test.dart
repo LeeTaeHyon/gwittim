@@ -70,11 +70,11 @@ void main() {
 
     await tester.tap(find.text('Google 계정으로 시작하기'));
     await tester.pumpAndSettle();
-    expect(find.text('홈'), findsOneWidget); // 하단 탭
+    expect(find.text('오늘'), findsOneWidget); // 하단 탭
     expect(await captured!(), 'fake-id-token');
 
-    // 로그아웃은 프로필 맨 아래 계정 칸에 있다 (D-010)
-    await tester.tap(find.text('프로필'));
+    // 로그아웃은 내 정보 설정의 계정 칸에 있다 (D-010)
+    await tester.tap(find.byTooltip('내 정보'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('로그아웃'),

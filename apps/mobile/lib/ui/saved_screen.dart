@@ -6,7 +6,9 @@ import 'briefing_data.dart';
 import 'common.dart';
 import 'components.dart';
 import 'format.dart';
+import 'icons.dart';
 import 'report_screen.dart';
+import 'skeleton.dart';
 import 'theme.dart';
 
 /// 저장한 공고 (D-010). 마감 기준으로 묶고, 최신 공고 상태와 저장 이후 바뀐 마감을 함께 보인다 (SPEC §6).
@@ -194,7 +196,7 @@ class SavedScreenState extends State<SavedScreen> {
           },
         );
       }
-      return const Center(child: CircularProgressIndicator());
+      return const SavedSkeleton();
     }
     final c = context.gw;
     final changed = deadlineChangedEntries(entries);
@@ -347,7 +349,7 @@ class _SavedRow extends StatelessWidget {
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.urgent),
                     )
                   else
-                    Text(_metaLine(n), style: meta),
+                    Text.rich(_meta(n, c), style: meta),
                   if (changed) ...[
                     const SizedBox(height: 6),
                     Wrap(
@@ -383,8 +385,8 @@ class _SavedRow extends StatelessWidget {
                 tooltip: saved ? '저장 취소' : '저장',
                 isSelected: saved,
                 onPressed: onToggle,
-                icon: Icon(Icons.bookmark_border, color: c.muted),
-                selectedIcon: Icon(Icons.bookmark, color: c.point),
+                icon: GwIcon(GwGlyph.saved, color: c.muted),
+                selectedIcon: GwIcon(GwGlyph.saved, filled: true, color: c.point),
               ),
           ],
         ),
@@ -392,12 +394,11 @@ class _SavedRow extends StatelessWidget {
     );
   }
 
-  /// 분류 · (확인된 시각) · D-day. 확정 마감이 없으면 원문 설명.
-  String _metaLine(NoticeSummary n) {
+  /// 마감 상태를 앞에 굵게(D-day · 확인된 시각), 분류는 뒤에 흐리게. 확정 마감이 없으면 원문 설명.
+  TextSpan _meta(NoticeSummary n, GwColors c) {
     final deadline = n.applicationDeadline;
     final left = daysLeft(n, today);
-    return [
-      category,
+    final lead = [
       if (n.lifecycleStatus == 'closed')
         '모집이 끝났어요'
       else if (deadline == null)
@@ -405,12 +406,27 @@ class _SavedRow extends StatelessWidget {
       else if (deadline.day.isBefore(DateTime(today.year, today.month, today.day)))
         '마감일이 지났어요'
       else ...[
-        if (deadline.hasTime) '${deadline.time} 마감',
         if (left != null) left == 0 ? '오늘 마감' : 'D-$left',
+        if (deadline.hasTime) '${deadline.time} 마감',
       ],
-      if (n.lifecycleStatus == 'unknown') '모집 상태 미확인',
     ].join(' · ');
+    return TextSpan(
+      children: [
+        if (lead.isNotEmpty) ...[
+          TextSpan(
+            text: lead,
+            style: left == null
+                ? null
+                : TextStyle(fontWeight: FontWeight.w600, color: left <= urgentDays ? c.urgent : c.sub),
+          ),
+          const TextSpan(text: ' · '),
+        ],
+        TextSpan(text: category),
+        if (n.lifecycleStatus == 'unknown') const TextSpan(text: ' · 모집 상태 미확인'),
+      ],
+    );
   }
+
 }
 
 /// 왼쪽 마감 날짜. 이번 주·다음 주는 요일, 그 밖은 달을 함께 보인다.
@@ -427,7 +443,7 @@ class _DateColumn extends StatelessWidget {
     if (notice.lifecycleStatus == 'removed') {
       return Padding(
         padding: const EdgeInsets.only(top: 2),
-        child: Icon(Icons.delete_outline, size: 20, color: c.faint),
+        child: Icon(Icons.delete_outline_rounded, size: 20, color: c.faint),
       );
     }
     final deadline = notice.applicationDeadline;

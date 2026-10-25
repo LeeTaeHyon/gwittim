@@ -128,7 +128,7 @@ void main() {
     expect(Theme.of(home).brightness, Brightness.dark);
     expect(home.gw, GwColors.dark);
 
-    await tester.tap(find.text('프로필'));
+    await tester.tap(find.byTooltip('내 정보'));
     await tester.pumpAndSettle();
     final profileList = find.descendant(of: find.byType(ProfileScreen), matching: find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(find.text('라이트'), 300, scrollable: profileList);
