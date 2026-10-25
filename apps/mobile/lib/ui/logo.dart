@@ -1,0 +1,102 @@
+import 'package:flutter/material.dart';
+
+import 'theme.dart';
+
+/// 귀띔 로고 (D-011 A1). 라임 말풍선 안에 직접 그린 '귀띔'으로, 글꼴을 쓰지 않는다.
+/// 색은 라이트·다크 모두 라임 면 위 네이비 글자다.
+class GwLogo extends StatelessWidget {
+  const GwLogo({super.key, required this.height});
+
+  /// 꼬리까지 포함한 높이. 너비는 원본 비율(400:250)을 따른다.
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return Semantics(
+      label: '귀띔',
+      child: CustomPaint(size: Size(height * 400 / 250, height), painter: _LogoPainter(c.lime, c.limeInk)),
+    );
+  }
+}
+
+/// `docs/brand/logo.svg`의 path 데이터 (viewBox 0 0 400 250). 원본을 고치면 여기도 같이 고친다.
+@visibleForTesting
+const logoBubbleData = 'M56 0H344A56 56 0 0 1 400 56V164A56 56 0 0 1 344 220H40L0 250V56A56 56 0 0 1 56 0Z';
+
+/// 글자는 원본에서 translate(72 40) scale(1.15)로 놓인다.
+@visibleForTesting
+const logoGlyphData =
+    'M2 6H64V42H51V17H2ZM0 56H80V67H47V116H34V67H0ZM86 0H100V120H86Z'
+    'M118 4H150V14H130V30H152V40H118ZM160 4H192V14H172V30H194V40H160Z'
+    'M118 56H200V66H118ZM208 0H222V68H208Z'
+    'M130 78H214A8 8 0 0 1 222 86V112A8 8 0 0 1 214 120H132L122 128V86A8 8 0 0 1 130 78Z'
+    'M136 88A2 2 0 0 0 134 90V110H208A2 2 0 0 0 210 108V90A2 2 0 0 0 208 88Z';
+
+class _LogoPainter extends CustomPainter {
+  _LogoPainter(this.bubble, this.ink);
+
+  final Color bubble;
+  final Color ink;
+
+  static final _bubble = svgPath(logoBubbleData);
+  static final _glyph = svgPath(logoGlyphData);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.scale(size.width / 400, size.height / 250);
+    canvas.drawPath(_bubble, Paint()..color = bubble);
+    canvas.translate(72, 40);
+    canvas.scale(1.15);
+    canvas.drawPath(_glyph, Paint()..color = ink);
+  }
+
+  @override
+  bool shouldRepaint(_LogoPainter old) => old.bubble != bubble || old.ink != ink;
+}
+
+/// 로고에 쓰는 절대 좌표 명령(M·L·H·V·A·Z)만 읽는다. 로고 하나라서 SVG 패키지를 들이지 않는다.
+/// A의 sweep 1(시계 방향)은 arcToPoint의 clockwise와 같다.
+@visibleForTesting
+Path svgPath(String d) {
+  final tokens = RegExp(r'[A-Za-z]|[\d.]+').allMatches(d).map((m) => m[0]!).toList();
+  final path = Path();
+  var i = 0;
+  var x = 0.0;
+  var y = 0.0;
+  String? command;
+  double next() => double.parse(tokens[i++]);
+  while (i < tokens.length) {
+    if (double.tryParse(tokens[i]) == null) command = tokens[i++];
+    switch (command) {
+      case 'M':
+        x = next();
+        y = next();
+        path.moveTo(x, y);
+      case 'L':
+        x = next();
+        y = next();
+        path.lineTo(x, y);
+      case 'H':
+        x = next();
+        path.lineTo(x, y);
+      case 'V':
+        y = next();
+        path.lineTo(x, y);
+      case 'A':
+        final radius = Radius.elliptical(next(), next());
+        final rotation = next();
+        final largeArc = next() != 0;
+        final clockwise = next() != 0;
+        x = next();
+        y = next();
+        path.arcToPoint(Offset(x, y), radius: radius, rotation: rotation, largeArc: largeArc, clockwise: clockwise);
+      case 'Z':
+        path.close();
+        command = null; // Z 뒤에는 새 명령이 와야 한다
+      default:
+        throw FormatException('지원하지 않는 path 명령', d, i);
+    }
+  }
+  return path;
+}
