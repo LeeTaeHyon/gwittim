@@ -5,17 +5,20 @@ import 'theme.dart';
 /// 귀띔 로고 (D-011 A1). 라임 말풍선 안에 직접 그린 '귀띔'으로, 글꼴을 쓰지 않는다.
 /// 색은 라이트·다크 모두 라임 면 위 네이비 글자다.
 class GwLogo extends StatelessWidget {
-  const GwLogo({super.key, required this.height});
+  const GwLogo({super.key, required this.height, this.reveal});
 
   /// 꼬리까지 포함한 높이. 너비는 원본 비율(400:250)을 따른다.
   final double height;
+
+  /// 글자 획을 차례로 채우는 진행도(0~1). 시작 인트로에서만 쓰고, 없으면 글자를 다 그린다.
+  final Animation<double>? reveal;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
     return Semantics(
       label: '귀띔',
-      child: CustomPaint(size: Size(height * 400 / 250, height), painter: _LogoPainter(c.lime, c.limeInk)),
+      child: CustomPaint(size: Size(height * 400 / 250, height), painter: _LogoPainter(c.lime, c.limeInk, reveal)),
     );
   }
 }
@@ -33,14 +36,24 @@ const logoGlyphData =
     'M130 78H214A8 8 0 0 1 222 86V112A8 8 0 0 1 214 120H132L122 128V86A8 8 0 0 1 130 78Z'
     'M136 88A2 2 0 0 0 134 90V110H208A2 2 0 0 0 210 108V90A2 2 0 0 0 208 88Z';
 
+/// 획 단위(ㄱ ㅜ ㅣ ㄷ ㄷ ㅡ ㅣ ㅁ). ㅁ은 바깥과 속을 한 path로 둬야 속이 빈다.
+final _strokes = () {
+  final parts = RegExp('M[^M]*').allMatches(logoGlyphData).map((m) => m[0]!).toList();
+  return [for (final d in parts.take(7)) svgPath(d), svgPath(parts.skip(7).join())];
+}();
+
 class _LogoPainter extends CustomPainter {
-  _LogoPainter(this.bubble, this.ink);
+  _LogoPainter(this.bubble, this.ink, this.reveal) : super(repaint: reveal);
 
   final Color bubble;
   final Color ink;
+  final Animation<double>? reveal;
 
   static final _bubble = svgPath(logoBubbleData);
   static final _glyph = svgPath(logoGlyphData);
+
+  /// 획 하나가 나타나는 데 쓰는 몫. 나머지만큼 획마다 시작이 늦어진다.
+  static const _span = 0.35;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -48,11 +61,25 @@ class _LogoPainter extends CustomPainter {
     canvas.drawPath(_bubble, Paint()..color = bubble);
     canvas.translate(72, 40);
     canvas.scale(1.15);
-    canvas.drawPath(_glyph, Paint()..color = ink);
+    final r = reveal?.value;
+    if (r == null) {
+      canvas.drawPath(_glyph, Paint()..color = ink);
+      return;
+    }
+    // 쓰는 순서대로 한 획씩 아래에서 살짝 올라오며 나타난다.
+    for (var i = 0; i < _strokes.length; i++) {
+      final start = i * (1 - _span) / (_strokes.length - 1);
+      final t = Curves.easeOutCubic.transform(((r - start) / _span).clamp(0.0, 1.0));
+      if (t == 0) continue;
+      canvas.save();
+      canvas.translate(0, (1 - t) * 10);
+      canvas.drawPath(_strokes[i], Paint()..color = ink.withValues(alpha: t));
+      canvas.restore();
+    }
   }
 
   @override
-  bool shouldRepaint(_LogoPainter old) => old.bubble != bubble || old.ink != ink;
+  bool shouldRepaint(_LogoPainter old) => old.bubble != bubble || old.ink != ink || old.reveal != reveal;
 }
 
 /// 로고에 쓰는 절대 좌표 명령(M·L·H·V·A·Z)만 읽는다. 로고 하나라서 SVG 패키지를 들이지 않는다.
