@@ -202,6 +202,56 @@ void main() {
     expect((await repo.getProfile())!.interestIds, isEmpty);
   });
 
+  testWidgets('고른 칸 바탕은 양옆으로 미끄러지고, 비우면 그 자리에서 흐려진다', (tester) async {
+    await openProfile(tester);
+    final thumb = find.byKey(const ValueKey('segment-thumb'));
+    await tester.scrollUntilVisible(find.text('라이트'), 200, scrollable: profileList());
+    await tester.pumpAndSettle();
+    double x() => tester.getCenter(thumb).dx;
+    double center(String label) => tester.getCenter(find.text(label)).dx;
+    expect(x(), moreOrLessEquals(center('시스템 설정'), epsilon: 1));
+
+    await tester.tap(find.text('다크'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(x(), greaterThan(center('시스템 설정') + 1)); // 가는 중
+    expect(x(), lessThan(center('다크') - 1));
+    await tester.pumpAndSettle();
+    expect(x(), moreOrLessEquals(center('다크'), epsilon: 1));
+
+    // 고치기의 학년: 고른 칸을 다시 누르면 바탕이 그 자리에서 흐려진다
+    await tester.scrollUntilVisible(find.text('입력하기'), -200, scrollable: profileList());
+    await tester.tap(find.text('입력하기'));
+    await tester.pumpAndSettle();
+    final grade = find.descendant(
+      of: find.ancestor(of: find.text('2학년'), matching: find.byType(LayoutBuilder)).first,
+      matching: thumb,
+    );
+    double opacity() =>
+        tester.widget<AnimatedOpacity>(find.descendant(of: grade, matching: find.byType(AnimatedOpacity))).opacity;
+    expect(opacity(), 0); // 아직 고르지 않음
+    await tapIn(tester, editList(), find.text('3학년'));
+    expect(opacity(), 1);
+    expect(tester.getCenter(grade).dx, moreOrLessEquals(center('3학년'), epsilon: 1));
+    await tapIn(tester, editList(), find.text('3학년'));
+    expect(opacity(), 0);
+    expect(tester.getCenter(grade).dx, moreOrLessEquals(center('3학년'), epsilon: 1));
+  });
+
+  testWidgets('애니메이션 줄이기 설정이면 고른 칸 바탕이 바로 옮겨 간다', (tester) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue = FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await openProfile(tester);
+    await tester.scrollUntilVisible(find.text('라이트'), 200, scrollable: profileList());
+    await tester.tap(find.text('다크'));
+    await tester.pump();
+    await tester.pump();
+    expect(
+      tester.getCenter(find.byKey(const ValueKey('segment-thumb'))).dx,
+      moreOrLessEquals(tester.getCenter(find.text('다크')).dx, epsilon: 1),
+    );
+  });
+
   testWidgets('계정: 로그아웃은 동작하고, 탈퇴는 아직 화면만 있다', (tester) async {
     var signedOut = 0;
     await openProfile(tester, onSignOut: () async => signedOut++);
