@@ -216,8 +216,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 80));
     expect(x(), greaterThan(center('시스템 설정') + 1)); // 가는 중
     expect(x(), lessThan(center('다크') - 1));
+    Brightness brightness() => Theme.of(tester.element(find.byType(ProfileScreen))).brightness;
+    expect(brightness(), Brightness.light); // 테마는 바탕이 다 미끄러진 뒤에 바뀐다
     await tester.pumpAndSettle();
     expect(x(), moreOrLessEquals(center('다크'), epsilon: 1));
+    expect(brightness(), Brightness.dark);
 
     // 고치기의 학년: 고른 칸을 다시 누르면 바탕이 그 자리에서 흐려진다
     await tester.scrollUntilVisible(find.text('입력하기'), -200, scrollable: profileList());
