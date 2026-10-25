@@ -87,6 +87,44 @@ void main() {
     expect(p.targetRoleIds, ['software_developer']);
   });
 
+  testWidgets('학과 선택 팝업: 가운데에 뜨고, 고른 학과에 체크, 이름으로 찾고 고르면 닫힌다', (tester) async {
+    await openProfile(tester);
+    await tapInList(tester, find.text('학과'));
+    final sheet = find.byType(Dialog);
+    Finder inSheet(Finder f) => find.descendant(of: sheet, matching: f);
+    expect(inSheet(find.text('학과 선택')), findsOneWidget);
+    final screen = tester.getRect(find.byType(MaterialApp));
+    final card = tester.getRect(inSheet(find.byType(Material)).first);
+    expect(card.center.dx, moreOrLessEquals(screen.center.dx));
+    expect(card.bottom, lessThan(screen.bottom)); // 바닥에 붙지 않는다
+    expect(inSheet(find.byIcon(Icons.check_rounded)), findsOneWidget); // '선택 안 함'에 체크
+    expect(inSheet(find.text('선택 안 함')), findsOneWidget);
+
+    await tester.enterText(inSheet(find.byType(TextField)), '보안');
+    await tester.pumpAndSettle();
+    expect(inSheet(find.text('컴퓨터보안공학과')), findsOneWidget);
+    expect(inSheet(find.text('컴퓨터공학과')), findsNothing);
+    expect(inSheet(find.text('선택 안 함')), findsNothing);
+
+    await tester.enterText(inSheet(find.byType(TextField)), '없는학과');
+    await tester.pumpAndSettle();
+    expect(inSheet(find.text('찾는 학과가 없어요')), findsOneWidget);
+
+    await tester.enterText(inSheet(find.byType(TextField)), '보안');
+    await tester.pumpAndSettle();
+    await tester.tap(inSheet(find.text('컴퓨터보안공학과')));
+    await tester.pumpAndSettle();
+    expect(sheet, findsNothing);
+    expect(find.text('컴퓨터보안공학과'), findsOneWidget); // 학과 줄에 보인다
+
+    // 닫기 버튼은 고르지 않고 닫는다
+    await tapInList(tester, find.text('학과'));
+    await tester.tap(find.byTooltip('닫기'));
+    await tester.pumpAndSettle();
+    expect(sheet, findsNothing);
+    expect(find.text('컴퓨터보안공학과'), findsOneWidget);
+  });
+
   testWidgets('학과를 "선택 안 함"으로 되돌리면 비워 저장한다', (tester) async {
     final repo = await openProfile(tester);
     await tapInList(tester, find.text('학과'));
