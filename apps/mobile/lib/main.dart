@@ -10,6 +10,7 @@ import 'data/repository.dart';
 import 'ui/briefing_data.dart';
 import 'ui/common.dart';
 import 'ui/home_screen.dart';
+import 'ui/intro.dart';
 import 'ui/profile_screen.dart';
 import 'ui/saved_screen.dart';
 import 'ui/theme.dart';
@@ -26,12 +27,12 @@ Future<void> main() async {
   // 화면 설정을 먼저 읽어서 첫 화면부터 고른 테마로 그린다 (D-010).
   final theme = await ThemeController.load(PrefsThemeStore());
   if (_apiBase.isEmpty) {
-    runApp(GwittimApp(repository: SampleNoticeRepository(), openUrl: _openExternal, themeController: theme));
+    _run(GwittimApp(repository: SampleNoticeRepository(), openUrl: _openExternal, themeController: theme));
     return;
   }
   final baseUrl = Uri.parse(_apiBase.endsWith('/') ? _apiBase : '$_apiBase/');
   if (_devToken.isNotEmpty) {
-    runApp(
+    _run(
       GwittimApp(
         repository: ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: () async => _devToken),
         openUrl: _openExternal,
@@ -42,7 +43,7 @@ Future<void> main() async {
   }
   await Firebase.initializeApp();
   await FirebaseAuthService.initializeGoogle();
-  runApp(
+  _run(
     AuthGate(
       auth: FirebaseAuthService(),
       repositoryFor: (tokenProvider) => ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: tokenProvider),
@@ -51,6 +52,9 @@ Future<void> main() async {
     ),
   );
 }
+
+/// 시작 인트로를 씌워 실행한다 (D-011).
+void _run(Widget app) => runApp(Intro(child: app));
 
 Future<bool> _openExternal(Uri url) => launchUrl(url, mode: LaunchMode.externalApplication);
 
