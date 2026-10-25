@@ -1,9 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/main.dart';
 import 'package:gwittim/ui/briefing_data.dart';
+import 'package:gwittim/ui/notices_screen.dart';
 import 'package:gwittim/ui/profile_screen.dart';
 import 'package:gwittim/ui/saved_screen.dart';
 
@@ -59,28 +59,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있어요'), findsOneWidget);
 
-    await tester.tap(find.text('프로필'));
+    await tester.tap(find.byTooltip('내 정보'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('소프트웨어 개발'));
+    await tester.tap(find.text('입력하기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('다음'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('소프트웨어 개발'));
     await tester.pump();
-    await tester.scrollUntilVisible(
-      find.text('저장하기'),
-      200,
-      scrollable: find.descendant(of: find.byType(ProfileScreen), matching: find.byType(Scrollable)).first,
-    );
-    await tester.ensureVisible(find.text('저장하기'));
+    await tester.tap(find.text('다음'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('저장하기'));
     await tester.pumpAndSettle();
+    expect(find.byType(ProfileScreen), findsOneWidget); // 저장하면 내 정보로 돌아온다
 
     final profile = await repo.getProfile();
     expect(profile!.universityId, 'mjc');
     expect(profile.interestIds, ['software']);
     expect(profile.majorId, isNull); // 선택하지 않은 항목은 추정하지 않음
 
-    await tester.tap(find.text('홈'));
+    await tester.tap(find.byTooltip('뒤로'));
     await tester.pumpAndSettle();
     expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있어요'), findsNothing);
   });
@@ -113,12 +111,12 @@ void main() {
 
     await tester.tap(find.byTooltip('뒤로'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('저장'));
+    await tester.tap(find.text('저장함'));
     await tester.pumpAndSettle();
     expect(find.text(title), findsOneWidget);
     expect(find.text('1개'), findsOneWidget);
     expect(find.text('그 이후'), findsOneWidget); // 10/17(토) 기준 10/30은 다다음 주
-    expect(find.text('행사 · 17:00 마감 · D-13'), findsOneWidget);
+    expect(find.text('D-13 · 17:00 마감 · 행사'), findsOneWidget);
     expect(find.text('마감일이 바뀐 공고가 1개 있어요'), findsOneWidget);
     expect(find.text('$title · 10월 28일(수) 17:00 → 10월 30일(금) 17:00'), findsOneWidget);
     expect(find.text('마감일 바뀜'), findsOneWidget);
@@ -131,10 +129,16 @@ void main() {
     expect(inSaved(find.byTooltip('저장')), findsOneWidget); // 다시 켤 수 있게 남겨 둔다
     expect(find.text('0개'), findsOneWidget);
 
-    await tester.tap(find.text('홈'));
+    await tester.tap(find.text('오늘'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('저장'));
+    await tester.tap(find.text('저장함'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('저장한 공고가 없어요'), findsOneWidget);
+    expect(find.text('아직 저장한 공고가 없어요'), findsOneWidget);
+
+    // 빈 화면의 '공고 둘러보기'는 공고 탭으로 간다
+    await tester.tap(find.text('공고 둘러보기'));
+    await tester.pumpAndSettle();
+    expect(find.byType(NoticesScreen), findsOneWidget);
+    expect(find.byType(SavedScreen), findsNothing);
   });
 }

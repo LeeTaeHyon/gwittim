@@ -1,11 +1,13 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/main.dart';
 import 'package:gwittim/ui/briefing_data.dart';
 import 'package:gwittim/ui/home_screen.dart';
+import 'package:gwittim/ui/notices_screen.dart';
 import 'package:gwittim/ui/report_screen.dart';
+import 'package:gwittim/ui/theme.dart';
 
 class FailingRepository implements NoticeRepository {
   int calls = 0;
@@ -244,7 +246,7 @@ void main() {
         rec,
         (f) => f == 'major_id' ? '컴퓨터공학과' : null,
       );
-      expect(rows.map((r) => r.label), ['학과 · 컴퓨터공학과', '학년 · 프로필에 없어요']);
+      expect(rows.map((r) => (r.field, r.label)), [('학과', '컴퓨터공학과'), ('학년', '프로필에 없어요')]);
       expect(rows.last.state, CheckState.check);
     });
 
@@ -262,6 +264,9 @@ void main() {
   });
 
   testWidgets('홈 → 공고 리포트 → 학교 공지 열기', (tester) async {
+    tester.view.physicalSize = const Size(800, 2400); // 홈 전체가 한 화면에 보이게
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final opened = <Uri>[];
     await tester.pumpWidget(
       GwittimApp(
@@ -277,8 +282,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('다가오는 마감'), findsOneWidget);
+    expect(find.byType(NoticeCard), findsNWidgets(3)); // 홈은 상위 3개만, 나머지는 공고 탭
+    expect(find.text('전체 보기'), findsOneWidget);
+    expect(find.textContaining('합격 가능성'), findsNothing); // 홈 끝 문구는 뺐다 (브리핑·리포트에만)
     expect(find.text(projectTitle), findsNWidgets(2)); // 다가오는 마감 + 나에게 맞는 공고
-    expect(find.text('D-13'), findsOneWidget); // 마감 10/30
+    expect(find.text('D-13 · 17:00 마감 · 행사'), findsOneWidget); // 다가오는 마감: 남은 날·시각이 앞
+    expect(find.text('10월 30일(금) 17:00 마감 · D-13'), findsOneWidget); // 카드: 7일 넘게 남으면 칩 없이 날짜 줄에
+    expect(find.text('D-13'), findsNothing);
     expect(find.text('오늘 챙길 소식 '), findsNothing); // 형광펜 조각은 별도 위젯
     expect(find.textContaining('마감일이 정해지지 않은 공고 1개'), findsOneWidget);
 
@@ -286,7 +296,15 @@ void main() {
 
     expect(find.text('지원 전 체크리스트'), findsOneWidget);
     expect(find.text('조건 충족'), findsOneWidget);
-    expect(find.text('학과 · 컴퓨터공학과'), findsOneWidget);
+    expect(find.text('학과'), findsOneWidget); // 작은 이름표
+    expect(find.text('공고에 적힌 말'), findsWidgets); // 근거는 인용 상자로
+    expect(find.textContaining('공고 “'), findsNothing);
+
+    // 샘플은 10/17 확인이라 24시간이 지났다 (D-006): 빨간 글자가 아니라 요약 아래 상자로 보인다.
+    final stale = find.textContaining('마지막 확인');
+    expect(stale, findsOneWidget);
+    expect(tester.widget<Text>(stale).style!.color, GwColors.light.body);
+    expect(tester.getTopLeft(stale).dy, lessThan(tester.getTopLeft(find.text('지원 전 체크리스트')).dy));
     await tester.scrollUntilVisible(find.text('이래서 추천했어요'), 200);
     await tester.scrollUntilVisible(find.text('10월 30일(금) 17:00 · 신청 마감'), 200);
     expect(find.text('13일 남았어요'), findsOneWidget);
@@ -302,8 +320,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final home = find.descendant(of: find.byType(HomeScreen), matching: find.byType(Scrollable)).first;
-    await tester.scrollUntilVisible(find.text(firstComeTitle), 200, scrollable: home);
+    await tester.tap(find.text('공고'));
+    await tester.pumpAndSettle();
+    final notices = find.descendant(of: find.byType(NoticesScreen), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.text(firstComeTitle), 200, scrollable: notices);
     expect(find.text('선착순 마감 (정원 도달 시 조기 종료)'), findsOneWidget);
     await tapVisible(tester, find.text(firstComeTitle));
 
@@ -320,9 +340,11 @@ void main() {
       GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: noBriefing),
     );
     await tester.pumpAndSettle();
-    final home = find.descendant(of: find.byType(HomeScreen), matching: find.byType(Scrollable)).first;
+    await tester.tap(find.text('공고'));
+    await tester.pumpAndSettle();
+    final notices = find.descendant(of: find.byType(NoticesScreen), matching: find.byType(Scrollable)).first;
     const title = '[합성 샘플] 학습성과 글쓰기 공모전';
-    await tester.scrollUntilVisible(find.text(title), 200, scrollable: home);
+    await tester.scrollUntilVisible(find.text(title), 200, scrollable: notices);
     await tapVisible(tester, find.text(title));
     expect(find.text('누구나 지원할 수 있어요'), findsOneWidget); // 이 샘플은 명시적 제한 없음
   });
@@ -366,7 +388,7 @@ void main() {
     expect(find.text('최신 공고'), findsOneWidget);
     await tester.tap(find.text('프로필 입력'));
     await tester.pumpAndSettle();
-    expect(find.text('내 프로필'), findsOneWidget);
+    expect(find.text('아직 입력하지 않았어요'), findsOneWidget); // 내 정보 요약 카드
   });
 
   testWidgets('새로고침이 실패하면 목록은 두고 연결 안내를 띄운다', (tester) async {
@@ -392,10 +414,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('잠시 후 다시 시도해 주세요.'), findsOneWidget);
+    final home = find.byType(HomeScreen);
+    expect(find.descendant(of: home, matching: find.text('불러오지 못했어요')), findsOneWidget);
+    expect(find.descendant(of: home, matching: find.text('잠시 후 다시 시도해 주세요.')), findsOneWidget);
     expect(find.textContaining('RepositoryException'), findsNothing);
-    await tester.tap(find.text('다시 시도'));
+    final before = repo.calls; // 홈과 공고 탭이 한 번씩 부른다
+    await tester.tap(find.descendant(of: home, matching: find.text('다시 시도')));
     await tester.pumpAndSettle();
-    expect(repo.calls, 2);
+    expect(repo.calls, before + 1);
   });
 }

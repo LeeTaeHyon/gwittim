@@ -11,7 +11,9 @@ import 'ui/briefing_data.dart';
 import 'ui/common.dart';
 import 'ui/components.dart';
 import 'ui/home_screen.dart';
+import 'ui/icons.dart';
 import 'ui/intro.dart';
+import 'ui/notices_screen.dart';
 import 'ui/profile_screen.dart';
 import 'ui/saved_screen.dart';
 import 'ui/theme.dart';
@@ -162,6 +164,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMixin {
   final _homeKey = GlobalKey<HomeScreenState>();
+  final _noticesKey = GlobalKey<NoticesScreenState>();
   final _savedKey = GlobalKey<SavedScreenState>();
   int _tab = 0;
 
@@ -176,7 +179,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     });
 
   void _select(int i) {
-    if (i == 1) _savedKey.currentState?.reload();
+    if (i == 2) _savedKey.currentState?.reload();
     if (i == _tab) return;
     final animate = MediaQuery.maybeDisableAnimationsOf(context) != true;
     setState(() {
@@ -191,6 +194,24 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   void dispose() {
     _switch.dispose();
     super.dispose();
+  }
+
+  /// 내 정보는 탭이 아니라 홈 머리 오른쪽 버튼으로 연다 (2026-10-25 팀장 결정 Q1 B).
+  void _openProfile() {
+    Navigator.of(context).push(
+      gwRoute(
+        context,
+        (_) => ProfileScreen(
+          repository: widget.repository,
+          themeController: widget.themeController,
+          onSaved: () {
+            _homeKey.currentState?.reload();
+            _noticesKey.currentState?.reload();
+          },
+          onSignOut: widget.onSignOut,
+        ),
+      ),
+    );
   }
 
   /// 탭 화면 하나. 위젯 구조는 늘 같게 두어 화면 상태가 유지된다.
@@ -235,20 +256,27 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                   openUrl: widget.openUrl,
                   briefingStore: widget.briefingStore,
                   today: widget.today,
-                  onOpenProfile: () => _select(2),
+                  onOpenProfile: _openProfile,
+                  onShowAll: () => _select(1),
                 ),
               ),
               _page(
                 1,
-                SavedScreen(key: _savedKey, repository: widget.repository, openUrl: widget.openUrl, today: widget.today),
+                NoticesScreen(
+                  key: _noticesKey,
+                  repository: widget.repository,
+                  openUrl: widget.openUrl,
+                  today: widget.today,
+                ),
               ),
               _page(
                 2,
-                ProfileScreen(
+                SavedScreen(
+                  key: _savedKey,
                   repository: widget.repository,
-                  themeController: widget.themeController,
-                  onSaved: () => _homeKey.currentState?.reload(),
-                  onSignOut: widget.onSignOut,
+                  openUrl: widget.openUrl,
+                  today: widget.today,
+                  onBrowse: () => _select(1),
                 ),
               ),
             ],
@@ -258,9 +286,9 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
           selected: _tab,
           onSelect: _select,
           tabs: const [
-            (icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: '홈'),
-            (icon: Icons.bookmark_border_rounded, activeIcon: Icons.bookmark_rounded, label: '저장'),
-            (icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: '프로필'),
+            (glyph: GwGlyph.today, label: '오늘'),
+            (glyph: GwGlyph.notices, label: '공고'),
+            (glyph: GwGlyph.saved, label: '저장함'),
           ],
         ),
       ),

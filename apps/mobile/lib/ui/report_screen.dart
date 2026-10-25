@@ -6,16 +6,21 @@ import 'briefing_data.dart';
 import 'common.dart';
 import 'components.dart';
 import 'format.dart';
+import 'icons.dart';
+import 'skeleton.dart';
 import 'theme.dart';
 
 /// 체크리스트 한 줄의 상태
 enum CheckState { met, notMet, check, info }
 
 class CheckRow {
-  const CheckRow(this.state, this.label, {this.evidence, this.note});
+  const CheckRow(this.state, this.label, {this.field, this.evidence, this.note});
 
   final CheckState state;
   final String label;
+
+  /// 조건 항목 이름표 ('학교', '학년' 등). 없으면 이름표 없이 label만.
+  final String? field;
 
   /// 공고 원문 근거 (형광펜으로 표시)
   final String? evidence;
@@ -41,15 +46,16 @@ List<CheckRow> checklistRows(
       final field = conditionFieldLabel(c.field);
       final value = profileValue(c.field);
       rows.add(switch (c.status) {
-        'met' => CheckRow(CheckState.met, value == null ? field : '$field · $value', evidence: c.evidence),
-        'not_met' => CheckRow(CheckState.notMet, '$field · 맞지 않아요', evidence: c.evidence),
+        'met' => CheckRow(CheckState.met, value ?? '맞아요', field: field, evidence: c.evidence),
+        'not_met' => CheckRow(CheckState.notMet, '맞지 않아요', field: field, evidence: c.evidence),
         _ when c.unknownReason == 'profile_missing' => CheckRow(
           CheckState.check,
-          '$field · 프로필에 없어요',
+          '프로필에 없어요',
+          field: field,
           evidence: c.evidence,
           note: '프로필에 입력하면 자동으로 비교해 드려요.',
         ),
-        _ => CheckRow(CheckState.check, '$field · 직접 확인', evidence: c.evidence),
+        _ => CheckRow(CheckState.check, '직접 확인', field: field, evidence: c.evidence),
       });
     }
   } else {
@@ -212,7 +218,7 @@ class _ReportScreenState extends State<ReportScreen> {
         body: Builder(
           builder: (context) {
             if (snapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
+              return const ReportSkeleton();
             }
             if (snapshot.hasError) {
               return MessageView.error(
@@ -264,14 +270,32 @@ class _ReportScreenState extends State<ReportScreen> {
                       style: TextStyle(fontSize: 24, height: 1.42, fontWeight: FontWeight.w700, color: c.ink),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      ['명지전문대 공지사항', if (n.published != null) '${shortDate(n.published!)} 게시'].join(' · '),
-                      style: TextStyle(fontSize: 14, color: c.muted),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          '명지전문대 공지사항',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.sub),
+                        ),
+                        if (n.published != null)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.calendar_today_rounded, size: 14, color: c.muted),
+                              const SizedBox(width: 4),
+                              Text('${shortDate(n.published!)} 게시', style: TextStyle(fontSize: 14, color: c.muted)),
+                            ],
+                          ),
+                      ],
                     ),
                   ],
                 ),
               ),
               if (notice.description != null) _SummaryBubble(text: notice.description!),
+              // D-006: 원문 확인이 24시간을 넘으면 요약 바로 아래에 알린다. 원문은 아래 '학교 공지에서 보기'로 연다.
+              if (staleNotice(notice.lastVerifiedAt, DateTime.now().toUtc()) case final stale?) _StaleBox(text: stale),
               if (changed != null) _ChangeBanner(entry: changed),
               _Checklist(
                 rows: checklistRows(notice, rec, _profileValue),
@@ -296,7 +320,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     child: IconButton(
                       tooltip: _saved! ? '저장 취소' : '저장',
                       style: IconButton.styleFrom(backgroundColor: c.chip, foregroundColor: c.onChip),
-                      icon: Icon(_saved! ? Icons.bookmark : Icons.bookmark_border),
+                      icon: GwIcon(GwGlyph.saved, filled: _saved!, color: c.onChip),
                       onPressed: _toggleSave,
                     ),
                   ),
@@ -306,7 +330,7 @@ class _ReportScreenState extends State<ReportScreen> {
                   child: FilledButton.icon(
                     onPressed: () => _open(notice),
                     iconAlignment: IconAlignment.end,
-                    icon: const Icon(Icons.open_in_new, size: 18),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
                     label: Text(rec?.eligibilityStatus == 'needs_check' ? '학교 공지에서 확인하기' : '학교 공지에서 보기'),
                   ),
                 ),
@@ -367,8 +391,45 @@ class _SummaryBubble extends StatelessWidget {
             text,
             style: TextStyle(fontSize: 16.5, height: 1.65, fontWeight: FontWeight.w500, color: c.body),
           ),
-          const SizedBox(height: 8),
-          Text('학교 공지를 바탕으로 정리했어요', style: TextStyle(fontSize: 12.5, color: c.muted)),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: c.card.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(10)),
+              child: Text('학교 공지를 바탕으로 정리했어요', style: TextStyle(fontSize: 12, color: c.muted)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 오래된 정보 안내 (D-006). 오류처럼 보이지 않게 빨간 글자 대신 옅은 상자로 둔다.
+class _StaleBox extends StatelessWidget {
+  const _StaleBox({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(color: c.cardSoft, borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(Icons.schedule_rounded, size: 18, color: c.sub),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text, style: TextStyle(fontSize: 14, height: 1.5, color: c.body)),
+          ),
         ],
       ),
     );
@@ -391,7 +452,7 @@ class _ChangeBanner extends StatelessWidget {
       decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(16)),
       child: Row(
         children: [
-          Icon(Icons.alarm, color: c.urgent),
+          Icon(Icons.alarm_rounded, color: c.urgent),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -467,10 +528,10 @@ class _CheckLine extends StatelessWidget {
     final check = row.state == CheckState.check;
     final c = context.gw;
     final box = switch (row.state) {
-      CheckState.met => _box(c.point, Icon(Icons.check, size: 16, color: c.pointTick, semanticLabel: '충족')),
+      CheckState.met => _box(c.point, Icon(Icons.check_rounded, size: 16, color: c.pointTick, semanticLabel: '충족')),
       CheckState.notMet => _box(
         c.urgentFill,
-        Icon(Icons.close, size: 16, color: c.onUrgentFill, semanticLabel: '맞지 않음'),
+        Icon(Icons.close_rounded, size: 16, color: c.onUrgentFill, semanticLabel: '맞지 않음'),
       ),
       CheckState.check => Container(
         width: 24,
@@ -480,9 +541,9 @@ class _CheckLine extends StatelessWidget {
           border: Border.all(color: c.checkLine, width: 2),
           borderRadius: BorderRadius.circular(7),
         ),
-        child: Icon(Icons.question_mark, size: 14, color: c.check, semanticLabel: '확인 필요'),
+        child: Icon(Icons.question_mark_rounded, size: 14, color: c.check, semanticLabel: '확인 필요'),
       ),
-      CheckState.info => _box(c.neutral, Icon(Icons.remove, size: 16, color: c.sub, semanticLabel: '안내')),
+      CheckState.info => _box(c.neutral, Icon(Icons.remove_rounded, size: 16, color: c.sub, semanticLabel: '안내')),
     };
     final evidenceStyle = TextStyle(fontSize: 13.5, height: 1.5, color: c.sub);
     return Padding(
@@ -499,26 +560,57 @@ class _CheckLine extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      row.label,
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: check ? c.check : c.body),
-                    ),
-                    if (row.evidence != null) ...[
-                      const SizedBox(height: 4),
-                      // 근거가 길면 형광펜 없이 줄바꿈한다.
-                      row.evidence!.length <= 24
-                          ? Text.rich(
-                              TextSpan(
-                                style: evidenceStyle,
-                                children: [
-                                  const TextSpan(text: '공고 “'),
-                                  markSpan(row.evidence!, evidenceStyle, color: check ? c.checkMark : null),
-                                  const TextSpan(text: '”'),
-                                ],
+                    // '학교' 같은 작은 이름표 + 본문
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (row.field case final field?)
+                          Container(
+                            height: 22,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            decoration: BoxDecoration(color: c.neutral, borderRadius: BorderRadius.circular(11)),
+                            child: Center(
+                              widthFactor: 1,
+                              child: Text(
+                                field,
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.sub),
                               ),
-                            )
-                          : Text('공고 “${row.evidence}”', style: evidenceStyle),
-                    ],
+                            ),
+                          ),
+                        Text(
+                          row.label,
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: check ? c.check : c.body),
+                        ),
+                      ],
+                    ),
+                    if (row.evidence != null)
+                      // 공고 원문 인용: 왼쪽 세로줄 상자. 짧은 근거는 형광펜, 길면 형광펜 없이 줄바꿈한다.
+                      Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
+                        decoration: BoxDecoration(
+                          border: Border(left: BorderSide(color: c.line, width: 3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('공고에 적힌 말', style: TextStyle(fontSize: 12, color: c.muted)),
+                            const SizedBox(height: 2),
+                            row.evidence!.length <= 24
+                                ? Text.rich(
+                                    TextSpan(
+                                      style: evidenceStyle,
+                                      children: [
+                                        markSpan(row.evidence!, evidenceStyle, color: check ? c.checkMark : null),
+                                      ],
+                                    ),
+                                  )
+                                : Text(row.evidence!, style: evidenceStyle),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -582,7 +674,10 @@ class _Reasons extends StatelessWidget {
           const SizedBox(height: 12),
           Text.rich(TextSpan(style: style, children: spans)),
           const SizedBox(height: 8),
-          Text('추천 순서를 정한 이유예요. 합격 가능성을 뜻하지 않아요.', style: captionStyle(context)),
+          Text(
+            '추천 순서를 정한 이유예요. 합격 가능성을 뜻하지 않아요.',
+            style: TextStyle(fontSize: 12.5, height: 1.6, color: context.gw.muted),
+          ),
         ],
       ),
     );
@@ -643,9 +738,8 @@ class _Schedule extends StatelessWidget {
               ),
             ),
           const SizedBox(height: 20),
-          if (stale != null)
-            Text(stale, style: TextStyle(fontSize: 13, color: c.urgent))
-          else if (verified != null)
+          // 오래된 정보 안내는 요약 아래 상자로 올렸다.
+          if (stale == null && verified != null)
             Text(
               '${verified.month}월 ${verified.day}일 ${verified.hour.toString().padLeft(2, '0')}:${verified.minute.toString().padLeft(2, '0')} 기준이에요',
               style: captionStyle(context),
