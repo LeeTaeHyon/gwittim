@@ -1,7 +1,7 @@
 # 귀띔 (Gwittim) — 공통 개발 명세
 
 - 버전: 0.3
-- 작성일: 2026-10-16 / 0.2 갱신: 2026-10-17 (D-005 계약 결정 반영, `contracts/` 초안 작성) / 0.3 갱신: 2026-10-26 (D-013 수집 게시판 4개, 오래된 마감 미상 공고 추천 제외)
+- 작성일: 2026-10-16 / 0.2 갱신: 2026-10-17 (D-005 계약 결정 반영, `contracts/` 초안 작성) / 0.3 갱신: 2026-10-26 (D-013 수집 게시판 4개, 오래된 마감 미상 공고 추천 제외, D-014 이미지 대체텍스트)
 - 상태: 구현 착수용 제안 초안. 팀 합의 후 기준 버전으로 사용한다.
 - 대상: 팀장, 팀원, 각자의 AI 코딩 에이전트
 - 이 문서는 목표 동작을 정의한다. 구현 완료를 의미하지 않는다.
@@ -82,7 +82,7 @@ M1의 수동 검증 표본은 20건을 목표로 한다. 부족하면 실제 건
 | source_notice_id | string 또는 null | 출처가 제공하는 공고 ID |
 | source_url | string | 원문 URL |
 | title | string | 원문 제목 |
-| body_text | string | 메뉴·푸터를 제거한 본문 |
+| body_text | string | 메뉴·푸터를 제거한 본문. 본문 이미지의 대체텍스트(alt)는 `[이미지 설명]` 줄 아래에 붙인다(D-014) |
 | published | object 또는 null | 원문 게시일 날짜 정보. 날짜만 있으면 precision=date, 미표기는 null |
 | collected_at | string | 이번 수집 시각 |
 | content_hash | string | `sha256:<hex>`. title·body_text·published·source_fields·첨부 파일명의 해시 |

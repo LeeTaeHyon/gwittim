@@ -24,7 +24,7 @@
     "source_notice_id": { "type": ["string", "null"], "minLength": 1, "description": "출처가 제공하는 공고 ID. 없으면 null (정규화 URL로 식별)." },
     "source_url": { "type": "string", "format": "uri" },
     "title": { "type": "string", "minLength": 1 },
-    "body_text": { "type": "string", "description": "메뉴·푸터를 제거한 본문." },
+    "body_text": { "type": "string", "description": "메뉴·푸터를 제거한 본문. 본문 이미지의 대체텍스트(alt)는 '[이미지 설명]' 줄 아래에 붙인다 (D-014)." },
     "published": {
       "description": "원문 게시일. 날짜만 있으면 precision=date, time=null. 미표기는 null.",
       "oneOf": [{ "$ref": "common.schema.json#/$defs/date_info" }, { "type": "null" }]

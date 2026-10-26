@@ -167,6 +167,8 @@ def to_raw_notice(board: Board, data_idx: str, url: str, row, detail, collected_
             "board_menu_idx": board.menu_idx,
             "bbs_mst_idx": row.bbs_mst_idx,
             "body_image_count": detail.body_image_count,
+            # 대체텍스트로 내용을 읽은 이미지가 있을 때만 둔다 (그런 이미지가 없는 공고의 content_hash는 그대로)
+            **({"body_image_text_count": detail.body_image_text_count} if detail.body_image_text_count else {}),
         },
         "attachments": [_attachment(name) for name in detail.attachments],
     }
