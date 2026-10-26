@@ -202,31 +202,46 @@ void main() {
   testWidgets('소개 장면: 말풍선 → 체크리스트 → 관심 분야로 바뀌는 추천 순서, 버튼 자리는 그대로', (tester) async {
     await pumpSignIn(tester);
     final buttonTop = tester.getTopLeft(find.byType(GoogleSignInButton)).dy;
-    double fill(int k) => tester
-        .getSize(find.descendant(of: find.byKey(ValueKey('progress-$k')), matching: find.byType(DecoratedBox)).last)
-        .width;
+    Finder box(int i, String state) => find.byKey(ValueKey('box-$i-$state'));
 
     await tester.pump(const Duration(milliseconds: 4000));
     expect(shown(tester, '장학생 선발 공고'), isTrue);
     expect(shown(tester, '지원 전 체크리스트'), isFalse);
 
-    await tester.pump(const Duration(milliseconds: 5000)); // 9초: 장면 2, 조건 줄이 하나씩
-    expect(shown(tester, '지원 전 체크리스트'), isTrue);
-    expect(shown(tester, '컴퓨터공학과'), isTrue);
-    expect(shown(tester, '공지에서 직접 확인'), isFalse);
-    expect(shown(tester, '장학생 선발 공고'), isFalse);
-    expect(fill(0), 20); // 지난 장면은 채워져 있다
-    expect(fill(1), inExclusiveRange(0, 20));
-    await tester.pump(const Duration(milliseconds: 2000)); // 11초
+    // 장면 2: 카드가 아래에서 올라오고, 조건 줄은 빈 칸으로 먼저 보인다
+    await tester.pump(const Duration(milliseconds: 3400)); // 7.4초
+    final cardTop = tester.getTopLeft(find.text('지원 전 체크리스트')).dy;
+    await tester.pump(const Duration(milliseconds: 400)); // 7.8초
+    expect(tester.getTopLeft(find.text('지원 전 체크리스트')).dy, lessThan(cardTop)); // 올라오는 중
     expect(shown(tester, '공지에서 직접 확인'), isTrue);
+    for (var i = 0; i < 3; i++) {
+      expect(box(i, 'off'), findsOneWidget);
+    }
+    expect(
+      find.byType(Transform).evaluate().every((e) {
+        final t = (e.widget as Transform).transform;
+        return t.getMaxScaleOnAxis() <= 1.0001; // 카드가 커지며 나오지 않는다
+      }),
+      isTrue,
+    );
+
+    await tester.pump(const Duration(milliseconds: 900)); // 8.7초: 첫 줄만 체크
+    expect(box(0, 'on'), findsOneWidget);
+    expect(box(1, 'off'), findsOneWidget);
+    expect(box(2, 'off'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 2300)); // 11초: 모두 체크
+    for (var i = 0; i < 3; i++) {
+      expect(box(i, 'on'), findsOneWidget);
+    }
     expect(shown(tester, '2개는 맞아요'), isTrue);
+    expect(shown(tester, '장학생 선발 공고'), isFalse);
     expect(tester.getTopLeft(find.byType(GoogleSignInButton)).dy, buttonTop);
 
     double y(String text) => tester.getTopLeft(find.text(text)).dy;
-    await tester.pump(const Duration(milliseconds: 3500)); // 14.5초: 장면 3, 아직 원래 순서
+    await tester.pump(const Duration(milliseconds: 3800)); // 14.8초: 장면 3 카드가 다 올라옴, 아직 원래 순서
     expect(shown(tester, '추천 순서가 바뀌어요'), isTrue);
     expect(y('AI 해커톤 참가자 모집'), greaterThan(y('교내 디자인 공모전')));
-    await tester.pump(const Duration(milliseconds: 3000)); // 17.5초: 관심 분야 칩을 고른 뒤
+    await tester.pump(const Duration(milliseconds: 2700)); // 17.5초: 관심 분야 칩을 고른 뒤
     expect(y('AI 해커톤 참가자 모집'), lessThan(y('교내 디자인 공모전')));
     expect(shown(tester, '관심 분야 '), isTrue);
     expect(tester.getTopLeft(find.byType(GoogleSignInButton)).dy, buttonTop);
@@ -234,6 +249,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 4000)); // 21.5초: 다시 장면 1
     expect(shown(tester, '추천 순서가 바뀌어요'), isFalse);
     expect(find.byKey(const ValueKey('typing')), findsOneWidget);
+    expect(find.byKey(const ValueKey('progress-0')), findsNothing); // 진행 표시는 없다
     expect(find.textContaining('알림'), findsNothing); // 어느 장면도 알림을 약속하지 않는다
   });
 
@@ -262,7 +278,6 @@ void main() {
       find.ancestor(of: find.text('발표회 마감이 3일 늦춰졌어요'), matching: find.byType(Opacity)),
     );
     expect(opacities.every((o) => o.opacity == 1), isTrue);
-    expect(find.byKey(const ValueKey('progress-0')), findsOneWidget);
 
     await tester.tap(find.text('장학생 선발 공고 · D-6'));
     await tester.pump();
