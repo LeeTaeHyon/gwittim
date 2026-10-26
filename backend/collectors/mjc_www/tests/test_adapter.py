@@ -4,6 +4,7 @@ from pathlib import Path
 from backend.analysis import build_notice
 from backend.collectors.common import InMemoryStore, Outcome, ingest
 from backend.collectors.mjc_www import BOARDS, collect, parse_detail, parse_list
+from backend.collectors.mjc_www.parser import alt_lines
 from backend.contracts import schema_errors
 from backend.sources import source_config
 
@@ -47,6 +48,43 @@ def test_parse_detail():
     assert "2026.10.20.(화) ~ 2026.11.02.(월)" in d.body_text
     assert "test@example.invalid" not in d.body_text and "[이메일 생략]" in d.body_text
     assert "목록" not in d.body_text and "fn_egov" not in d.body_text
+    assert "[이미지 설명]" not in d.body_text and d.body_image_text_count == 0  # alt '포스터'는 너무 짧음
+
+
+POSTER_ALT = (
+    "명지전문대학 / 진로취·창업팀 / JOB-Cafe 추천채용 / 채용제목 / [합성] 토목현장 신입사원 / 회사명 / 합성건설(주) / "
+    "접수마감일 / 26.12.30(수) / 지원자격(필수사항) / 토목과 졸업 및 졸업예정자 / 원서접수방법 / 이메일 접수 / 문의 test@example.invalid"
+)
+
+
+def test_parse_detail_reads_image_alt_text():
+    html = VIEW.replace('alt="포스터"', f'alt="{POSTER_ALT}"')
+    d = parse_detail(html)
+    lines = d.body_text.splitlines()
+    assert "[이미지 설명]" in lines
+    assert "접수마감일 / 26.12.30(수)" in lines  # 항목 이름과 값은 한 줄
+    assert "지원자격(필수사항) / 토목과 졸업 및 졸업예정자" in lines
+    assert "test@example.invalid" not in d.body_text
+    assert (d.body_image_count, d.body_image_text_count) == (1, 1)
+
+
+def test_sentence_alt_is_split_into_lines():
+    alt = "국가장학금 신청 안내. 신청대상은 국내 대학에 재학 중인 학생입니다. 신청기간은 2026. 5. 22.(금)부터입니다."
+    assert alt_lines(alt) == ["국가장학금 신청 안내", "신청대상은 국내 대학에 재학 중인 학생입니다", "신청기간은 2026. 5. 22.(금)부터입니다."]
+
+
+def test_image_alt_deadline_reaches_notice():
+    fetch, _ = fake_fetch({"list.do": LIST, "BD9000000002": VIEW.replace('alt="포스터"', f'alt="{POSTER_ALT}"'), "BD9000000001": VIEW})
+    raws, _ = collect(BOARD, fetch=fetch, delay=0, collected_at=AT)
+    raw = next(r for r in raws if r["source_notice_id"] == "BD9000000002")
+    assert raw["source_fields"]["body_image_text_count"] == 1
+    plain = next(r for r in raws if r["source_notice_id"] == "BD9000000001")
+    assert "body_image_text_count" not in plain["source_fields"]  # 읽은 이미지가 없으면 필드를 두지 않음
+    store = InMemoryStore()
+    record = store.get(ingest(raw, store).key)
+    notice, issues = build_notice(record, today=date(2026, 10, 17))
+    assert issues == [] and schema_errors("notice", notice) == []
+    assert notice["application_deadline"]["date"] == "2026-11-02"  # 본문 날짜가 먼저
 
 
 def test_collect_dedupes_pinned_and_outputs_valid_raw_notice():

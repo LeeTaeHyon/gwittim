@@ -11,6 +11,13 @@ _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _BLOCK = {"p", "div", "br", "tr", "li", "h1", "h2", "h3", "h4", "table", "ul", "ol"}
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 
+# 본문 이미지의 대체텍스트(alt). 학교 편집기가 포스터 글을 ' / '로 이어 적어 둔 경우가 많다 (D-014).
+ALT_MIN_CHARS = 20  # 이보다 짧은 alt는 제목 정도라 본문에 넣지 않는다
+ALT_READ_CHARS = 100  # 이 길이 이상이면 포스터 내용을 글로 옮긴 것으로 보고 '읽은 이미지'로 센다
+ALT_HEADER = "[이미지 설명]"
+_ALT_LABEL = re.compile(r"^[^\d]{1,12}$")  # '접수마감일', '지원자격' 같은 짧은 항목 이름
+_SENTENCE_END = re.compile(r"(?<=[가-힣])\.\s+")  # 문장으로 쓴 alt ('신청대상은 ... 학생입니다. 선발요건은 ...')
+
 
 @dataclass
 class ListRow:
@@ -30,6 +37,7 @@ class Detail:
     attachments: list[str] = field(default_factory=list)
     body_text: str = ""
     body_image_count: int = 0
+    body_image_text_count: int = 0  # alt가 ALT_READ_CHARS 이상인 이미지 수
 
 
 def _clean(text: str) -> str:
@@ -82,6 +90,7 @@ class DetailParser(HTMLParser):
         self.attachments: list[str] = []
         self.body_parts: list[str] = []
         self.images = 0
+        self.alts: list[str] = []
         self._in_title = False
         self._th: list[str] | None = None
         self._last_th: str | None = None
@@ -104,6 +113,9 @@ class DetailParser(HTMLParser):
                 self.body_parts.append("\t")
             elif tag == "img":
                 self.images += 1
+                alt = _clean(a.get("alt") or "")
+                if len(alt) >= ALT_MIN_CHARS:
+                    self.alts.append(alt)
             return
         if tag == "div" and a.get("id") == "divMemo":
             self._memo_depth = 1
@@ -163,10 +175,32 @@ def parse_list(html: str) -> list[ListRow]:
     return p.rows
 
 
+def alt_lines(alt: str) -> list[str]:
+    """alt를 ' / '와 문장 단위 줄로 나누되, 짧은 항목 이름은 다음 값과 한 줄로 둔다 ('접수마감일 / 26.12.30(수)')."""
+    lines: list[str] = []
+    label = None
+    for chunk in alt.split(" / "):
+        sentences = [s.strip() for s in _SENTENCE_END.split(chunk) if s.strip()]
+        if not sentences:
+            continue
+        if label is not None:
+            sentences[0] = f"{label} / {sentences[0]}"
+            label = None
+        elif len(sentences) == 1 and _ALT_LABEL.match(sentences[0]):
+            label = sentences[0]
+            continue
+        lines += sentences
+    if label is not None:
+        lines.append(label)
+    return lines
+
+
 def parse_detail(html: str) -> Detail:
     p = DetailParser()
     p.feed(html)
     lines = [_clean(line) for line in "".join(p.body_parts).splitlines()]
+    for alt in p.alts:
+        lines += [ALT_HEADER, *alt_lines(alt)]
     body = "\n".join(line for line in lines if line)
     body = _EMAIL.sub("[이메일 생략]", body)  # 이메일 무단수집 거부 고지 (source-review §2)
     date = p.fields.get("날짜")
@@ -177,4 +211,5 @@ def parse_detail(html: str) -> Detail:
         attachments=p.attachments,
         body_text=body,
         body_image_count=p.images,
+        body_image_text_count=sum(len(alt) >= ALT_READ_CHARS for alt in p.alts),
     )
