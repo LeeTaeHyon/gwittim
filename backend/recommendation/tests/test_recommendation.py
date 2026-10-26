@@ -179,3 +179,17 @@ def test_personalized_item_without_personal_factor_has_null_score_last(notices, 
     last = out["items"][-1]["recommendation"]
     assert last["notice_id"] == "n_untagged" and last["score"] is None
     assert last["reason_codes"] == ["eligibility_met"]
+
+
+def test_old_notice_without_deadline_excluded(notices, profile):
+    old = copy.deepcopy(notices[1])  # 0002: 확정 마감일 없음
+    old.update(lifecycle_status="unknown")
+    old["published"]["date"] = "2026-08-17"  # TODAY 61일 전
+    recent = copy.deepcopy(old)
+    recent.update(notice_id="n_recent")
+    recent["published"]["date"] = "2026-08-18"  # 60일 전까지는 남긴다
+    dated = copy.deepcopy(notices[0])  # 마감일을 아는 공고는 게시일과 무관
+    dated["published"]["date"] = "2026-01-02"
+    for p in (profile, {}):
+        ids = [i["notice"]["notice_id"] for i in recommend([old, recent, dated], p, today=TODAY, generated_at=NOW)["items"]]
+        assert ids.count("n_synthetic_0002") == 0 and "n_recent" in ids and "n_synthetic_0001" in ids
