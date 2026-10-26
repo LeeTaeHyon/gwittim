@@ -19,7 +19,7 @@ from backend.dictionaries import codes
 from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
-from .rules import RuleBasedAnalyzer
+from .rules import RuleBasedAnalyzer, is_activity_line
 
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _PHONE = re.compile(r"(?:\+?82[-\s]?)?0\d{1,2}[-\s.)]?\d{3,4}[-\s.]?\d{4}")
@@ -142,7 +142,9 @@ class OllamaAnalyzer:
         # 마감: 규칙이 못 찾았을 때만. 근거 문구를 결정적 파서로 다시 읽는다.
         if fields["application_deadline"] is None and isinstance(out.get("deadline"), dict):
             evidence = out["deadline"].get("evidence")
-            if grounded(evidence):
+            if grounded(evidence) and is_activity_line(evidence):
+                self.rejected.append(f"활동 기간을 마감으로 답함: {evidence[:40]}")
+            elif grounded(evidence):
                 start, end = parse_line(evidence)
                 point = end or start
                 if point:
