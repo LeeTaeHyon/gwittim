@@ -176,8 +176,10 @@ class _SignInScreenState extends State<SignInScreen> {
 }
 
 /// 로그인 화면의 예시 말풍선 장면. 말풍선마다 '…' 입력 중 표시가 잠깐 보인 뒤 말풍선이 꼬리 쪽에서
-/// 톡 튀어나온다. 셋이 다 나오면 잠시 머물렀다가 함께 흐려지고 처음부터 되풀이한다.
-/// 크기·투명도만 바꾸고 자리는 늘 차지해서 아래 버튼이 움직이지 않는다. 애니메이션 줄이기 설정이면 셋 다 그대로 보인다.
+/// 톡 튀어나온다. 셋이 다 나오면 잠시 머물렀다가 함께 흐려지고, 다음 세트로 넘어가 되풀이한다.
+/// 크기·투명도만 바꾸고 자리는 가장 큰 세트만큼 늘 차지해서 아래 버튼이 움직이지 않는다.
+/// 애니메이션 줄이기 설정이면 1세트가 그대로 보인다.
+/// 문구는 앱에 실제로 있는 기능만 쓰고 알림은 약속하지 않는다(푸시 알림은 P0 제외).
 class _ExampleDemo extends StatefulWidget {
   const _ExampleDemo();
 
@@ -185,15 +187,16 @@ class _ExampleDemo extends StatefulWidget {
   State<_ExampleDemo> createState() => _ExampleDemoState();
 }
 
-/// 한 바퀴(ms). 말풍선 i의 입력 중 표시는 300 + 900i에 시작해 600 뒤에 말풍선으로 바뀐다.
+/// 세트 하나(ms). 말풍선 i의 입력 중 표시는 300 + 900i에 시작해 600 뒤에 말풍선으로 바뀐다.
 const _demoLoop = 7000;
+const _demoSets = 3;
 const _demoPop = 450;
 const _demoFadeOut = 6200;
 
 class _ExampleDemoState extends State<_ExampleDemo> with SingleTickerProviderStateMixin {
   late final _loop = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: _demoLoop),
+    duration: const Duration(milliseconds: _demoLoop * _demoSets),
   );
 
   @override
@@ -219,16 +222,33 @@ class _ExampleDemoState extends State<_ExampleDemo> with SingleTickerProviderSta
   Widget build(BuildContext context) {
     final c = context.gw;
     final still = MediaQuery.maybeDisableAnimationsOf(context) == true;
-    final bubbles = [
-      _ExampleBubble(kicker: '마감 임박', kickerColor: c.urgent, text: '장학생 선발 공고 · D-6'),
-      _ExampleBubble(kicker: '맞춤 공고', kickerColor: c.accent, text: '관심 분야와 관련된 공고 ', marked: '3개'),
-      _ExampleBubble(kicker: '저장한 공고', kickerColor: c.accent, text: '발표회 마감이 3일 늦춰졌어요'),
+    final sets = [
+      // 1세트: 마감·맞춤 공고·저장 공고 변경
+      [
+        _ExampleBubble(kicker: '마감 임박', kickerColor: c.urgent, text: '장학생 선발 공고 · D-6'),
+        _ExampleBubble(kicker: '맞춤 공고', kickerColor: c.accent, text: '관심 분야와 관련된 공고 ', marked: '3개'),
+        _ExampleBubble(kicker: '저장한 공고', kickerColor: c.accent, text: '발표회 마감이 3일 늦춰졌어요'),
+      ],
+      // 2세트: 지원 조건 비교 (성적은 받지 않아서 직접 확인)
+      [
+        _ExampleBubble(kicker: '지원 조건', kickerColor: c.accent, text: '학과·학년 조건이 ', marked: '맞아요'),
+        _ExampleBubble(kicker: '직접 확인', kickerColor: c.accent, text: '평점 조건은 공지에서 확인해요'),
+        _ExampleBubble(kicker: '마감 임박', kickerColor: c.urgent, text: '공모전 접수 · 오늘 마감'),
+      ],
+      // 3세트: 오늘의 귀띔·추천 이유·선착순
+      [
+        _ExampleBubble(kicker: '오늘의 귀띔', kickerColor: c.accent, text: '오늘 챙길 소식 ', marked: '2가지'),
+        _ExampleBubble(kicker: '추천 이유', kickerColor: c.accent, text: '희망 직무와 관련 있어요'),
+        _ExampleBubble(kicker: '선착순', kickerColor: c.accent, text: '해외 연수 · 정원 차면 마감돼요'),
+      ],
     ];
     const indents = [0.0, 32.0, 12.0];
     return AnimatedBuilder(
       animation: _loop,
       builder: (context, _) {
-        final ms = still ? _demoFadeOut.toDouble() : _loop.value * _demoLoop;
+        final all = _loop.value * _demoLoop * _demoSets;
+        final set = still ? 0 : (all ~/ _demoLoop).clamp(0, _demoSets - 1);
+        final ms = still ? _demoFadeOut.toDouble() : all - set * _demoLoop;
         final out = Curves.easeInCubic.transform(((ms - _demoFadeOut) / 500).clamp(0.0, 1.0));
         return Opacity(
           opacity: 1 - out,
@@ -238,11 +258,11 @@ class _ExampleDemoState extends State<_ExampleDemo> with SingleTickerProviderSta
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (var i = 0; i < bubbles.length; i++) ...[
+                for (var i = 0; i < indents.length; i++) ...[
                   if (i > 0) const SizedBox(height: 10),
                   Padding(
                     padding: EdgeInsets.only(left: indents[i]),
-                    child: _slot(bubbles[i], ms - (300 + 900 * i)),
+                    child: _slot([for (final s in sets) s[i]], set, ms - (300 + 900 * i)),
                   ),
                 ],
               ],
@@ -253,17 +273,31 @@ class _ExampleDemoState extends State<_ExampleDemo> with SingleTickerProviderSta
     );
   }
 
+  /// 세트마다 이 자리에 오는 말풍선 중 지금 세트의 것만 보인다. 나머지는 자리만 차지한다(가장 큰 것에 맞춤).
   /// t: 이 말풍선의 입력 중 표시가 시작된 뒤 지난 ms
-  Widget _slot(Widget bubble, double t) {
+  Widget _slot(List<Widget> bubbles, int set, double t) {
     final typing = t < 0 || t >= 600 ? 0.0 : (t / 150).clamp(0.0, 1.0) * ((600 - t) / 150).clamp(0.0, 1.0);
     final p = ((t - 600) / _demoPop).clamp(0.0, 1.0);
     return Stack(
       alignment: Alignment.bottomLeft,
       children: [
+        for (var k = 0; k < bubbles.length; k++)
+          if (k != set)
+            Visibility(
+              visible: false,
+              maintainSize: true,
+              maintainAnimation: true,
+              maintainState: true,
+              child: bubbles[k],
+            ),
         Opacity(
           opacity: Curves.easeOut.transform((p * 2).clamp(0.0, 1.0)),
           alwaysIncludeSemantics: true,
-          child: Transform.scale(scale: 0.6 + 0.4 * _pop.transform(p), alignment: Alignment.bottomLeft, child: bubble),
+          child: Transform.scale(
+            scale: 0.6 + 0.4 * _pop.transform(p),
+            alignment: Alignment.bottomLeft,
+            child: bubbles[set],
+          ),
         ),
         if (typing > 0)
           Opacity(
