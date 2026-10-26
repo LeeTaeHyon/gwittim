@@ -16,7 +16,7 @@ from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
 
-ANALYSIS_VERSION = "rule-0.3"  # 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
+ANALYSIS_VERSION = "rule-0.4"  # 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
 
 
 class Analyzer(Protocol):
@@ -158,8 +158,13 @@ GRADE_RANGE = re.compile(r"([1-4])\s*[~\-–]\s*([1-4])\s*학년")
 GRADE_LIST = re.compile(r"([1-4])\s*[,·]\s*([1-4])\s*학년")
 GRADE_ONE = re.compile(r"(?<![~\-–,·\d])([1-4])\s*학년\s*(?:만|대상|재학생|학생)")
 UNIVERSITY = re.compile(r"우리\s*대학|본교")
-UNRESTRICTED = re.compile(r"누구나|제한\s*없|학년\s*무관|전공\s*무관")
-UNRESOLVED = re.compile(r"평점|학점|성적|소득|연령|나이|만\s*\d+\s*세|우대|요건")
+# '분량 제한 없음' 같은 문구는 지원 자격이 아니다. 대상·자격에 대한 제한 없음만 본다.
+UNRESTRICTED = re.compile(
+    r"누구나|(?:학년|학과|전공|자격|대상|지원|참여|신청)\s*제한\s*없|제한\s*없이\s*(?:누구나|지원|참여|신청)|학년\s*무관|전공\s*무관"
+)
+UNRESOLVED = re.compile(r"평점|학점|성적|소득|연령|나이|만\s*\d+\s*세|우대|요건|거주|주민등록|소재|출신|국적")
+# 재학·휴학·졸업 밖의 학적 (같은 줄에 있으면 재학 상태 조건으로 만들지 않는다)
+OTHER_STATUS = re.compile(r"복학|입학\s*예정|편입|재입학|신입생")
 # 제출 서류 목록(성적증명서 등)과 '성적에 관계없이'는 지원 조건이 아니다
 NOT_CONDITION = re.compile(r"서류|증명서|확인서|사본|신청서|관계\s*없이|무관")
 SEE_ATTACHMENT = re.compile(r"(?:첨부|붙임|모집요강)[^\n]{0,10}참(?:조|고)")
@@ -167,6 +172,12 @@ SEE_ATTACHMENT = re.compile(r"(?:첨부|붙임|모집요강)[^\n]{0,10}참(?:조
 
 def _lines(raw: dict) -> list[str]:
     return [line.strip() for line in raw["body_text"].splitlines() if line.strip()]
+
+
+def _unread_images(raw: dict) -> int:
+    """본문 이미지 중 대체텍스트로 내용을 읽지 못한 수 (D-014)."""
+    fields = raw["source_fields"]
+    return (fields.get("body_image_count") or 0) - (fields.get("body_image_text_count") or 0)
 
 
 def _codes(rules: dict[str, str], text: str, allowed: set[str]) -> list[str]:
@@ -247,7 +258,9 @@ class RuleBasedAnalyzer:
                 add("grade", "eq", int(m[1]), line)
 
             statuses = [s for s, p in (("enrolled", r"재학생"), ("on_leave", r"휴학생"), ("graduated", r"졸업생|졸업자")) if re.search(p, line)]
-            if statuses:
+            if statuses and OTHER_STATUS.search(line):
+                unresolved.append({"evidence": line, "note": None})  # 복학생·입학예정자 등은 프로필 재학 상태로 판정할 수 없다
+            elif statuses:
                 add("enrollment_status", "eq" if len(statuses) == 1 else "in", statuses[0] if len(statuses) == 1 else statuses, line)
 
             if source.university_id and UNIVERSITY.search(line):
@@ -267,7 +280,7 @@ class RuleBasedAnalyzer:
             (bool(conditions) or explicit)
             and not unresolved
             and not raw["attachments"]
-            and not raw["source_fields"].get("body_image_count")  # 포스터 이미지 속 조건은 읽지 못함
+            and not _unread_images(raw)  # 포스터 이미지 속 조건은 읽지 못함 (대체텍스트로 읽은 이미지는 제외)
         )
         return {
             "conditions": conditions,

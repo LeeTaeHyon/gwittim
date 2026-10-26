@@ -70,6 +70,37 @@ def test_attachment_or_unresolved_keeps_extraction_incomplete():
     assert elig["unresolved_conditions"] == [{"evidence": "직전 학기 평점 3.0 이상", "note": None}]
 
 
+def test_image_read_through_alt_text_does_not_block_completeness():
+    def complete(images: int, read: int) -> bool:
+        raw = raw_notice(CONTEST)
+        raw["source_fields"] = dict(raw["source_fields"], body_image_count=images)
+        if read:
+            raw["source_fields"]["body_image_text_count"] = read
+        return RuleBasedAnalyzer().analyze(raw, MJC)["eligibility"]["extraction_complete"]
+
+    assert complete(1, 0) is False  # 읽지 못한 포스터
+    assert complete(1, 1) is True  # 대체텍스트로 읽은 포스터 (D-014)
+    assert complete(2, 1) is False
+
+
+def test_non_eligibility_no_limit_is_not_unrestricted():
+    elig = RuleBasedAnalyzer().analyze(raw_notice("제출서류: 인턴 자기소개서 (분량 제한 없음)"), MJC)["eligibility"]
+    assert elig["explicitly_unrestricted"] is False
+
+
+def test_residence_and_nationality_are_unresolved():
+    body = "대상: 우리대학 재학생\n충남 지역에 주민등록을 둔 학생\n대한민국 국적의 국내 대학 재학생"
+    elig = RuleBasedAnalyzer().analyze(raw_notice(body), MJC)["eligibility"]
+    assert len(elig["unresolved_conditions"]) == 2 and elig["extraction_complete"] is False
+
+
+def test_mixed_enrollment_statuses_are_unresolved():
+    line = "신청대상은 재학생, 신입생 2학기 입학예정자, 편입생, 재입학생, 복학생"
+    elig = RuleBasedAnalyzer().analyze(raw_notice(line), MJC)["eligibility"]
+    assert not any(c["field"] == "enrollment_status" for c in elig["conditions"])
+    assert elig["unresolved_conditions"] == [{"evidence": line, "note": None}]
+
+
 def test_no_conditions_found_is_not_unrestricted():
     elig = RuleBasedAnalyzer().analyze(raw_notice("많은 참여 바랍니다."), MJC)["eligibility"]
     assert (elig["conditions"], elig["explicitly_unrestricted"], elig["extraction_complete"]) == ([], False, False)
