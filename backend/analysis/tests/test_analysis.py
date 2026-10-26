@@ -54,6 +54,18 @@ def test_deadline_with_time_gets_source_timezone():
     assert (d["date"], d["time"], d["timezone"], d["precision"]) == ("2026-10-18", "10:00", "Asia/Seoul", "minute")
 
 
+def test_work_period_is_activity_not_deadline():
+    body = "1) 근로기간 : 2026. 9. 1.(화) ~ 12.14.(월)까지\n신청기간: 2026.08.11.(화) ~ 2026.08.20.(목)"
+    fields = RuleBasedAnalyzer().analyze(raw_notice(body), MJC)
+    assert fields["application_deadline"]["date"] == "2026-08-20"
+    assert fields["activity_period"]["end"]["date"] == "2026-12-14"
+    only_period = RuleBasedAnalyzer().analyze(raw_notice("1) 근로기간 : 2026. 9. 1.(화) ~ 12.14.(월)까지"), MJC)
+    assert only_period["application_deadline"] is None
+    # 신청·접수를 함께 말하면 마감으로 본다
+    both = RuleBasedAnalyzer().analyze(raw_notice("교육기간 중 신청 접수: 2026.11.02.(월)까지"), MJC)
+    assert both["application_deadline"]["date"] == "2026-11-02"
+
+
 def test_first_come_is_note_not_deadline():
     fields = RuleBasedAnalyzer().analyze(raw_notice("해외 연수 참가자 모집\n선착순 마감 (정원 도달 시 조기 종료)"), MJC)
     assert fields["application_deadline"] is None
