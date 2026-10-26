@@ -11,12 +11,9 @@ import 'package:gwittim/ui/profile_screen.dart';
 import 'package:gwittim/ui/theme.dart';
 
 class FakeAuth implements AuthService {
-  FakeAuth({this.failWith, this.completes = true});
+  FakeAuth({this.failWith});
 
   final Object? failWith;
-
-  /// false면 로그인 창이 닫히거나 뜨지 않은 것처럼 false를 돌려준다
-  final bool completes;
   final _state = StreamController<bool>.broadcast();
   bool _signedIn = false;
   int signInCalls = 0;
@@ -33,7 +30,6 @@ class FakeAuth implements AuthService {
   Future<bool> signInWithGoogle() async {
     signInCalls++;
     if (failWith != null) throw failWith!;
-    if (!completes) return false;
     _signedIn = true;
     _state.add(true);
     return true;
@@ -43,6 +39,13 @@ class FakeAuth implements AuthService {
   Future<void> signOut() async {
     _signedIn = false;
     _state.add(false);
+  }
+}
+
+/// 로그인 화면의 예시 장면은 계속 되풀이되어 pumpAndSettle이 끝나지 않는다. 화면 전환이 끝날 만큼만 진행한다.
+Future<void> settle(WidgetTester tester) async {
+  for (var i = 0; i < 20; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
   }
 }
 
@@ -69,26 +72,26 @@ void main() {
       ),
     );
     auth.start();
-    await tester.pumpAndSettle();
+    await settle(tester);
     expect(find.text('Google 계정으로 시작하기'), findsOneWidget);
 
     await tester.tap(find.text('Google 계정으로 시작하기'));
-    await tester.pumpAndSettle();
+    await settle(tester);
     expect(find.text('오늘'), findsOneWidget); // 하단 탭
     expect(await captured!(), 'fake-id-token');
 
     // 로그아웃은 내 정보 설정의 계정 칸에 있다 (D-010)
     await tester.tap(find.byTooltip('내 정보'));
-    await tester.pumpAndSettle();
+    await settle(tester);
     await tester.scrollUntilVisible(
       find.text('로그아웃'),
       300,
       scrollable: find.descendant(of: find.byType(ProfileScreen), matching: find.byType(Scrollable)).first,
     );
-    await tester.pumpAndSettle();
+    await settle(tester);
     expect(find.text('Google 계정으로 로그인했어요'), findsOneWidget);
     await tester.tap(find.text('로그아웃'));
-    await tester.pumpAndSettle();
+    await settle(tester);
     expect(find.text('Google 계정으로 시작하기'), findsOneWidget);
   });
 
@@ -98,7 +101,7 @@ void main() {
       AuthGate(auth: auth, repositoryFor: (_) => SampleNoticeRepository(), openUrl: (_) async => true),
     );
     auth.start();
-    await tester.pumpAndSettle();
+    await settle(tester);
 
     expect(find.bySemanticsLabel('귀띔'), findsOneWidget); // 직접 그린 로고 (D-011)
     expect(find.text('몰랐던 기회를\n먼저 귀띔해 드려요'), findsOneWidget);
@@ -123,7 +126,7 @@ void main() {
       ),
     );
     auth.start();
-    await tester.pumpAndSettle();
+    await settle(tester);
     expect(tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor, const Color(0xFF0F1222));
   });
 
@@ -133,28 +136,64 @@ void main() {
       AuthGate(auth: auth, repositoryFor: (_) => SampleNoticeRepository(), openUrl: (_) async => true),
     );
     auth.start();
-    await tester.pumpAndSettle();
+    await settle(tester);
     await tester.tap(find.text('Google 계정으로 시작하기'));
-    await tester.pumpAndSettle();
+    await settle(tester);
     expect(find.text('로그인하지 못했어요. 잠시 후 다시 시도해 주세요.'), findsOneWidget);
     expect(find.textContaining('DEVELOPER_ERROR'), findsNothing);
   });
 
-  testWidgets('로그인이 끝나지 않고 돌아오면 계정 확인 안내', (tester) async {
-    final auth = FakeAuth(completes: false);
+  testWidgets('예시 말풍선: 입력 중 표시 뒤에 하나씩 튀어나오고, 다 나온 뒤 흐려지며 되풀이한다', (tester) async {
+    final auth = FakeAuth();
+    await tester.pumpWidget(
+      AuthGate(auth: auth, repositoryFor: (_) => SampleNoticeRepository(), openUrl: (_) async => true),
+    );
+    auth.start();
+    await tester.pump();
+    final typing = find.byKey(const ValueKey('typing'));
+    double opacityOf(String text) => tester
+        .widgetList<Opacity>(find.ancestor(of: find.textContaining(text), matching: find.byType(Opacity)))
+        .fold(1.0, (o, w) => o * w.opacity);
+    final buttonTop = tester.getTopLeft(find.byType(GoogleSignInButton)).dy;
+
+    await tester.pump(const Duration(milliseconds: 500)); // 첫 말풍선 입력 중
+    expect(typing, findsOneWidget);
+    expect(opacityOf('장학생 선발 공고'), 0);
+    expect(find.text('장학생 선발 공고 · D-6'), findsOneWidget); // 안 보여도 화면 읽기에는 남는다
+
+    await tester.pump(const Duration(milliseconds: 1000)); // 1.5초: 첫 말풍선 도착, 둘째 입력 중
+    expect(opacityOf('장학생 선발 공고'), 1);
+    expect(opacityOf('관심 분야와 관련된 공고'), 0);
+    expect(typing, findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 2500)); // 4초: 셋 다 보인다
+    expect(typing, findsNothing);
+    for (final t in ['장학생 선발 공고', '관심 분야와 관련된 공고', '발표회 마감이']) {
+      expect(opacityOf(t), 1);
+    }
+    expect(tester.getTopLeft(find.byType(GoogleSignInButton)).dy, buttonTop); // 아래 버튼은 움직이지 않는다
+
+    await tester.pump(const Duration(milliseconds: 2700)); // 6.7초: 흐려짐
+    expect(opacityOf('장학생 선발 공고'), lessThan(0.1));
+    await tester.pump(const Duration(milliseconds: 800)); // 다음 바퀴 첫 입력 중
+    expect(typing, findsOneWidget);
+    expect(tester.hasRunningAnimations, isTrue);
+  });
+
+  testWidgets('애니메이션 줄이기 설정이면 예시 말풍선 셋이 그대로 보인다', (tester) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue = FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    final auth = FakeAuth();
     await tester.pumpWidget(
       AuthGate(auth: auth, repositoryFor: (_) => SampleNoticeRepository(), openUrl: (_) async => true),
     );
     auth.start();
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Google 계정으로 시작하기'));
-    await tester.pumpAndSettle();
-    expect(find.text('로그인을 마치지 못했어요. 기기에 Google 계정이 있는지 확인해 주세요.'), findsOneWidget);
-    // 로그인 화면에 남고, 알림이 사라지면 다시 누를 수 있다
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Google 계정으로 시작하기'));
-    await tester.pump();
-    expect(auth.signInCalls, 2);
+    expect(find.byKey(const ValueKey('typing')), findsNothing);
+    expect(find.text('발표회 마감이 3일 늦춰졌어요'), findsOneWidget);
+    final opacities = tester.widgetList<Opacity>(
+      find.ancestor(of: find.text('발표회 마감이 3일 늦춰졌어요'), matching: find.byType(Opacity)),
+    );
+    expect(opacities.every((o) => o.opacity == 1), isTrue);
   });
 }

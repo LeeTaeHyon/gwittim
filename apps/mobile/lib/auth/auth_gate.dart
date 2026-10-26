@@ -69,7 +69,10 @@ class _AuthGateState extends State<AuthGate> {
             themeController: _theme,
           );
         }
-        return GwMaterialApp(themeController: _theme, home: SignInScreen(auth: widget.auth));
+        return GwMaterialApp(
+          themeController: _theme,
+          home: SignInScreen(auth: widget.auth),
+        );
       },
     );
   }
@@ -144,27 +147,8 @@ class _SignInScreenState extends State<SignInScreen> {
                         style: TextStyle(fontSize: 16, height: 1.6, color: c.loginSub),
                       ),
                       const SizedBox(height: 36),
-                      // 앱이 알려 주는 소식의 예시 (D-010)
-                      _ExampleBubble(kicker: '마감 임박', kickerColor: c.urgent, text: '장학생 선발 공고 · D-6'),
-                      const SizedBox(height: 10),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 32),
-                        child: _ExampleBubble(
-                          kicker: '맞춤 공고',
-                          kickerColor: c.accent,
-                          text: '관심 분야와 관련된 공고 ',
-                          marked: '3개',
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 12),
-                        child: _ExampleBubble(
-                          kicker: '저장한 공고',
-                          kickerColor: c.accent,
-                          text: '발표회 마감이 3일 늦춰졌어요',
-                        ),
-                      ),
+                      // 앱이 알려 주는 소식의 예시 (D-010). 채팅처럼 하나씩 도착하는 장면을 되풀이한다.
+                      const _ExampleDemo(),
                       const Spacer(),
                       const SizedBox(height: 36),
                       GoogleSignInButton(label: 'Google 계정으로 시작하기', onPressed: _busy ? null : _signIn),
@@ -185,6 +169,150 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 로그인 화면의 예시 말풍선 장면. 말풍선마다 '…' 입력 중 표시가 잠깐 보인 뒤 말풍선이 꼬리 쪽에서
+/// 톡 튀어나온다. 셋이 다 나오면 잠시 머물렀다가 함께 흐려지고 처음부터 되풀이한다.
+/// 크기·투명도만 바꾸고 자리는 늘 차지해서 아래 버튼이 움직이지 않는다. 애니메이션 줄이기 설정이면 셋 다 그대로 보인다.
+class _ExampleDemo extends StatefulWidget {
+  const _ExampleDemo();
+
+  @override
+  State<_ExampleDemo> createState() => _ExampleDemoState();
+}
+
+/// 한 바퀴(ms). 말풍선 i의 입력 중 표시는 300 + 900i에 시작해 600 뒤에 말풍선으로 바뀐다.
+const _demoLoop = 7000;
+const _demoPop = 450;
+const _demoFadeOut = 6200;
+
+class _ExampleDemoState extends State<_ExampleDemo> with SingleTickerProviderStateMixin {
+  late final _loop = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: _demoLoop),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.maybeDisableAnimationsOf(context) == true) {
+      _loop.stop();
+    } else if (!_loop.isAnimating) {
+      _loop.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _loop.dispose();
+    super.dispose();
+  }
+
+  /// 살짝 넘쳤다 돌아오는 등장 곡선 (시작 인트로의 말풍선과 같은 느낌)
+  static const _pop = Cubic(0.34, 1.4, 0.64, 1);
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final still = MediaQuery.maybeDisableAnimationsOf(context) == true;
+    final bubbles = [
+      _ExampleBubble(kicker: '마감 임박', kickerColor: c.urgent, text: '장학생 선발 공고 · D-6'),
+      _ExampleBubble(kicker: '맞춤 공고', kickerColor: c.accent, text: '관심 분야와 관련된 공고 ', marked: '3개'),
+      _ExampleBubble(kicker: '저장한 공고', kickerColor: c.accent, text: '발표회 마감이 3일 늦춰졌어요'),
+    ];
+    const indents = [0.0, 32.0, 12.0];
+    return AnimatedBuilder(
+      animation: _loop,
+      builder: (context, _) {
+        final ms = still ? _demoFadeOut.toDouble() : _loop.value * _demoLoop;
+        final out = Curves.easeInCubic.transform(((ms - _demoFadeOut) / 500).clamp(0.0, 1.0));
+        return Opacity(
+          opacity: 1 - out,
+          alwaysIncludeSemantics: true,
+          child: Transform.translate(
+            offset: Offset(0, -10 * out),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < bubbles.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 10),
+                  Padding(
+                    padding: EdgeInsets.only(left: indents[i]),
+                    child: _slot(bubbles[i], ms - (300 + 900 * i)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// t: 이 말풍선의 입력 중 표시가 시작된 뒤 지난 ms
+  Widget _slot(Widget bubble, double t) {
+    final typing = t < 0 || t >= 600 ? 0.0 : (t / 150).clamp(0.0, 1.0) * ((600 - t) / 150).clamp(0.0, 1.0);
+    final p = ((t - 600) / _demoPop).clamp(0.0, 1.0);
+    return Stack(
+      alignment: Alignment.bottomLeft,
+      children: [
+        Opacity(
+          opacity: Curves.easeOut.transform((p * 2).clamp(0.0, 1.0)),
+          alwaysIncludeSemantics: true,
+          child: Transform.scale(scale: 0.6 + 0.4 * _pop.transform(p), alignment: Alignment.bottomLeft, child: bubble),
+        ),
+        if (typing > 0)
+          Opacity(
+            opacity: typing,
+            child: _TypingBubble(t: t),
+          ),
+      ],
+    );
+  }
+}
+
+/// 말풍선이 오기 전의 '…' 입력 중 표시. 점 세 개가 차례로 밝아진다.
+class _TypingBubble extends StatelessWidget {
+  const _TypingBubble({required this.t});
+
+  final double t;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return ExcludeSemantics(
+      child: Container(
+        key: const ValueKey('typing'),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: c.loginCard,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+            bottomRight: Radius.circular(20),
+            bottomLeft: Radius.circular(6),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          spacing: 4,
+          children: [
+            for (var i = 0; i < 3; i++)
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: c.muted.withValues(
+                    alpha: 0.35 + 0.65 * (1 - (((t / 400 - i * 0.2) % 1) - 0.3).abs() / 0.7).clamp(0.0, 1.0),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -220,7 +348,10 @@ class _ExampleBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(kicker, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kickerColor)),
+            Text(
+              kicker,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kickerColor),
+            ),
             const SizedBox(height: 3),
             // 화면 높이 계산(IntrinsicHeight) 안에 있어서 형광펜 위젯 대신 글자 바탕색을 쓴다.
             Text.rich(
