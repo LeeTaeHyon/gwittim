@@ -16,14 +16,16 @@ class SourceConfig:
     timezone_basis: str | None
 
 
+_MJC_TIMEZONE_BASIS = "서울 소재 학교 게시판이며 본문 시각을 국내 시각으로 표기 (source-review §4). 시각이 있는 날짜에만 적용"
+
 SOURCES: dict[str, SourceConfig] = {
-    "mjc_www_notice": SourceConfig(
-        source_id="mjc_www_notice",
-        name="명지전문대학 공지사항",
-        university_id="mjc",
-        timezone="Asia/Seoul",
-        timezone_basis="서울 소재 학교 게시판이며 본문 시각을 국내 시각으로 표기 (source-review §4). 시각이 있는 날짜에만 적용",
-    ),
+    s.source_id: s
+    for s in [
+        SourceConfig("mjc_www_notice", "명지전문대학 공지사항", "mjc", "Asia/Seoul", _MJC_TIMEZONE_BASIS),
+        SourceConfig("mjc_www_scholarship", "명지전문대학 장학공지", "mjc", "Asia/Seoul", _MJC_TIMEZONE_BASIS),
+        SourceConfig("mjc_www_job", "명지전문대학 채용공지", "mjc", "Asia/Seoul", _MJC_TIMEZONE_BASIS),
+        SourceConfig("mjc_www_work", "명지전문대학 근로게시판", "mjc", "Asia/Seoul", _MJC_TIMEZONE_BASIS),
+    ]
 }
 
 

@@ -36,7 +36,13 @@ def notice_id_for(key: str) -> str:
     return "n_" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:20]
 
 
-def lifecycle(deadline: dict | None, today: date) -> str:
+# 제목에 모집이 끝났다고 적힌 공고 (근로게시판의 '[모집완료]', '(마감)' 등). '마감 임박'·'마감 연장'은 아니다.
+CLOSED_TITLE = re.compile(r"[\[(]\s*(?:모집\s*)?(?:마감|완료)\s*[\])]|모집\s*완료|모집\s*마감(?!\s*(?:일|임박|연장))")
+
+
+def lifecycle(deadline: dict | None, today: date, title: str = "") -> str:
+    if CLOSED_TITLE.search(title):
+        return "closed"
     if deadline is None:
         return "unknown"
     return "closed" if date.fromisoformat(deadline["date"]) < today else "open"
@@ -108,7 +114,7 @@ def build_notice(
     raw = record.raw
     if previous and previous["notice_version"] == record.notice_version and previous["analysis_version"] == analyzer.version:
         reused = dict(previous, last_collected_at=record.last_collected_at, changed_fields=[])
-        reused["lifecycle_status"] = "removed" if record.removed else lifecycle(reused["application_deadline"], today)
+        reused["lifecycle_status"] = "removed" if record.removed else lifecycle(reused["application_deadline"], today, raw["title"])
         if reused["lifecycle_status"] != previous["lifecycle_status"]:
             reused["changed_fields"] = ["lifecycle_status"]
         return reused, []
@@ -133,7 +139,7 @@ def build_notice(
         "deadline_note": fields["deadline_note"],
         "activity_period": fields["activity_period"],
         "eligibility": fields["eligibility"],
-        "lifecycle_status": "removed" if record.removed else lifecycle(fields["application_deadline"], today),
+        "lifecycle_status": "removed" if record.removed else lifecycle(fields["application_deadline"], today, raw["title"]),
         "publication_status": "published",
         "notice_version": record.notice_version,
         "analysis_version": version,
