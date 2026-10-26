@@ -16,7 +16,7 @@ from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
 
-ANALYSIS_VERSION = "rule-0.5"  # 0.5: 근로·근무 기간은 마감 아님. 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
+ANALYSIS_VERSION = "rule-0.6"  # 0.6: 미해석 조건 정리·우대 사항 표시(D-015). 0.5: 근로·근무 기간은 마감 아님. 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
 
 
 class Analyzer(Protocol):
@@ -179,6 +179,83 @@ OTHER_STATUS = re.compile(r"복학|입학\s*예정|편입|재입학|신입생")
 NOT_CONDITION = re.compile(r"서류|증명서|확인서|사본|신청서|관계\s*없이|무관")
 SEE_ATTACHMENT = re.compile(r"(?:첨부|붙임|모집요강)[^\n]{0,10}참(?:조|고)")
 
+# ---------- 미해석 조건 정리 (D-015) ----------
+
+PREFERRED_NOTE = "우대 사항"  # unresolved_condition.note: 지원 자격이 아니라 갖추면 유리한 조건
+_ENUM = re.compile(r"^\s*(?:\(?\d{1,2}[.)]\s*|[①-⑳]\s*|[○●◦•ㆍᆞ·\-*※□■▶▷◎◆◇./]\s*|[가-하][.)]\s+)+")
+_LABEL = re.compile(r"^([^\d/:：]{1,12}?)\s*(?:\s/\s|[:：])\s*(.+)$")  # '항목 이름 / 값', '항목 이름: 값'
+_HEADING_WORD = re.compile(r"(?:지원|응시|참가|신청|자격|요건|조건|대상|우대|사항|필수|공통|분야별|직무별|기타)+")
+# 조건 문구 자체가 우대를 말하는 경우 ('…자 우대', '…우대함'). '우대가점', '우대사항은 … 충족' 같은 말은 아님
+_ENDS_PREFERRED = re.compile(r"우대(?:함|합니다)?\.?\s*$")
+# 필수 조건을 말하는 줄. 우대 항목이 여기서 끝나고, 이 줄은 우대 사항이 아니다
+_REQUIRED = re.compile(r"필수|(?:지원|응시)\s*자격\s*[:：]|자격\s*요건\s*[:：]")
+_TOP_HEADING = re.compile(r"^\s*\d{1,2}\.\s")
+
+
+def _is_heading(text: str) -> bool:
+    """'지원자격 및 우대사항', '자격요건:'처럼 항목 이름만 있는 줄."""
+    words = [w for w in re.split(r"[\s·/,:()및]+", text) if w]
+    return bool(words) and all(_HEADING_WORD.fullmatch(w) for w in words)
+
+
+def condition_text(line: str) -> tuple[str | None, bool]:
+    """(번호·기호·항목 이름을 뗀 조건 문구, 항목 이름이 '우대'였는지). 제목만 있는 줄이면 문구는 None.
+
+    문구는 원문 줄의 일부라 근거 검증(원문에 있는가)을 그대로 통과한다.
+    """
+    text = _ENUM.sub("", line).strip()
+    preferred = False
+    if (m := _LABEL.match(text)) and _is_heading(m[1]):
+        preferred = "우대" in m[1]
+        text = _ENUM.sub("", m[2]).strip()
+    if not text or _is_heading(text) or re.match(r"없음\b", text):  # '우대사항: 없음'
+        return None, preferred
+    return text, preferred
+
+
+def _preferred_lines(lines: list[str]) -> list[str]:
+    """'우대사항' 항목 아래 줄들. 다음 번호 제목, '지원자격' 같은 다른 항목, 이미지 설명이 나오면 끝난다."""
+    out, section = [], None
+    for line in lines:
+        text = _ENUM.sub("", line).strip()
+        m = _LABEL.match(text)
+        head = m[1] if m else text
+        if _is_heading(head):
+            pref, req = "우대" in head, bool(re.search(r"자격|요건|조건|대상|공통", head))
+            section = "pref" if pref and not req else None
+            if m and section:
+                out.append(m[2])
+        elif _TOP_HEADING.match(line) or _REQUIRED.search(line) or line == "[이미지 설명]":
+            section = None
+        elif section:
+            out.append(text)
+    return out
+
+
+def tidy_unresolved(items: list[dict], lines: list[str]) -> tuple[list[dict], bool]:
+    """미해석 조건을 정리한다: 번호·기호 떼기, 제목 줄 빼기, 같은 문구 하나로, 우대 사항 표시.
+
+    돌려주는 bool은 제목 줄을 뺐는지다. 제목 아래 조건을 다 읽었다고 볼 수 없으니 완전성을 막는 데 쓴다.
+    """
+    preferred_lines = _preferred_lines(lines)
+    out: dict[str, dict] = {}
+    dropped = False
+    for item in items:
+        text, label_preferred = condition_text(item["evidence"])
+        if text is None:
+            dropped = True
+            continue
+        preferred = not _REQUIRED.search(item["evidence"]) and (
+            label_preferred or bool(_ENDS_PREFERRED.search(text)) or any(text in p for p in preferred_lines)
+        )
+        key = re.sub(r"\s+", "", text)
+        if key in out:
+            if preferred:
+                out[key]["note"] = PREFERRED_NOTE
+            continue
+        out[key] = {"evidence": text, "note": PREFERRED_NOTE if preferred else item["note"]}
+    return list(out.values()), dropped
+
 
 def _lines(raw: dict) -> list[str]:
     return [line.strip() for line in raw["body_text"].splitlines() if line.strip()]
@@ -285,10 +362,12 @@ class RuleBasedAnalyzer:
             if unrestricted_line is None and UNRESTRICTED.search(line):
                 unrestricted_line = line
 
+        unresolved, dropped_heading = tidy_unresolved(unresolved, lines)
         explicit = unrestricted_line is not None and not conditions
         complete = (
             (bool(conditions) or explicit)
             and not unresolved
+            and not dropped_heading
             and not raw["attachments"]
             and not _unread_images(raw)  # 포스터 이미지 속 조건은 읽지 못함 (대체텍스트로 읽은 이미지는 제외)
         )

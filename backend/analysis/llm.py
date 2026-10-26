@@ -19,7 +19,7 @@ from backend.dictionaries import codes
 from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
-from .rules import RuleBasedAnalyzer, is_activity_line
+from .rules import RuleBasedAnalyzer, is_activity_line, tidy_unresolved
 
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _PHONE = re.compile(r"(?:\+?82[-\s]?)?0\d{1,2}[-\s.)]?\d{3,4}[-\s.]?\d{4}")
@@ -170,11 +170,9 @@ class OllamaAnalyzer:
         if elig["conditions"]:
             elig["explicitly_unrestricted"], elig["unrestricted_evidence"] = False, None
 
-        known = {u["evidence"] for u in elig["unresolved_conditions"]}
-        for text in out.get("unresolved") or []:
-            if grounded(text) and text not in known:
-                elig["unresolved_conditions"].append({"evidence": text, "note": "LLM 추출"})
-                known.add(text)
+        extra = [{"evidence": t, "note": "LLM 추출"} for t in out.get("unresolved") or [] if grounded(t)]
+        # 규칙 결과와 합쳐 다시 정리: 같은 조건이 규칙·LLM에서 두 번 나오지 않게, 우대 사항 표시도 함께 (D-015)
+        elig["unresolved_conditions"], _ = tidy_unresolved(elig["unresolved_conditions"] + extra, raw["body_text"].splitlines())
         if elig["unresolved_conditions"]:
             elig["extraction_complete"] = False  # LLM은 완전성을 올리지 않고 내리기만 한다
 

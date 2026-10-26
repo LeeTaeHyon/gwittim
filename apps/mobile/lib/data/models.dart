@@ -92,10 +92,14 @@ class Eligibility {
     required this.extractionComplete,
     required this.explicitlyUnrestricted,
     required this.unrestrictedEvidence,
+    this.preferredEvidence = const [],
   });
 
   final List<EligibilityCondition> conditions;
   final List<String> unresolvedEvidence;
+
+  /// unresolvedEvidence 중 우대 사항(note '우대 사항', D-015). 지원 자격이 아니라 갖추면 유리한 조건.
+  final List<String> preferredEvidence;
   final bool extractionComplete;
   final bool explicitlyUnrestricted;
   final String? unrestrictedEvidence;
@@ -106,6 +110,10 @@ class Eligibility {
         EligibilityCondition(field: c['field'] as String, evidence: c['evidence'] as String),
     ],
     unresolvedEvidence: [for (final u in m['unresolved_conditions'] as List) u['evidence'] as String],
+    preferredEvidence: [
+      for (final u in m['unresolved_conditions'] as List)
+        if (u['note'] == '우대 사항') u['evidence'] as String,
+    ],
     extractionComplete: m['extraction_complete'] as bool,
     explicitlyUnrestricted: m['explicitly_unrestricted'] as bool,
     unrestrictedEvidence: m['unrestricted_evidence'] as String?,
