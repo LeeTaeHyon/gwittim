@@ -22,7 +22,7 @@ const _sourceNames = {
 enum CheckState { met, notMet, check, info }
 
 class CheckRow {
-  const CheckRow(this.state, this.label, {this.field, this.evidence, this.note});
+  const CheckRow(this.state, this.label, {this.field, this.evidence, this.note, this.moreEvidence = const []});
 
   final CheckState state;
   final String label;
@@ -33,8 +33,43 @@ class CheckRow {
   /// 공고 원문 근거 (형광펜으로 표시)
   final String? evidence;
 
+  /// 같은 종류로 묶인 나머지 근거 (groupCheckRows)
+  final List<String> moreEvidence;
+
   /// 그 줄 아래 안내 말풍선
   final String? note;
+
+  List<String> get evidences => [?evidence, ...moreEvidence];
+
+  /// 이 줄이 나타내는 조건 수 (묶인 줄은 근거 수)
+  int get count => evidences.length > 1 ? evidences.length : 1;
+}
+
+/// 이름표 없는 같은 종류 줄(상태·문구·안내가 같음)이 2개 이상이면 첫 자리에 한 줄로 묶는다.
+/// 예: '직접 확인' 4개 → '직접 확인 4개' 한 줄에 근거 4개, 안내 말풍선 하나.
+List<CheckRow> groupCheckRows(List<CheckRow> rows) {
+  final groups = <(CheckState, String, String?), List<CheckRow>>{};
+  for (final r in rows) {
+    if (r.field == null && r.evidence != null) groups.putIfAbsent((r.state, r.label, r.note), () => []).add(r);
+  }
+  final out = <CheckRow>[];
+  for (final r in rows) {
+    final group = r.field == null && r.evidence != null ? groups[(r.state, r.label, r.note)]! : null;
+    if (group == null || group.length < 2) {
+      out.add(r);
+    } else if (identical(group.first, r)) {
+      out.add(
+        CheckRow(
+          r.state,
+          '${r.label} ${group.length}개',
+          evidence: r.evidence,
+          moreEvidence: [for (final g in group.skip(1)) g.evidence!],
+          note: r.note,
+        ),
+      );
+    }
+  }
+  return out;
 }
 
 final _privateCondition = RegExp(r'평점|학점|성적|소득|연령|나이');
@@ -90,7 +125,7 @@ List<CheckRow> checklistRows(
           : const CheckRow(CheckState.info, '공고에서 지원 조건을 찾지 못했어요', note: '조건이 없다는 뜻은 아니에요. 학교 공지를 확인해 주세요.'),
     );
   }
-  return rows;
+  return groupCheckRows(rows);
 }
 
 /// 추천 이유 문장 조각: (형광펜 낱말들, 2주 안 마감 여부)
@@ -498,8 +533,9 @@ class _Checklist extends StatelessWidget {
       'not_met' => const Pill('맞지 않아요', tone: PillTone.urgent),
       _ => null,
     };
-    final checks = rows.where((r) => r.state == CheckState.check).length;
-    final mets = rows.where((r) => r.state == CheckState.met).length;
+    int countOf(CheckState s) => rows.where((r) => r.state == s).fold(0, (n, r) => n + r.count);
+    final checks = countOf(CheckState.check);
+    final mets = countOf(CheckState.met);
     final intro = status == null
         ? '공고에서 찾은 조건이에요.'
         : checks > 0
@@ -593,8 +629,8 @@ class _CheckLine extends StatelessWidget {
                         ),
                       ],
                     ),
-                    if (row.evidence != null)
-                      // 공고 원문 인용: 왼쪽 세로줄 상자. 짧은 근거는 형광펜, 길면 형광펜 없이 줄바꿈한다.
+                    if (row.evidences.isNotEmpty)
+                      // 공고 원문 인용: 왼쪽 세로줄 상자. 짧은 근거는 형광펜, 길면 형광펜 없이 줄바꿈한다. 묶인 근거는 줄마다 하나씩.
                       Container(
                         margin: const EdgeInsets.only(top: 8),
                         padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
@@ -605,17 +641,17 @@ class _CheckLine extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('공고에 적힌 말', style: TextStyle(fontSize: 12, color: c.muted)),
-                            const SizedBox(height: 2),
-                            row.evidence!.length <= 24
-                                ? Text.rich(
-                                    TextSpan(
-                                      style: evidenceStyle,
-                                      children: [
-                                        markSpan(row.evidence!, evidenceStyle, color: check ? c.checkMark : null),
-                                      ],
-                                    ),
-                                  )
-                                : Text(row.evidence!, style: evidenceStyle),
+                            for (final (i, e) in row.evidences.indexed) ...[
+                              SizedBox(height: i == 0 ? 2 : 8),
+                              e.length <= 24
+                                  ? Text.rich(
+                                      TextSpan(
+                                        style: evidenceStyle,
+                                        children: [markSpan(e, evidenceStyle, color: check ? c.checkMark : null)],
+                                      ),
+                                    )
+                                  : Text(e, style: evidenceStyle),
+                            ],
                           ],
                         ),
                       ),

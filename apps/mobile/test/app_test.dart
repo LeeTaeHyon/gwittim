@@ -228,6 +228,25 @@ void main() {
       expect(row.note, contains('성적을 받지 않아요'));
     });
 
+    test('같은 종류 직접 확인 줄은 2개 이상이면 한 줄로 묶는다', () {
+      final rows = checklistRows(
+        notice(
+          conditions: const [EligibilityCondition(field: 'major_id', evidence: '컴퓨터공학과')],
+          unresolved: ['직무 관련 자격증 소유자', '직전 학기 평점 3.0 이상', '근무지 인접 거주자 우대', '주말 근무 가능자'],
+        ),
+        null,
+        none,
+      );
+      expect(rows.map((r) => r.label), ['학과', '직접 확인 3개', '직접 확인']);
+      final grouped = rows[1];
+      expect(grouped.evidences, ['직무 관련 자격증 소유자', '근무지 인접 거주자 우대', '주말 근무 가능자']);
+      expect(grouped.note, contains('자동으로 비교하지 못했어요'));
+      expect(grouped.count, 3);
+      // 성적 조건은 안내가 달라서 따로 남는다 (1개라 묶지 않음)
+      expect(rows[2].evidences, ['직전 학기 평점 3.0 이상']);
+      expect(rows[2].note, contains('성적을 받지 않아요'));
+    });
+
     test('서버 판정을 그대로 쓰고 프로필 값 이름을 붙인다', () {
       final rec = Recommendation(
         noticeId: 'n',
