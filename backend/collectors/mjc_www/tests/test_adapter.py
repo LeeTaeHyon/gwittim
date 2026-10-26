@@ -5,6 +5,7 @@ from backend.analysis import build_notice
 from backend.collectors.common import InMemoryStore, Outcome, ingest
 from backend.collectors.mjc_www import BOARDS, collect, parse_detail, parse_list
 from backend.contracts import schema_errors
+from backend.sources import source_config
 
 HTML = Path(__file__).parent / "html"
 LIST = (HTML / "list.html").read_text(encoding="utf-8")
@@ -89,8 +90,12 @@ def test_recollect_is_unchanged_and_flows_into_analysis():
     assert notice["eligibility"]["extraction_complete"] is False  # 첨부·포스터 이미지
 
 
-def test_only_notice_board_active_in_p0():
-    assert [b.source_id for b in BOARDS.values() if b.active] == ["mjc_www_notice"]
+def test_p0_active_boards_have_source_config():
+    active = [b.source_id for b in BOARDS.values() if b.active]
+    assert active == ["mjc_www_notice", "mjc_www_scholarship", "mjc_www_job", "mjc_www_work"]  # D-013
+    for source_id in active:
+        assert source_config(source_id).timezone == "Asia/Seoul"
+        assert BOARDS[source_id].bbs_mst_idx
 
 
 # ---------- D-006 재시도 ----------

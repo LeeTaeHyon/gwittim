@@ -1,7 +1,7 @@
 """명지전문대 www 게시판 어댑터: 게시판 설정 → RawNotice. DB 저장은 하지 않는다 (D-002).
 
 게시판 추가는 BOARDS에 한 줄을 넣고 active=True로 바꾸면 된다 (source-review §5).
-P0 활성 게시판은 공지사항(66) 하나다.
+P0 활성 게시판은 공지사항·장학공지·채용공지·근로게시판 4개다 (D-013).
 """
 from __future__ import annotations
 
@@ -35,10 +35,10 @@ BOARDS: dict[str, Board] = {
     b.source_id: b
     for b in [
         Board("mjc_www_notice", "공지사항", "66", "BM0000000026", active=True),
-        Board("mjc_www_scholarship", "장학공지", "208", "BM0000000032", active=False),
-        Board("mjc_www_job", "채용공지", "2617", "", active=False),
+        Board("mjc_www_scholarship", "장학공지", "208", "BM0000000032", active=True),
+        Board("mjc_www_job", "채용공지", "2617", "BM0000002077", active=True),
         Board("mjc_www_promotion", "홍보게시판", "2711", "BM0000002205", active=False),
-        Board("mjc_www_work", "근로게시판", "3002", "", active=False),
+        Board("mjc_www_work", "근로게시판", "3002", "BM0000002478", active=True),
         Board("mjc_www_minority", "소수학생게시판", "3145", "", active=False),
     ]
 }

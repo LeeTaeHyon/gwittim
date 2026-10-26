@@ -138,9 +138,13 @@ class Notice {
     required this.activityPeriod,
     required this.eligibility,
     required this.lastVerifiedAt,
+    this.sourceId,
   });
 
   final NoticeSummary summary;
+
+  /// 수집한 게시판 (예: mjc_www_notice). 모르면 null.
+  final String? sourceId;
 
   /// 검증된 요약. 없으면 null.
   final String? description;
@@ -156,6 +160,7 @@ class Notice {
     activityPeriod: ActivityPeriod.fromJson(m['activity_period']),
     eligibility: Eligibility.fromJson(m['eligibility'] as Map<String, dynamic>),
     lastVerifiedAt: m['last_verified_at'] == null ? null : DateTime.parse(m['last_verified_at'] as String),
+    sourceId: m['source_id'] as String?,
   );
 }
 
