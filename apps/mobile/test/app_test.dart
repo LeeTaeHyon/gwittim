@@ -101,6 +101,7 @@ RecommendationEntry entry(
 Notice notice({
   List<EligibilityCondition> conditions = const [],
   List<String> unresolved = const [],
+  List<String> preferred = const [],
   bool unrestricted = false,
   bool complete = true,
 }) => Notice(
@@ -110,13 +111,24 @@ Notice notice({
   activityPeriod: null,
   eligibility: Eligibility(
     conditions: conditions,
-    unresolvedEvidence: unresolved,
+    unresolvedEvidence: [...unresolved, ...preferred],
+    preferredEvidence: preferred,
     extractionComplete: complete,
     explicitlyUnrestricted: unrestricted,
     unrestrictedEvidence: unrestricted ? '누구나' : null,
   ),
   lastVerifiedAt: null,
 );
+
+/// 공고 하나만 돌려주는 저장소 (리포트 화면 확인용)
+class OneNoticeRepository extends FailingRepository {
+  OneNoticeRepository(this.notice);
+
+  final Notice notice;
+
+  @override
+  Future<Notice?> getNotice(String noticeId) async => notice;
+}
 
 void main() {
   final today = DateTime(2026, 10, 17);
@@ -245,6 +257,50 @@ void main() {
       // 성적 조건은 안내가 달라서 따로 남는다 (1개라 묶지 않음)
       expect(rows[2].evidences, ['직전 학기 평점 3.0 이상']);
       expect(rows[2].note, contains('성적을 받지 않아요'));
+    });
+
+    test('우대 사항은 지원 자격 뒤에 따로 묶고 확인 필요 수에 넣지 않는다', () {
+      final rows = checklistRows(
+        notice(
+          unresolved: ['해외여행 결격 사유가 없는 자', '남자의 경우 병역필 또는 면제자'],
+          preferred: ['외국어 능통자 (토익 850점 이상)', '운전면허 소지자'],
+        ),
+        null,
+        none,
+      );
+      expect(rows.map((r) => r.label), ['직접 확인 2개', '우대 사항 2개']);
+      expect(rows.last.state, CheckState.info);
+      expect(rows.last.evidences, ['외국어 능통자 (토익 850점 이상)', '운전면허 소지자']);
+    });
+
+    testWidgets('묶인 근거가 3개를 넘으면 접어 두고 펼칠 수 있다', (tester) async {
+      final repo = OneNoticeRepository(notice(unresolved: ['조건 1', '조건 2', '조건 3', '조건 4', '조건 5'], complete: false));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: gwittimTheme(),
+          home: ReportScreen(
+            repository: repo,
+            noticeId: 'n',
+            openUrl: (_) async => true,
+            today: today,
+            recommendation: const Recommendation(
+              noticeId: 'n',
+              score: null,
+              eligibilityStatus: 'needs_check',
+              reasonCodes: ['eligibility_needs_check'],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('직접 확인 5개'), findsOneWidget);
+      expect(find.text('5개 조건은 직접 확인해 주세요.'), findsOneWidget); // 개수는 묶기 전 조건 수
+      expect(find.text('조건 3'), findsOneWidget);
+      expect(find.text('조건 4'), findsNothing);
+      await tapVisible(tester, find.text('2개 더 보기'));
+      expect(find.text('조건 5'), findsOneWidget);
+      await tapVisible(tester, find.text('접기'));
+      expect(find.text('조건 5'), findsNothing);
     });
 
     test('서버 판정을 그대로 쓰고 프로필 값 이름을 붙인다', () {

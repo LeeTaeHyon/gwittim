@@ -97,7 +97,7 @@ def test_grounded_llm_output_is_merged(ollama):
     assert conds["major_id"] == "mjc.computer_engineering"
     assert fields["eligibility"]["extraction_complete"] is False  # 우대 조건 → 미완성
     assert fields["summary"].startswith("컴퓨터공학과")
-    assert "_analysis_version" not in fields and a.version == "rule-0.5+ollama:test-model"
+    assert "_analysis_version" not in fields and a.version == "rule-0.6+ollama:test-model"
 
 
 def test_hallucinations_are_rejected(ollama):
@@ -150,7 +150,7 @@ def test_ollama_failure_falls_back_to_rule_version(ollama):
     store = InMemoryStore()
     result = ingest(raw(), store)
     notice, issues = build_notice(store.records[result.key], today=date(2026, 10, 17), analyzer=analyzer(ollama))
-    assert notice["analysis_version"] == "rule-0.5"
+    assert notice["analysis_version"] == "rule-0.6"
     assert issues == [] and schema_errors("notice", notice) == []
 
 
@@ -165,7 +165,7 @@ def test_llm_notice_passes_validation(ollama):
     result = ingest(raw(), store)
     notice, issues = build_notice(store.records[result.key], today=date(2026, 10, 17), analyzer=analyzer(ollama))
     assert issues == []
-    assert notice["analysis_version"] == "rule-0.5+ollama:test-model"
+    assert notice["analysis_version"] == "rule-0.6+ollama:test-model"
 
 
 def test_summary_with_wrong_weekday_or_unknown_date_is_rejected(ollama):

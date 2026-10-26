@@ -134,7 +134,7 @@
       "required": ["evidence", "note"],
       "properties": {
         "evidence": { "type": "string", "minLength": 1 },
-        "note": { "type": ["string", "null"] }
+        "note": { "type": ["string", "null"], "description": "설명. '우대 사항'이면 지원 자격이 아니라 갖추면 유리한 조건 (D-015)." }
       }
     },
     "eligibility": {
