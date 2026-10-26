@@ -180,6 +180,50 @@ void main() {
     expect(tester.hasRunningAnimations, isTrue);
   });
 
+  testWidgets('예시는 7초마다 다음 세트로 넘어가 세 세트를 돌고, 버튼 자리는 그대로다', (tester) async {
+    final auth = FakeAuth();
+    await tester.pumpWidget(
+      AuthGate(auth: auth, repositoryFor: (_) => SampleNoticeRepository(), openUrl: (_) async => true),
+    );
+    auth.start();
+    await tester.pump();
+    final buttonTop = tester.getTopLeft(find.byType(GoogleSignInButton)).dy;
+    bool shown(String text) {
+      final f = find.textContaining(text);
+      if (find
+          .ancestor(of: f, matching: find.byWidgetPredicate((w) => w is Visibility && !w.visible))
+          .evaluate()
+          .isNotEmpty) {
+        return false;
+      }
+      return tester
+          .widgetList<Opacity>(find.ancestor(of: f, matching: find.byType(Opacity)))
+          .every((o) => o.opacity > 0.9);
+    }
+
+    await tester.pump(const Duration(milliseconds: 4000));
+    expect(shown('장학생 선발 공고'), isTrue);
+    expect(shown('학과·학년 조건이'), isFalse);
+
+    await tester.pump(const Duration(milliseconds: 7000)); // 11초: 2세트
+    expect(shown('학과·학년 조건이'), isTrue);
+    expect(shown('평점 조건은 공지에서 확인해요'), isTrue);
+    expect(shown('공모전 접수 · 오늘 마감'), isTrue);
+    expect(shown('장학생 선발 공고'), isFalse);
+    expect(tester.getTopLeft(find.byType(GoogleSignInButton)).dy, buttonTop);
+
+    await tester.pump(const Duration(milliseconds: 7000)); // 18초: 3세트
+    expect(shown('오늘 챙길 소식'), isTrue);
+    expect(shown('희망 직무와 관련 있어요'), isTrue);
+    expect(shown('해외 연수 · 정원 차면 마감돼요'), isTrue);
+    expect(tester.getTopLeft(find.byType(GoogleSignInButton)).dy, buttonTop);
+
+    await tester.pump(const Duration(milliseconds: 7000)); // 25초: 다시 1세트
+    expect(shown('장학생 선발 공고'), isTrue);
+    expect(shown('오늘 챙길 소식'), isFalse);
+    expect(find.textContaining('알림'), findsNothing); // 어느 세트도 알림을 약속하지 않는다
+  });
+
   testWidgets('애니메이션 줄이기 설정이면 예시 말풍선 셋이 그대로 보인다', (tester) async {
     tester.platformDispatcher.accessibilityFeaturesTestValue = FakeAccessibilityFeatures(disableAnimations: true);
     addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
