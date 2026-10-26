@@ -106,7 +106,9 @@ List<CheckRow> checklistRows(
       rows.add(CheckRow(CheckState.info, conditionFieldLabel(c.field), evidence: c.evidence));
     }
   }
+  final preferred = elig.preferredEvidence.toSet();
   for (final u in elig.unresolvedEvidence) {
+    if (preferred.contains(u)) continue;
     rows.add(
       CheckRow(
         CheckState.check,
@@ -117,6 +119,10 @@ List<CheckRow> checklistRows(
             : '자동으로 비교하지 못했어요. 학교 공지에서 확인해 주세요.',
       ),
     );
+  }
+  // 우대 사항은 지원 자격 뒤에, 확인 필요보다 약한 안내로 보인다 (D-015)
+  for (final u in elig.unresolvedEvidence.where(preferred.contains)) {
+    rows.add(CheckRow(CheckState.info, '우대 사항', evidence: u, note: '갖추면 유리한 조건이에요.'));
   }
   if (elig.conditions.isEmpty && elig.unresolvedEvidence.isEmpty) {
     rows.add(
@@ -562,13 +568,24 @@ class _Checklist extends StatelessWidget {
   }
 }
 
-class _CheckLine extends StatelessWidget {
+/// 묶인 줄에서 접기 전에 보이는 근거 수. 이보다 많으면 '○개 더 보기'로 펼친다.
+const checkPreviewCount = 3;
+
+class _CheckLine extends StatefulWidget {
   const _CheckLine({required this.row});
 
   final CheckRow row;
 
   @override
+  State<_CheckLine> createState() => _CheckLineState();
+}
+
+class _CheckLineState extends State<_CheckLine> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final row = widget.row;
     final check = row.state == CheckState.check;
     final c = context.gw;
     final box = switch (row.state) {
@@ -629,31 +646,64 @@ class _CheckLine extends StatelessWidget {
                         ),
                       ],
                     ),
-                    if (row.evidences.isNotEmpty)
-                      // 공고 원문 인용: 왼쪽 세로줄 상자. 짧은 근거는 형광펜, 길면 형광펜 없이 줄바꿈한다. 묶인 근거는 줄마다 하나씩.
-                      Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
-                        decoration: BoxDecoration(
-                          border: Border(left: BorderSide(color: c.line, width: 3)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('공고에 적힌 말', style: TextStyle(fontSize: 12, color: c.muted)),
-                            for (final (i, e) in row.evidences.indexed) ...[
-                              SizedBox(height: i == 0 ? 2 : 8),
-                              e.length <= 24
-                                  ? Text.rich(
-                                      TextSpan(
-                                        style: evidenceStyle,
-                                        children: [markSpan(e, evidenceStyle, color: check ? c.checkMark : null)],
-                                      ),
-                                    )
-                                  : Text(e, style: evidenceStyle),
-                            ],
-                          ],
-                        ),
+                    if (row.evidence case final single? when row.moreEvidence.isEmpty)
+                      // 공고 원문 인용: 왼쪽 세로줄 상자. 짧은 근거는 형광펜, 길면 형광펜 없이 줄바꿈한다.
+                      _Quote(
+                        children: [
+                          single.length <= 24
+                              ? Text.rich(
+                                  TextSpan(
+                                    style: evidenceStyle,
+                                    children: [markSpan(single, evidenceStyle, color: check ? c.checkMark : null)],
+                                  ),
+                                )
+                              : Text(single, style: evidenceStyle),
+                        ],
+                      )
+                    else if (row.evidences.isNotEmpty)
+                      // 묶인 근거: 형광펜 없이 점 목록. checkPreviewCount개를 넘으면 접어 둔다 (D-015)
+                      _Quote(
+                        children: [
+                          for (final e in _expanded ? row.evidences : row.evidences.take(checkPreviewCount))
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8, right: 8),
+                                    child: Container(
+                                      width: 4,
+                                      height: 4,
+                                      decoration: BoxDecoration(color: c.muted, shape: BoxShape.circle),
+                                    ),
+                                  ),
+                                  Expanded(child: Text(e, style: evidenceStyle)),
+                                ],
+                              ),
+                            ),
+                          if (row.evidences.length > checkPreviewCount)
+                            TextButton(
+                              onPressed: () => setState(() => _expanded = !_expanded),
+                              style: TextButton.styleFrom(
+                                foregroundColor: c.sub,
+                                minimumSize: const Size(48, 44),
+                                padding: const EdgeInsets.only(right: 4),
+                                textStyle: const TextStyle(
+                                  fontFamily: 'Pretendard',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(_expanded ? '접기' : '${row.evidences.length - checkPreviewCount}개 더 보기'),
+                                  Icon(_expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                   ],
                 ),
@@ -686,6 +736,33 @@ class _CheckLine extends StatelessWidget {
     decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(7)),
     child: icon,
   );
+}
+
+/// '공고에 적힌 말' 인용 상자 (왼쪽 세로줄)
+class _Quote extends StatelessWidget {
+  const _Quote({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: c.line, width: 3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('공고에 적힌 말', style: TextStyle(fontSize: 12, color: c.muted)),
+          const SizedBox(height: 2),
+          ...children,
+        ],
+      ),
+    );
+  }
 }
 
 class _Reasons extends StatelessWidget {

@@ -275,3 +275,63 @@ def test_end_to_end_into_recommendation():
     out = recommend(notices, profile, today=TODAY, generated_at="2026-10-17T03:05:00Z")
     assert schema_errors("recommendation_list_response", out) == []
     assert out["items"][0]["notice"]["title"] == "[합성 샘플] 공고 1"
+
+
+# ---------- 미해석 조건 정리 (D-015) ----------
+
+CTS_LIKE = (
+    "2. 지원자격 및 우대사항\n"
+    "공통 / ○ 해외여행 결격 사유가 없는 자\n"
+    "우대사항 / ○ 외국어 능통자 (토익 850점 이상)\n"
+    "○ 근무지 인접 거주자 우대\n"
+    "○ 운전면허 소지자\n"
+    "3. 지원방법 및 제출서류\n"
+    "[이미지 설명]\n"
+    "○ 근무지 인접 거주자 우대\n"
+)
+
+
+def test_tidy_unresolved_strips_marks_dedupes_and_marks_preferred():
+    from backend.analysis.rules import PREFERRED_NOTE, tidy_unresolved
+
+    lines = CTS_LIKE.splitlines()
+    items = [{"evidence": e, "note": None} for e in ("2. 지원자격 및 우대사항", "우대사항 / ○ 외국어 능통자 (토익 850점 이상)", "○ 근무지 인접 거주자 우대")]
+    items += [{"evidence": e, "note": "LLM 추출"} for e in ("해외여행 결격 사유가 없는 자", "근무지 인접 거주자 우대", "운전면허 소지자")]
+    out, dropped = tidy_unresolved(items, lines)
+    assert dropped is True  # 제목 줄을 뺐다
+    assert [(o["evidence"], o["note"]) for o in out] == [
+        ("외국어 능통자 (토익 850점 이상)", PREFERRED_NOTE),
+        ("근무지 인접 거주자 우대", PREFERRED_NOTE),
+        ("해외여행 결격 사유가 없는 자", "LLM 추출"),
+        ("운전면허 소지자", PREFERRED_NOTE),  # '우대사항' 항목 아래 줄
+    ]
+
+
+@pytest.mark.parametrize(
+    "line, preferred",
+    [
+        ("우대사항: 공공분야 법률업무 관련 근무경력", True),
+        ("자격요건 및 우대사항은 접수마감일 기준으로 충족해야 함", False),
+        ("면접점수가 60점 미만인 경우 우대가점을 포함하더라도 과락 처리", False),
+        ("자금운용 / 필수요건: CFA, FRM 중 1개 이상 보유", False),
+    ],
+)
+def test_preferred_only_when_condition_itself_is_preferred(line, preferred):
+    from backend.analysis.rules import PREFERRED_NOTE, tidy_unresolved
+
+    out, _ = tidy_unresolved([{"evidence": line, "note": None}], [line])
+    assert (out[0]["note"] == PREFERRED_NOTE) is preferred
+
+
+def test_heading_only_unresolved_keeps_extraction_incomplete():
+    fields = RuleBasedAnalyzer().analyze(raw_notice("대상: 우리대학 재학생\n자격요건"), MJC)
+    elig = fields["eligibility"]
+    assert elig["unresolved_conditions"] == []  # 제목 줄은 체크리스트에 넣지 않는다
+    assert elig["extraction_complete"] is False  # 그 아래 조건을 다 읽었다고 볼 수 없다
+
+
+def test_tidied_evidence_still_passes_source_check():
+    record, _ = record_for(raw_notice(CTS_LIKE))
+    notice, issues = build_notice(record, today=TODAY)
+    assert issues == []
+    assert "○" not in "".join(u["evidence"] for u in notice["eligibility"]["unresolved_conditions"])
