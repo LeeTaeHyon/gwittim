@@ -16,7 +16,7 @@ from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
 
-ANALYSIS_VERSION = "rule-0.4"  # 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
+ANALYSIS_VERSION = "rule-0.5"  # 0.5: 근로·근무 기간은 마감 아님. 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
 
 
 class Analyzer(Protocol):
@@ -151,7 +151,17 @@ MAJOR_RULES = {
 }
 
 START_DEADLINE = re.compile(r"신청\s*기간|접수\s*기간|모집\s*기간|공모\s*기간|원서\s*접수|신청\s*기한|접수\s*기한|제출\s*기한|마감|까지")
-ACTIVITY = re.compile(r"활동\s*기간|교육\s*기간|운영\s*기간|행사\s*기간|연수\s*기간")
+ACTIVITY = re.compile(
+    r"활동\s*기간|교육\s*기간|운영\s*기간|행사\s*기간|연수\s*기간|근로\s*기간|근무\s*기간|실습\s*기간|계약\s*기간|파견\s*기간"
+)
+# 활동 기간 줄의 '~ 12.14.(월)까지'는 신청 마감이 아니다. 신청·접수를 함께 말할 때만 마감으로 본다.
+APPLY = re.compile(r"신청|접수|모집|공모|원서|제출")
+
+
+def is_activity_line(line: str) -> bool:
+    return bool(ACTIVITY.search(line)) and not APPLY.search(line)
+
+
 NOTE = re.compile(r"선착순|예산\s*소진|조기\s*마감")
 
 GRADE_RANGE = re.compile(r"([1-4])\s*[~\-–]\s*([1-4])\s*학년")
@@ -224,7 +234,7 @@ class RuleBasedAnalyzer:
             start, end = parse_line(line)
             if start is None:
                 continue
-            if out["application_deadline"] is None and START_DEADLINE.search(line):
+            if out["application_deadline"] is None and START_DEADLINE.search(line) and not is_activity_line(line):
                 if end:
                     out["application_start"] = date_info(start, line, tz)
                     out["application_deadline"] = date_info(end, line, tz)
