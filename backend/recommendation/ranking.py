@@ -3,7 +3,14 @@ from __future__ import annotations
 
 from datetime import date
 
-from .config import EXCLUDED_CATEGORIES, EXCLUDED_LIFECYCLE, EXCLUDED_PUBLICATION, MAX_LIMIT, RANKING_VERSION
+from .config import (
+    EXCLUDED_CATEGORIES,
+    EXCLUDED_LIFECYCLE,
+    EXCLUDED_PUBLICATION,
+    MAX_LIMIT,
+    RANKING_VERSION,
+    STALE_UNKNOWN_DAYS,
+)
 from .eligibility import evaluate
 from .scoring import factors, score
 
@@ -22,6 +29,14 @@ _SUMMARY_FIELDS = (
 _FACTOR_REASONS = {"interest": "interest_match", "role": "role_match", "major": "major_match"}
 
 
+def is_stale(notice: dict, today: date) -> bool:
+    """마감일을 모르는 채로 게시 후 STALE_UNKNOWN_DAYS일이 지난 공고. 게시일 미상이면 판단하지 않는다."""
+    published = notice["published"]
+    if notice["lifecycle_status"] != "unknown" or published is None:
+        return False
+    return (today - date.fromisoformat(published["date"])).days > STALE_UNKNOWN_DAYS
+
+
 def has_personal_input(profile: dict) -> bool:
     return bool(profile.get("interest_ids") or profile.get("target_role_ids") or profile.get("major_id"))
 
@@ -29,7 +44,7 @@ def has_personal_input(profile: dict) -> bool:
 def recommend(notices: list[dict], profile: dict, *, today: date, generated_at: str, limit: int = 20) -> dict:
     """list_recommendations 응답을 만든다.
 
-    - review_pending, closed, removed, not_met, 행정 공지(admin_notice)는 기본 추천에서 제외
+    - review_pending, closed, removed, not_met, 행정 공지(admin_notice), 오래된 마감 미상 공고는 기본 추천에서 제외
     - 프로필에 관심사·직무·전공이 없으면 mode=latest: 점수 없이 게시일 내림차순
     - 정렬: 점수 내림차순(점수 없음은 뒤) → 게시일 내림차순(미상은 뒤) → notice_id
     - 초기에는 소량 결과를 한 번에 돌려준다 (next_cursor=None, SPEC §7)
@@ -43,6 +58,7 @@ def recommend(notices: list[dict], profile: dict, *, today: date, generated_at: 
             notice["lifecycle_status"] in EXCLUDED_LIFECYCLE
             or notice["publication_status"] in EXCLUDED_PUBLICATION
             or notice["category"] in EXCLUDED_CATEGORIES
+            or is_stale(notice, today)
         ):
             continue
         status, condition_results = evaluate(notice["eligibility"], profile)

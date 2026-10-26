@@ -16,7 +16,7 @@ from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
 
-ANALYSIS_VERSION = "rule-0.2"  # 0.2: 부서명 오탐 제거, 직무·학과 키워드, 비학생 공지(admin_notice)
+ANALYSIS_VERSION = "rule-0.3"  # 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
 
 
 class Analyzer(Protocol):
@@ -42,6 +42,12 @@ ADMIN_TITLE = re.compile(
     r"(?:교수|교원|강사|직원|조교)\s*(?:초빙|공개\s*채용|채용)|교직원|정기\s*점검|안전\s*진단|주차장|청소\s*작업|보건실"
     r"|국민\s*행동\s*요령|라이선스|입찰|휴무|정전|단수|시스템\s*점검"
 )
+# 채용공지 게시판의 외부 기관 '직원 채용'은 학생이 지원할 채용이다. 이 게시판에서는 학교의 교원·교직원 채용만 행정 공지로 본다.
+JOB_BOARD_ADMIN_TITLE = re.compile(r"(?:교수|교원|강사|조교)\s*(?:초빙|공개\s*채용|채용)|교직원|명지전문대학?\s*(?:신규\s*)?직원")
+JOB_BOARDS = {"mjc_www_job"}
+
+# 장학·학사 공지 본문은 여러 장학 종류와 서류를 나열해서 키워드가 엉뚱하게 걸린다. 꼬리표는 제목에서만 찾는다.
+TITLE_ONLY_TAG_CATEGORIES = {"scholarship", "academic"}
 
 # 꼬리표 키워드 판정 전에 지우는 부서·센터 이름 (예: '취·창업팀'이 창업 공고로, 'AI·IR센터'가 AI 공고로 잡히던 문제)
 TAG_NOISE = re.compile(
@@ -52,34 +58,39 @@ CATEGORY_RULES = [
     ("contest", r"공모전|경진대회|해커톤|대회"),
     ("scholarship", r"장학"),
     ("internship", r"인턴|현장실습"),
-    ("job", r"채용|구인"),
+    ("job", r"채용|구인|근로\s*학생"),
     ("volunteer", r"봉사"),
     ("global", r"해외|연수|교환학생|유학(?!생)"),
     ("startup", r"창업"),
     ("extracurricular", r"비교과|마일리지|역량"),
     ("education_program", r"교육생|특강|강좌|과정|교육"),
     ("event", r"행사|박람회|축제|설명회|포럼|바자회"),
-    ("academic", r"수강|학사|성적|졸업|등록금|강의평가|시험"),
+    ("academic", r"수강\s*(?:신청|정정|철회)|학사|성적|졸업|등록금|강의평가|시험"),  # '콘텐츠 수강 안내'는 학사 안내가 아님
 ]
+
+# 공공기관 채용(채용공지의 공단·공사 공고). '공사'는 건설 공사와 겹쳐서 기관 이름 꼴만 본다.
+PUBLIC_ORG = (
+    r"공무원|공공기관|공기업|공단|(?:도시|에너지|공항|관광|주택|도로|철도|가스|전력|교육방송)\s*공사|관리원|진흥원|기술원"
+)
 
 INTEREST_RULES = {
     "ai_data": r"\bAI\b|인공지능|빅\s*데이터|데이터\s*(?:분석|사이언스|과학|엔지니어)",
     "software": r"소프트웨어|개발자|코딩|프로그래밍|\bSW\b|해커톤|앱\s*개발",
     "security": r"정보\s*보안|사이버\s*보안|해킹",
     "electronics_hw": r"전자|반도체|하드웨어|전기\s*공학|임베디드",
-    "mechanical_manufacturing": r"기계|제조|생산\s*관리|스마트\s*팩토리",
+    "mechanical_manufacturing": r"기계|제조|생산\s*(?:관리|직)|스마트\s*팩토리",
     "construction_spatial": r"건설|토목|공간정보|드론|측량",
     "design": r"디자인",
-    "media_content": r"영상|미디어|콘텐츠",
-    "business_marketing": r"마케팅|경영|비즈니스",
-    "finance_accounting": r"금융|회계|세무",
+    "media_content": r"영상|미디어|콘텐츠|방송|취재|기자(?!단|재)",
+    "business_marketing": r"마케팅|경영|비즈니스|세일즈|영업(?!일|\s*시간)",
+    "finance_accounting": r"금융|회계|세무|재무|Financ",
     "startup": r"창업",
     "global_language": r"해외|외국어|어학|글로벌|교환\s*학생|유학(?!생)|일본어|중국어",  # '외국인 유학생'은 제외
     "education_welfare": r"유아\s*교육|사회복지|청소년|상담사|(?<!창업)보육",
     "health": r"보건의료|의료|간호",
     "culture_arts": r"문화|예술|공연|음악|문학|글쓰기",
     "sports": r"스포츠|체육",
-    "public_service": r"공공기관|공무원|공기업",
+    "public_service": PUBLIC_ORG,
     "volunteering": r"봉사",
 }
 
@@ -88,18 +99,18 @@ ROLE_RULES = {
     "data_ai": r"데이터\s*(?:분석|엔지니어|사이언스)|인공지능|머신\s*러닝|딥\s*러닝|AI\s*(?:개발|모델|엔지니어|서비스|경진|해커톤)",
     "security_engineer": r"정보\s*보안|보안\s*(?:엔지니어|전문)|해킹|CTF",
     "hw_engineer": r"반도체|임베디드|전자\s*회로|전기\s*기사",
-    "mechanical_engineer": r"기계\s*설계|\bCAD\b|스마트\s*팩토리|생산\s*관리",
+    "mechanical_engineer": r"기계\s*설계|\bCAD\b|스마트\s*팩토리|생산\s*(?:관리|직)",
     "civil_engineer": r"토목|건설\s*(?:현장|기술)|측량",
     "designer": r"디자이너|디자인\s*공모|\bUX\b|UI\s*디자인|시각\s*디자인",
-    "content_creator": r"콘텐츠\s*제작|영상\s*(?:제작|편집|공모)|크리에이터|유튜브|숏폼",
-    "marketer": r"마케터|마케팅|서포터즈|홍보\s*(?:대사|기자단)",
+    "content_creator": r"콘텐츠\s*제작|영상\s*(?:제작|편집|공모)|크리에이터|유튜브|숏폼|취재|기자(?!단|재)",
+    "marketer": r"마케터|마케팅|서포터즈|홍보\s*(?:대사|기자단)|세일즈|영업(?!일|\s*시간)",
     "office_admin": r"사무원|경영\s*지원|사무\s*보조|행정\s*(?:직원|보조|인턴)",
-    "accountant": r"회계|세무",
-    "service": r"승무원|항공\s*서비스|호텔\s*(?:리어|경영|서비스)|서비스직",
+    "accountant": r"회계|세무|재무|Financial",
+    "service": r"승무원|(?:항공|공항)\s*서비스|호텔\s*(?:리어|경영|서비스)|서비스직",
     "educator": r"교사|보육\s*교사|교육\s*봉사|학습\s*멘토|튜터",
     "social_worker": r"사회복지",
     "healthcare": r"간호|보건의료|병원\s*(?:행정|실습)",
-    "public_official": r"공무원|공공기관\s*(?:채용|인턴)|공기업",
+    "public_official": PUBLIC_ORG,
     "artist": r"실용음악|작곡|연극|전시회",
     "entrepreneur": r"창업",
 }
@@ -149,6 +160,8 @@ GRADE_ONE = re.compile(r"(?<![~\-–,·\d])([1-4])\s*학년\s*(?:만|대상|재�
 UNIVERSITY = re.compile(r"우리\s*대학|본교")
 UNRESTRICTED = re.compile(r"누구나|제한\s*없|학년\s*무관|전공\s*무관")
 UNRESOLVED = re.compile(r"평점|학점|성적|소득|연령|나이|만\s*\d+\s*세|우대|요건")
+# 제출 서류 목록(성적증명서 등)과 '성적에 관계없이'는 지원 조건이 아니다
+NOT_CONDITION = re.compile(r"서류|증명서|확인서|사본|신청서|관계\s*없이|무관")
 SEE_ATTACHMENT = re.compile(r"(?:첨부|붙임|모집요강)[^\n]{0,10}참(?:조|고)")
 
 
@@ -166,13 +179,15 @@ class RuleBasedAnalyzer:
     def analyze(self, raw: dict, source: SourceConfig) -> dict:
         title, lines = raw["title"], _lines(raw)
         text = title + "\n" + "\n".join(lines)
-        admin = bool(ADMIN_TITLE.search(title))
-        tag_text = "" if admin else TAG_NOISE.sub(" ", text)  # 비학생 공지는 꼬리표 없음
+        admin = bool((JOB_BOARD_ADMIN_TITLE if raw["source_id"] in JOB_BOARDS else ADMIN_TITLE).search(title))
+        category = "admin_notice" if admin else self._category(TAG_NOISE.sub(" ", title), TAG_NOISE.sub(" ", text))
+        tag_source = title if category in TITLE_ONLY_TAG_CATEGORIES else text
+        tag_text = "" if admin else TAG_NOISE.sub(" ", tag_source)  # 비학생 공지는 꼬리표 없음
         majors = {m["id"] for m in _dictionary("majors")}
         named = [m["id"] for m in _dictionary("majors") if m["name_ko"] in tag_text]
         return {
             "summary": None,  # 검증된 요약은 LLM 단계 이후
-            "category": "admin_notice" if admin else self._category(title, text),
+            "category": category,
             "interest_tags": _codes(INTEREST_RULES, tag_text, {i["id"] for i in _dictionary("interests")}),
             "related_majors": named + [c for c in _codes(MAJOR_RULES, tag_text, majors) if c not in named],
             "related_roles": _codes(ROLE_RULES, tag_text, {r["id"] for r in _dictionary("roles")}),
@@ -242,7 +257,7 @@ class RuleBasedAnalyzer:
             if named:
                 add("major_id", "eq" if len(named) == 1 else "in", named[0] if len(named) == 1 else named, line)
 
-            if UNRESOLVED.search(line) or SEE_ATTACHMENT.search(line):
+            if (UNRESOLVED.search(line) and not NOT_CONDITION.search(line)) or SEE_ATTACHMENT.search(line):
                 unresolved.append({"evidence": line, "note": None})
             if unrestricted_line is None and UNRESTRICTED.search(line):
                 unrestricted_line = line

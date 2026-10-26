@@ -10,6 +10,14 @@ import 'icons.dart';
 import 'skeleton.dart';
 import 'theme.dart';
 
+/// 수집 게시판 이름 (D-013). 서버 출처 설정(backend/sources.py)과 맞춘다.
+const _sourceNames = {
+  'mjc_www_notice': '명지전문대 공지사항',
+  'mjc_www_scholarship': '명지전문대 장학공지',
+  'mjc_www_job': '명지전문대 채용공지',
+  'mjc_www_work': '명지전문대 근로게시판',
+};
+
 /// 체크리스트 한 줄의 상태
 enum CheckState { met, notMet, check, info }
 
@@ -276,7 +284,7 @@ class _ReportScreenState extends State<ReportScreen> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
-                          '명지전문대 공지사항',
+                          _sourceNames[notice.sourceId] ?? '명지전문대 학교 공지',
                           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.sub),
                         ),
                         if (n.published != null)

@@ -2,6 +2,8 @@ import json
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 from backend.analysis import RuleBasedAnalyzer, build_notice, validate
 from backend.collectors.common import InMemoryStore, content_hash, ingest
 from backend.contracts import schema_errors
@@ -117,6 +119,63 @@ def test_staff_notice_is_admin_without_tags():
     )
     assert fields["category"] == "admin_notice"
     assert fields["interest_tags"] == [] and fields["related_roles"] == [] and fields["related_majors"] == []
+
+
+def test_job_board_outside_staff_hiring_is_a_job():
+    job = source_config("mjc_www_job")
+    outside = raw_notice("", title="[일반채용] 한국수산자원공단 2026년도 제1차 직원 채용 공고", source_id="mjc_www_job")
+    fields = RuleBasedAnalyzer().analyze(outside, job)
+    assert fields["category"] == "job"
+    assert "public_official" in fields["related_roles"] and "public_service" in fields["interest_tags"]
+    lecturer = raw_notice("", title="[강사초빙] 2026. 9. 1.자 명지전문대학 강사 공개채용 공고", source_id="mjc_www_job")
+    assert RuleBasedAnalyzer().analyze(lecturer, job)["category"] == "admin_notice"
+    # 공지사항 게시판의 '직원 채용'은 지금처럼 학교 직원 채용으로 본다
+    staff = raw_notice("", title="2026년 하반기 직원 채용 공고")
+    assert RuleBasedAnalyzer().analyze(staff, MJC)["category"] == "admin_notice"
+
+
+def test_job_keyword_lookalikes_are_not_tags():
+    fields = RuleBasedAnalyzer().analyze(raw_notice("실습 기자재 지원 프로그램\n결과는 3영업일 이내 안내"), MJC)
+    assert not {"media_content", "business_marketing"} & set(fields["interest_tags"])
+    assert not {"content_creator", "marketer"} & set(fields["related_roles"])
+
+
+def test_department_name_does_not_set_category():
+    fields = RuleBasedAnalyzer().analyze(raw_notice("", title="[모집] 2026-2학기 취ㆍ창업팀 근로학생 모집(화요일)"), MJC)
+    assert fields["category"] == "job"
+
+
+def test_scholarship_tags_come_from_title_only():
+    body = "1. 장학 종류: 문화예술 장학, 글로벌 인재 장학, 기계·제조 분야 장학\n2. 제출 서류: 금융거래 확인서"
+    plain = RuleBasedAnalyzer().analyze(raw_notice(body, title="2026-2학기 재학생 교내장학종별 장학금 신청 안내"), MJC)
+    assert plain["category"] == "scholarship" and plain["interest_tags"] == []
+    abroad = RuleBasedAnalyzer().analyze(raw_notice(body, title="화성시인재육성재단 「해외유학 장학금」 안내"), MJC)
+    assert abroad["interest_tags"] == ["global_language"]
+
+
+def test_document_lists_are_not_unresolved_conditions():
+    body = "대상: 우리대학 재학생\n제출 서류: 성적증명서 및 통장사본 각 1부\n성적에 관계없이 신청 가능"
+    fields = RuleBasedAnalyzer().analyze(raw_notice(body), MJC)
+    assert fields["eligibility"]["unresolved_conditions"] == []
+    assert fields["eligibility"]["extraction_complete"] is True
+
+
+@pytest.mark.parametrize(
+    "title, expected",
+    [
+        ("[모집완료] [교수학습센터] 2026-2학기 국가근로장학생 추가 모집", "closed"),
+        ("(모집완료)[도서관] 2026-2학기 국가근로장학생 모집", "closed"),
+        ("[마감] 선교지원팀 국가근로장학생 모집(주간)", "closed"),
+        ("(마감) [교수학습센터] 하계방학 국가근로장학생 모집", "closed"),
+        ("[모집 마감]_(생활관운영팀) 2026-1학기 국가근로장학생 모집 완료", "closed"),
+        ("[마감임박] 2026 아이디어 경진대회 참가 안내", "open"),
+        ("2026 아이디어 경진대회 모집 마감일 연장 안내", "open"),
+    ],
+)
+def test_closed_by_title(title, expected):
+    record, _ = record_for(raw_notice(CONTEST, title=title))
+    notice, _ = build_notice(record, today=TODAY)
+    assert notice["lifecycle_status"] == expected
 
 
 def test_build_notice_is_schema_valid_and_published():
