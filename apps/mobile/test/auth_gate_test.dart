@@ -11,9 +11,12 @@ import 'package:gwittim/ui/profile_screen.dart';
 import 'package:gwittim/ui/theme.dart';
 
 class FakeAuth implements AuthService {
-  FakeAuth({this.failWith});
+  FakeAuth({this.failWith, this.completes = true});
 
   final Object? failWith;
+
+  /// false면 로그인 창이 닫히거나 뜨지 않은 것처럼 false를 돌려준다
+  final bool completes;
   final _state = StreamController<bool>.broadcast();
   bool _signedIn = false;
   int signInCalls = 0;
@@ -30,6 +33,7 @@ class FakeAuth implements AuthService {
   Future<bool> signInWithGoogle() async {
     signInCalls++;
     if (failWith != null) throw failWith!;
+    if (!completes) return false;
     _signedIn = true;
     _state.add(true);
     return true;
@@ -134,5 +138,23 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('로그인하지 못했어요. 잠시 후 다시 시도해 주세요.'), findsOneWidget);
     expect(find.textContaining('DEVELOPER_ERROR'), findsNothing);
+  });
+
+  testWidgets('로그인이 끝나지 않고 돌아오면 계정 확인 안내', (tester) async {
+    final auth = FakeAuth(completes: false);
+    await tester.pumpWidget(
+      AuthGate(auth: auth, repositoryFor: (_) => SampleNoticeRepository(), openUrl: (_) async => true),
+    );
+    auth.start();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Google 계정으로 시작하기'));
+    await tester.pumpAndSettle();
+    expect(find.text('로그인을 마치지 못했어요. 기기에 Google 계정이 있는지 확인해 주세요.'), findsOneWidget);
+    // 로그인 화면에 남고, 알림이 사라지면 다시 누를 수 있다
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Google 계정으로 시작하기'));
+    await tester.pump();
+    expect(auth.signInCalls, 2);
   });
 }
