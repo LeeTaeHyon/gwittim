@@ -143,7 +143,7 @@ void main() {
     expect(find.textContaining('DEVELOPER_ERROR'), findsNothing);
   });
 
-  testWidgets('예시 말풍선: 입력 중 표시 뒤에 하나씩 튀어나오고, 다 나온 뒤 흐려지며 되풀이한다', (tester) async {
+  testWidgets('장면 1 말풍선: 입력 중 표시 뒤에 하나씩 튀어나오고, 다 나온 뒤 흐려진다', (tester) async {
     final auth = FakeAuth();
     await tester.pumpWidget(
       AuthGate(auth: auth, repositoryFor: (_) => SampleNoticeRepository(), openUrl: (_) async => true),
@@ -175,56 +175,79 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 2700)); // 6.7초: 흐려짐
     expect(opacityOf('장학생 선발 공고'), lessThan(0.1));
-    await tester.pump(const Duration(milliseconds: 800)); // 다음 바퀴 첫 입력 중
-    expect(typing, findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 800)); // 다음 장면
+    expect(typing, findsNothing);
     expect(tester.hasRunningAnimations, isTrue);
   });
 
-  testWidgets('예시는 7초마다 다음 세트로 넘어가 세 세트를 돌고, 버튼 자리는 그대로다', (tester) async {
+  /// 안 보이는 장면(자리만 차지)에 있거나 흐린 글자는 보이지 않는 것으로 친다.
+  bool shown(WidgetTester tester, String text) {
+    final f = find.textContaining(text);
+    final hidden = find.ancestor(of: f, matching: find.byWidgetPredicate((w) => w is Visibility && !w.visible));
+    if (hidden.evaluate().isNotEmpty) return false;
+    return tester
+        .widgetList<Opacity>(find.ancestor(of: f, matching: find.byType(Opacity)))
+        .every((o) => o.opacity > 0.9);
+  }
+
+  Future<void> pumpSignIn(WidgetTester tester) async {
     final auth = FakeAuth();
     await tester.pumpWidget(
       AuthGate(auth: auth, repositoryFor: (_) => SampleNoticeRepository(), openUrl: (_) async => true),
     );
     auth.start();
     await tester.pump();
+  }
+
+  testWidgets('소개 장면: 말풍선 → 체크리스트 → 관심 분야로 바뀌는 추천 순서, 버튼 자리는 그대로', (tester) async {
+    await pumpSignIn(tester);
     final buttonTop = tester.getTopLeft(find.byType(GoogleSignInButton)).dy;
-    bool shown(String text) {
-      final f = find.textContaining(text);
-      if (find
-          .ancestor(of: f, matching: find.byWidgetPredicate((w) => w is Visibility && !w.visible))
-          .evaluate()
-          .isNotEmpty) {
-        return false;
-      }
-      return tester
-          .widgetList<Opacity>(find.ancestor(of: f, matching: find.byType(Opacity)))
-          .every((o) => o.opacity > 0.9);
-    }
+    double fill(int k) => tester
+        .getSize(find.descendant(of: find.byKey(ValueKey('progress-$k')), matching: find.byType(DecoratedBox)).last)
+        .width;
 
     await tester.pump(const Duration(milliseconds: 4000));
-    expect(shown('장학생 선발 공고'), isTrue);
-    expect(shown('학과·학년 조건이'), isFalse);
+    expect(shown(tester, '장학생 선발 공고'), isTrue);
+    expect(shown(tester, '지원 전 체크리스트'), isFalse);
 
-    await tester.pump(const Duration(milliseconds: 7000)); // 11초: 2세트
-    expect(shown('학과·학년 조건이'), isTrue);
-    expect(shown('평점 조건은 공지에서 확인해요'), isTrue);
-    expect(shown('공모전 접수 · 오늘 마감'), isTrue);
-    expect(shown('장학생 선발 공고'), isFalse);
+    await tester.pump(const Duration(milliseconds: 5000)); // 9초: 장면 2, 조건 줄이 하나씩
+    expect(shown(tester, '지원 전 체크리스트'), isTrue);
+    expect(shown(tester, '컴퓨터공학과'), isTrue);
+    expect(shown(tester, '공지에서 직접 확인'), isFalse);
+    expect(shown(tester, '장학생 선발 공고'), isFalse);
+    expect(fill(0), 20); // 지난 장면은 채워져 있다
+    expect(fill(1), inExclusiveRange(0, 20));
+    await tester.pump(const Duration(milliseconds: 2000)); // 11초
+    expect(shown(tester, '공지에서 직접 확인'), isTrue);
+    expect(shown(tester, '2개는 맞아요'), isTrue);
     expect(tester.getTopLeft(find.byType(GoogleSignInButton)).dy, buttonTop);
 
-    await tester.pump(const Duration(milliseconds: 7000)); // 18초: 3세트
-    expect(shown('오늘 챙길 소식'), isTrue);
-    expect(shown('희망 직무와 관련 있어요'), isTrue);
-    expect(shown('해외 연수 · 정원 차면 마감돼요'), isTrue);
+    double y(String text) => tester.getTopLeft(find.text(text)).dy;
+    await tester.pump(const Duration(milliseconds: 3500)); // 14.5초: 장면 3, 아직 원래 순서
+    expect(shown(tester, '추천 순서가 바뀌어요'), isTrue);
+    expect(y('AI 해커톤 참가자 모집'), greaterThan(y('교내 디자인 공모전')));
+    await tester.pump(const Duration(milliseconds: 3000)); // 17.5초: 관심 분야 칩을 고른 뒤
+    expect(y('AI 해커톤 참가자 모집'), lessThan(y('교내 디자인 공모전')));
+    expect(shown(tester, '관심 분야 '), isTrue);
     expect(tester.getTopLeft(find.byType(GoogleSignInButton)).dy, buttonTop);
 
-    await tester.pump(const Duration(milliseconds: 7000)); // 25초: 다시 1세트
-    expect(shown('장학생 선발 공고'), isTrue);
-    expect(shown('오늘 챙길 소식'), isFalse);
-    expect(find.textContaining('알림'), findsNothing); // 어느 세트도 알림을 약속하지 않는다
+    await tester.pump(const Duration(milliseconds: 4000)); // 21.5초: 다시 장면 1
+    expect(shown(tester, '추천 순서가 바뀌어요'), isFalse);
+    expect(find.byKey(const ValueKey('typing')), findsOneWidget);
+    expect(find.textContaining('알림'), findsNothing); // 어느 장면도 알림을 약속하지 않는다
   });
 
-  testWidgets('애니메이션 줄이기 설정이면 예시 말풍선 셋이 그대로 보인다', (tester) async {
+  testWidgets('소개 장면을 누르면 다음 장면으로 넘어간다', (tester) async {
+    await pumpSignIn(tester);
+    await tester.pump(const Duration(milliseconds: 2000));
+    await tester.tap(find.text('장학생 선발 공고 · D-6'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1000));
+    expect(shown(tester, '지원 전 체크리스트'), isTrue);
+    expect(tester.hasRunningAnimations, isTrue); // 넘어간 뒤에도 계속 돈다
+  });
+
+  testWidgets('애니메이션 줄이기 설정이면 장면이 멈춰 있고, 누를 때만 넘어간다', (tester) async {
     tester.platformDispatcher.accessibilityFeaturesTestValue = FakeAccessibilityFeatures(disableAnimations: true);
     addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
     final auth = FakeAuth();
@@ -239,5 +262,11 @@ void main() {
       find.ancestor(of: find.text('발표회 마감이 3일 늦춰졌어요'), matching: find.byType(Opacity)),
     );
     expect(opacities.every((o) => o.opacity == 1), isTrue);
+    expect(find.byKey(const ValueKey('progress-0')), findsOneWidget);
+
+    await tester.tap(find.text('장학생 선발 공고 · D-6'));
+    await tester.pump();
+    expect(shown(tester, '공지에서 직접 확인'), isTrue); // 움직이지 않고 다 보인 채로 넘어간다
+    expect(tester.hasRunningAnimations, isFalse);
   });
 }
