@@ -6,6 +6,7 @@ import '../ui/theme.dart';
 
 /// 로그인 화면의 기능 소개 장면. 세 장면이 7초씩 돌아간다.
 /// 1 소식 말풍선(D-010 예시) → 2 지원 전 체크리스트 → 3 관심 분야를 고르면 바뀌는 추천 순서.
+/// 말풍선은 꼬리 쪽에서 톡 튀어나오고, 체크리스트·추천 카드는 아래에서 올라온다.
 /// 장면은 크기·투명도만 바꾸고 자리는 가장 큰 장면만큼 늘 차지해서 아래 버튼이 움직이지 않는다.
 /// 장면을 누르면 다음 장면으로 넘어간다. 애니메이션 줄이기 설정이면 움직이지 않고, 누를 때만 넘어간다.
 /// 문구는 앱에 실제로 있는 기능만 쓰고 알림은 약속하지 않는다(푸시 알림은 P0 제외).
@@ -110,49 +111,9 @@ class _SignInDemoState extends State<SignInDemo> with SingleTickerProviderStateM
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            _Progress(scene: scene, t: still ? 1 : ms / _scene),
           ],
         );
       },
-    );
-  }
-}
-
-/// 장면 진행 표시. 지난 장면은 채워져 있고, 지금 장면은 시간에 따라 찬다.
-class _Progress extends StatelessWidget {
-  const _Progress({required this.scene, required this.t});
-
-  final int scene;
-  final double t;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gw;
-    return ExcludeSemantics(
-      child: Row(
-        spacing: 6,
-        children: [
-          for (var k = 0; k < _scenes; k++)
-            Container(
-              key: ValueKey('progress-$k'),
-              width: 20,
-              height: 4,
-              decoration: BoxDecoration(
-                color: c.loginSub.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-              alignment: Alignment.centerLeft,
-              child: FractionallySizedBox(
-                widthFactor: k < scene ? 1 : (k == scene ? t.clamp(0.0, 1.0) : 0),
-                heightFactor: 1,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(color: c.loginInk, borderRadius: BorderRadius.circular(2)),
-                ),
-              ),
-            ),
-        ],
-      ),
     );
   }
 }
@@ -164,11 +125,18 @@ const _bubbleRadius = BorderRadius.only(
   bottomLeft: Radius.circular(6),
 );
 
-/// 장면 카드가 꼬리 쪽에서 톡 튀어나온다.
+/// 말풍선이 꼬리 쪽에서 톡 튀어나온다.
 Widget _popIn(double p, Widget child) => Opacity(
   opacity: Curves.easeOut.transform((p * 2).clamp(0.0, 1.0)),
   alwaysIncludeSemantics: true,
   child: Transform.scale(scale: 0.6 + 0.4 * _pop.transform(p), alignment: Alignment.bottomLeft, child: child),
+);
+
+/// 카드가 아래에서 올라오며 나타난다.
+Widget _riseIn(double p, Widget child) => Opacity(
+  opacity: Curves.easeOut.transform(p),
+  alwaysIncludeSemantics: true,
+  child: Transform.translate(offset: Offset(0, 24 * (1 - Curves.easeOutCubic.transform(p))), child: child),
 );
 
 TextStyle _kicker(Color color) => TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color);
@@ -328,7 +296,7 @@ Widget _tag(GwColors c, String text) => Container(
   ),
 );
 
-/// 장면 2: 공고 리포트의 지원 전 체크리스트. 조건 줄이 하나씩 들어오며 체크가 찍히고,
+/// 장면 2: 공고 리포트의 지원 전 체크리스트. 카드가 아래에서 올라온 뒤 빈 칸에 차례로 체크가 찍히고,
 /// 성적 조건은 받지 않으므로 '직접 확인'으로 남는다 (D-009).
 class _ChecklistScene extends StatelessWidget {
   const _ChecklistScene({required this.ms});
@@ -339,8 +307,8 @@ class _ChecklistScene extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gw;
     const rows = [('학과', '컴퓨터공학과', true), ('학년', '2학년', true), ('평점', '공지에서 직접 확인', false)];
-    return _popIn(
-      _span(ms, 200, 450),
+    return _riseIn(
+      _span(ms, 200, 500),
       _SceneCard(
         children: [
           Text('지원 전 체크리스트', style: _kicker(c.accent)),
@@ -353,7 +321,7 @@ class _ChecklistScene extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           for (final (i, (field, label, met)) in rows.indexed)
-            _checkRow(c, field, label, met, _span(ms, 900.0 + 600 * i, 450)),
+            _checkRow(c, i, field, label, met, _span(ms, 1100.0 + 600 * i, 350)),
           const SizedBox(height: 6),
           Opacity(
             opacity: _span(ms, 2900, 400),
@@ -365,48 +333,68 @@ class _ChecklistScene extends StatelessWidget {
     );
   }
 
-  Widget _checkRow(GwColors c, String field, String label, bool met, double t) {
-    final box = met
-        ? Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(color: c.point, borderRadius: BorderRadius.circular(6)),
-            child: Icon(Icons.check_rounded, size: 15, color: c.pointTick),
-          )
-        : Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(
-              color: c.checkBox,
-              border: Border.all(color: c.checkLine, width: 2),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Icon(Icons.question_mark_rounded, size: 13, color: c.check),
-          );
-    return Opacity(
-      opacity: Curves.easeOut.transform(t),
-      alwaysIncludeSemantics: true,
-      child: Transform.translate(
-        offset: Offset(-8 * (1 - Curves.easeOutCubic.transform(t)), 0),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            children: [
-              Transform.scale(scale: 0.5 + 0.5 * _pop.transform(_span(t, 0.3, 0.7)), child: box),
-              const SizedBox(width: 10),
-              _tag(c, field),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: met ? c.body : c.check),
-                ),
+  /// t: 이 줄에 체크가 찍히는 진행도. 0이면 빈 칸이다.
+  Widget _checkRow(GwColors c, int i, String field, String label, bool met, double t) {
+    final on = t > 0;
+    final mark = Transform.scale(
+      scale: 0.4 + 0.6 * _pop.transform(t),
+      child: met
+          ? Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(color: c.point, borderRadius: BorderRadius.circular(6)),
+              child: Icon(Icons.check_rounded, size: 15, color: c.pointTick),
+            )
+          : Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: c.checkBox,
+                border: Border.all(color: c.checkLine, width: 2),
+                borderRadius: BorderRadius.circular(6),
               ),
-            ],
+              child: Icon(Icons.question_mark_rounded, size: 13, color: c.check),
+            ),
+    );
+    final empty = Container(
+      width: 22,
+      height: 22,
+      decoration: BoxDecoration(
+        border: Border.all(color: c.line, width: 2),
+        borderRadius: BorderRadius.circular(6),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            key: ValueKey('box-$i-${on ? 'on' : 'off'}'),
+            width: 22,
+            height: 22,
+            child: Stack(
+              children: [
+                empty,
+                if (on) Opacity(opacity: Curves.easeOut.transform(t), child: mark),
+              ],
+            ),
           ),
-        ),
+          const SizedBox(width: 10),
+          _tag(c, field),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: met ? c.body : Color.lerp(c.body, c.check, t),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -429,8 +417,8 @@ class _RankingScene extends StatelessWidget {
     final move = Curves.easeInOutCubic.transform(_span(ms, 1600, 600));
     // (제목, 처음 순서, 바뀐 순서, 관심 분야 관련)
     const rows = [('교내 디자인 공모전', 0, 1, false), ('창업 아이디어 경진대회', 1, 2, false), ('AI 해커톤 참가자 모집', 2, 0, true)];
-    return _popIn(
-      _span(ms, 200, 450),
+    return _riseIn(
+      _span(ms, 200, 500),
       _SceneCard(
         children: [
           Text('관심 분야를 고르면', style: _kicker(c.accent)),

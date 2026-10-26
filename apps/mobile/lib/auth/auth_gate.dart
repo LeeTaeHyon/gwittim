@@ -125,8 +125,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // 소개 장면 아래 진행 표시(20)만큼 줄여서 작은 화면에서도 버튼까지 한 화면에 들어오게 한다.
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 60),
                       const Align(alignment: Alignment.centerLeft, child: GwLogo(height: 56)),
                       const SizedBox(height: 28),
                       Semantics(
