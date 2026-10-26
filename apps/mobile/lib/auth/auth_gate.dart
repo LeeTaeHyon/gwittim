@@ -92,7 +92,10 @@ class _SignInScreenState extends State<SignInScreen> {
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await widget.auth.signInWithGoogle();
+      // false: 사용자가 창을 닫았거나, 기기에 Google 계정이 없어 창이 뜨지 않은 경우(둘을 구분할 수 없음)
+      if (!await widget.auth.signInWithGoogle()) {
+        messenger.showSnackBar(const SnackBar(content: Text('로그인을 마치지 못했어요. 기기에 Google 계정이 있는지 확인해 주세요.')));
+      }
     } catch (_) {
       // 상세 오류는 화면에 보여주지 않는다 (SPEC §10)
       messenger.showSnackBar(const SnackBar(content: Text('로그인하지 못했어요. 잠시 후 다시 시도해 주세요.')));
