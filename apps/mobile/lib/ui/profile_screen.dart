@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../data/models.dart';
 import '../data/repository.dart';
+import 'app_info.dart';
 import 'common.dart';
 import 'components.dart';
+import 'logo.dart';
 import 'skeleton.dart';
 import 'theme.dart';
 
-/// 내 정보 (D-010, 2026-10-25 팀장 결정 Q5 B·Q6 A): 요약 카드 → 안내 → 설정(화면·계정).
+/// 내 정보 (D-010, 2026-10-25 팀장 결정 Q5 B·Q6 A): 요약 카드 → 안내 → 설정(화면·계정·앱 정보).
 /// 고치기는 학적 → 관심 분야 → 희망 직무 세 단계 화면에서 하고, 마지막 단계의 '저장하기'로 저장한다.
 /// 성적·소득·주민등록번호·학번·학생증은 받지 않는다 (SPEC §5).
 class ProfileScreen extends StatefulWidget {
@@ -95,6 +97,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(content: Text('탈퇴는 아직 준비 중이에요.')));
+  }
+
+  /// Flutter 기본 라이선스 화면. 패키지 라이선스와 Pretendard(registerAppLicenses)가 나온다.
+  void _openLicenses() {
+    Navigator.of(context).push(
+      gwRoute(
+        context,
+        (_) => const LicensePage(
+          applicationName: '귀띔',
+          applicationVersion: appVersion,
+          applicationIcon: Padding(padding: EdgeInsets.all(12), child: GwLogo(height: 40)),
+        ),
+      ),
+    );
   }
 
   @override
@@ -215,6 +231,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 10),
                   Text('탈퇴하면 프로필과 저장한 공고가 지워져요. 공고 자체는 그대로 남아요.', style: caption),
                 ],
+                Padding(
+                  padding: const EdgeInsets.only(top: 20, bottom: 4),
+                  child: Divider(height: 1, color: c.line),
+                ),
+                const _InfoRow(label: '버전', value: appVersion),
+                Divider(height: 1, color: c.line),
+                _InfoRow(label: '오픈소스 라이선스', onTap: _openLicenses),
               ],
             ),
           ),
@@ -615,6 +638,37 @@ class _FieldLabel extends StatelessWidget {
       text,
       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.gw.sub),
     );
+  }
+}
+
+/// 설정 > 앱 정보 줄. 값만 보이거나(버전), 누르면 다른 화면을 연다(라이선스).
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, this.value, this.onTap});
+
+  final String label;
+  final String? value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final row = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 52),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: c.body),
+            ),
+          ),
+          if (value case final v?) Text(v, style: TextStyle(fontSize: 15, color: c.muted)),
+          if (onTap != null) Icon(Icons.chevron_right_rounded, size: 20, color: c.muted),
+        ],
+      ),
+    );
+    if (onTap == null) return MergeSemantics(child: row);
+    return InkWell(onTap: onTap, borderRadius: BorderRadius.circular(12), child: row);
   }
 }
 
