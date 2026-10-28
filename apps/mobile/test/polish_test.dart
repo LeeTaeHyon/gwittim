@@ -161,7 +161,7 @@ void main() {
 
     testWidgets('하루 첫 브리핑은 아래에서 올라온다', (tester) async {
       await pumpApp(tester);
-      await tester.tap(find.text('브리핑 보기'));
+      await tester.tap(find.text('브리핑 자세히 보기'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       expect(tester.getTopLeft(find.byType(BriefingScreen)).dy, greaterThan(0));
