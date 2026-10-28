@@ -77,26 +77,28 @@ const firstComeTitle = '[합성 샘플] 해외 연수 프로그램 모집 (선�
 
 DateInfo day(String date) => DateInfo(date: date, time: null, timezone: null, precision: 'date', evidence: date);
 
-NoticeSummary summary(String id, {String? deadline, String? note, String lifecycle = 'open'}) => NoticeSummary(
-  noticeId: id,
-  noticeVersion: 1,
-  title: id,
-  category: 'contest',
-  sourceUrl: 'https://example.invalid/$id',
-  published: null,
-  applicationDeadline: deadline == null ? null : day(deadline),
-  deadlineNote: note,
-  lifecycleStatus: lifecycle,
-);
+NoticeSummary summary(String id, {String? deadline, String? note, String lifecycle = 'open', String? published}) =>
+    NoticeSummary(
+      noticeId: id,
+      noticeVersion: 1,
+      title: id,
+      category: 'contest',
+      sourceUrl: 'https://example.invalid/$id',
+      published: published == null ? null : day(published),
+      applicationDeadline: deadline == null ? null : day(deadline),
+      deadlineNote: note,
+      lifecycleStatus: lifecycle,
+    );
 
 RecommendationEntry entry(
   String id, {
   String? deadline,
   List<String> reasons = const [],
   String status = 'needs_check',
+  String? published,
 }) => RecommendationEntry(
   recommendation: Recommendation(noticeId: id, score: null, eligibilityStatus: status, reasonCodes: reasons),
-  notice: summary(id, deadline: deadline),
+  notice: summary(id, deadline: deadline, published: published),
 );
 
 Notice notice({
@@ -166,7 +168,7 @@ void main() {
     RecommendationList list(List<RecommendationEntry> items, {bool personalized = true}) =>
         RecommendationList(mode: personalized ? 'personalized' : 'latest', items: items, generatedAt: today);
 
-    test('7일 안 가장 가까운 확정 마감, 관련 공고, 저장 후 마감 변경을 센다', () {
+    test('7일 안 가장 가까운 관련 공고의 확정 마감, 저장 후 마감 변경을 센다', () {
       final b = buildBriefing(
         list([
           entry('a', deadline: '2026-10-23', reasons: ['interest_match']),
@@ -188,10 +190,60 @@ void main() {
         today,
       );
       expect(b.urgent?.notice.noticeId, 'a'); // b가 더 가깝지만 관련 이유가 없어 마감 임박에 넣지 않는다
-      expect(b.related.map((e) => e.notice.noticeId), ['a', 'c']);
+      expect(b.fresh, isEmpty); // 게시일 미상은 새 공고로 보지 않는다
       expect(b.changed.single.notice.noticeId, 's');
       expect(deadlineChangeText(b.changed.single), '마감이 3일 늦춰졌어요');
-      expect(b.count, 3);
+      expect(b.count, 2);
+    });
+
+    SavedEntry savedOne(String id, {String? deadline, String lifecycle = 'open'}) => SavedEntry(
+      saved: SavedNotice(
+        noticeId: id,
+        savedAt: today,
+        savedNoticeVersion: 1,
+        savedDeadlineSnapshot: deadline == null ? null : day(deadline),
+      ),
+      notice: summary(id, deadline: deadline, lifecycle: lifecycle),
+    );
+
+    test('조건 소식: 저장 공고 이틀 안 마감, 최근 3일 새 맞춤 공고, 관심 분야 밖 직무 관련 공고', () {
+      final b = buildBriefing(
+        list([
+          entry('저장도 함', deadline: '2026-10-18', reasons: ['interest_match']),
+          entry('임박', deadline: '2026-10-21', reasons: ['interest_match']),
+          entry('새것', reasons: ['interest_match'], published: '2026-10-15'),
+          entry('오래됨', reasons: ['interest_match'], published: '2026-10-14'),
+          entry('직무만', reasons: ['role_match']),
+          entry('직무+관심', reasons: ['role_match', 'interest_match']),
+          entry('새 직무', reasons: ['role_match'], published: '2026-10-17'),
+          entry('무관 새것', reasons: ['deadline_timing'], published: '2026-10-17'),
+        ]),
+        [
+          savedOne('저장도 함', deadline: '2026-10-18'),
+          savedOne('오늘', deadline: '2026-10-17'),
+          savedOne('사흘', deadline: '2026-10-20'),
+          savedOne('마감됨', deadline: '2026-10-18', lifecycle: 'closed'),
+        ],
+        today,
+        hasInterests: true,
+      );
+      expect(b.savedSoon.map((e) => e.notice.noticeId), ['오늘', '저장도 함']); // 가까운 순, 사흘·마감됨은 빠짐
+      expect(b.urgent?.notice.noticeId, '임박'); // 위에 이미 나온 저장 공고는 마감 임박에서 뺀다
+      expect(b.fresh.map((e) => e.notice.noticeId), ['새것', '새 직무']); // 10/15~17 게시, 관련 공고만
+      expect(b.career.map((e) => e.notice.noticeId), ['직무만']); // 새 공고에 나온 것은 겹치지 않게
+      expect(b.count, 4);
+    });
+
+    test('관심 분야를 입력하지 않았으면 관심 분야 밖 소식은 만들지 않는다', () {
+      final b = buildBriefing(
+        list([
+          entry('직무만', reasons: ['role_match']),
+        ]),
+        const [],
+        today,
+      );
+      expect(b.career, isEmpty);
+      expect(b.isEmpty, isTrue);
     });
 
     test('마감 후보: 맞춤 추천이면 관련 공고만, 최신 모드면 전부', () {
@@ -400,7 +452,7 @@ void main() {
     expect(find.text('D-13'), findsNothing);
     expect(find.text('오늘 확인할 공고가 있어요'), findsOneWidget); // 소식 종류 수는 세지 않는다
     expect(find.text('브리핑 자세히 보기'), findsOneWidget);
-    expect(find.textContaining(RegExp(r'^맞춤 공고 \d+건$')), findsOneWidget); // 작은 배지
+    expect(find.text('맞춤 공고 7건'), findsNothing); // 홈 숫자를 다시 세는 배지는 없앴다 (D-018)
     expect(find.textContaining('0건'), findsNothing); // 0건인 칸은 숨긴다
     expect(find.text('맞춤 공고 · 앞으로 2주'), findsOneWidget);
     // 선착순 샘플은 관련 이유가 없는 공고라 다가오는 마감 안내에서도 세지 않는다
@@ -509,7 +561,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('주요 소식'), findsOneWidget);
-    expect(find.text('맞춤 공고'), findsOneWidget);
+    expect(find.byType(BriefingScreen), findsOneWidget); // 머리는 네이비, 조건 소식만
     expect(find.textContaining('합격 가능성을 뜻하지 않아요'), findsOneWidget);
     await tester.tap(find.text('확인했어요'));
     await tester.pumpAndSettle();
