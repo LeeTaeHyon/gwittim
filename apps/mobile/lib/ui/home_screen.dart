@@ -112,10 +112,12 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  static bool _hasInterests(HomeData data) => data.profile?.interestIds.isNotEmpty ?? false;
+
   Future<void> _maybeShowBriefing(HomeData data) async {
     if (_briefingChecked) return;
     _briefingChecked = true;
-    final briefing = buildBriefing(data.list, data.saved, _today);
+    final briefing = buildBriefing(data.list, data.saved, _today, hasInterests: _hasInterests(data));
     try {
       if (briefing.isEmpty || await widget.briefingStore.shownOn(_today)) return;
       await widget.briefingStore.markShown(_today);
@@ -169,7 +171,7 @@ class HomeScreenState extends State<HomeScreen> {
     final c = context.gw;
     final caption = captionStyle(context);
     final list = data.list;
-    final briefing = buildBriefing(list, data.saved, _today);
+    final briefing = buildBriefing(list, data.saved, _today, hasInterests: _hasInterests(data));
     // 맞춤 추천이면 관련 공고 중에서만 마감을 센다.
     final candidates = deadlineCandidates(list);
     final upcoming = [
@@ -386,7 +388,8 @@ class _BriefingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
-    final onlyChanged = urgentCount == 0 && briefing.related.isEmpty;
+    final b = briefing;
+    final onlyChanged = urgentCount == 0 && b.savedSoon.isEmpty && b.fresh.isEmpty && b.career.isEmpty;
     return GwCard(
       bubble: true,
       onTap: onOpen,
@@ -408,11 +411,12 @@ class _BriefingCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
+              if (b.savedSoon.isNotEmpty)
+                _Badge(icon: Icons.bookmark_rounded, label: '저장 공고 곧 마감 ${b.savedSoon.length}건', urgent: true),
               if (urgentCount > 0) _Badge(icon: Icons.schedule_rounded, label: '마감 임박 $urgentCount건', urgent: true),
-              if (briefing.related.isNotEmpty)
-                _Badge(icon: Icons.auto_awesome_rounded, label: '맞춤 공고 ${briefing.related.length}건'),
-              if (briefing.changed.isNotEmpty)
-                _Badge(icon: Icons.update_rounded, label: '마감 바뀐 저장 공고 ${briefing.changed.length}건'),
+              if (b.fresh.isNotEmpty) _Badge(icon: Icons.fiber_new_rounded, label: '새 공고 ${b.fresh.length}건'),
+              if (b.career.isNotEmpty) _Badge(icon: Icons.explore_rounded, label: '진로 관련 ${b.career.length}건'),
+              if (b.changed.isNotEmpty) _Badge(icon: Icons.update_rounded, label: '마감 바뀐 저장 공고 ${b.changed.length}건'),
             ],
           ),
           const SizedBox(height: 14),
