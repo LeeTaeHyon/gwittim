@@ -59,22 +59,22 @@ class BriefingScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 14),
-                    Text('오늘 챙길 소식이', style: headline),
+                    // 소식 종류 수는 공고 수로 오해되기 쉬워 세지 않는다.
                     Text.rich(
                       TextSpan(
                         style: headline,
                         children: [
+                          const TextSpan(text: '오늘의 '),
                           WidgetSpan(
                             alignment: PlaceholderAlignment.baseline,
                             baseline: TextBaseline.alphabetic,
                             child: Marker(
-                              '${briefing.count}가지',
+                              '주요 소식',
                               style: headline,
                               animate: true,
                               delay: const Duration(milliseconds: 450),
                             ),
                           ),
-                          const TextSpan(text: ' 있어요'),
                         ],
                       ),
                     ),
@@ -171,6 +171,8 @@ class _UrgentBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final n = entry.notice;
     final left = daysLeft(n, today)!;
+    final due = n.applicationDeadline!.day;
+    final reason = entry.recommendation.reasonCodes.where(personalReasons.containsKey).firstOrNull;
     final start = DateTime(today.year, today.month, today.day);
     final days = [for (var i = 0; i < 7; i++) start.add(Duration(days: i))];
     final c = context.gw;
@@ -183,7 +185,15 @@ class _UrgentBubble extends StatelessWidget {
           Text('마감 임박', style: _kicker(c).copyWith(color: c.urgent)),
           const SizedBox(height: 6),
           Text(n.title, style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
-          Text(left == 0 ? '오늘 마감돼요' : '$left일 뒤 마감돼요', style: _title(c).copyWith(color: c.urgent)),
+          Text(
+            '${due.month}월 ${due.day}일 마감 · ${left == 0 ? '오늘' : 'D-$left'}',
+            style: _title(c).copyWith(color: c.urgent),
+          ),
+          // 마감이 가까워서가 아니라 관련이 있어서 보여 준다는 것을 밝힌다.
+          if (reason != null) ...[
+            const SizedBox(height: 6),
+            Text(reasonText(reason), style: TextStyle(fontSize: 14, height: 1.5, color: c.sub)),
+          ],
           const SizedBox(height: 18),
           // 오늘부터 7일: 오늘(라이트 네이비, 다크 라임)과 마감일(빨강)을 표시한다.
           Row(
@@ -230,11 +240,25 @@ class _UrgentBubble extends StatelessWidget {
           if (entry.recommendation.eligibilityStatus == 'needs_check') ...[
             const SizedBox(height: 16),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.help_outline_rounded, size: 18, color: c.check),
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: Icon(Icons.help_outline_rounded, size: 18, color: c.check),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text('지원 조건 중 직접 확인할 것이 있어요', style: TextStyle(fontSize: 14, color: c.sub)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '지원 자격 일부 확인 필요',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.body),
+                      ),
+                      for (final r in checkReasons(entry.recommendation))
+                        Text(r, style: TextStyle(fontSize: 13.5, height: 1.5, color: c.sub)),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -269,9 +293,8 @@ class _RelatedBubble extends StatelessWidget {
             TextSpan(
               style: _title(c),
               children: [
-                const TextSpan(text: '관심 분야·직무·전공과\n관련된 공고가 '),
-                markSpan('${entries.length}개', _title(c)),
-                const TextSpan(text: ' 있어요'),
+                const TextSpan(text: '관심 분야·직무·전공\n관련 공고 '),
+                markSpan('${entries.length}건', _title(c)),
               ],
             ),
           ),
@@ -312,7 +335,7 @@ class _RelatedBubble extends StatelessWidget {
           if (entries.length > 3)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text('외 ${entries.length - 3}개는 홈에서 볼 수 있어요', style: captionStyle(context)),
+              child: Text('외 ${entries.length - 3}건은 홈에서 볼 수 있어요', style: captionStyle(context)),
             ),
         ],
       ),

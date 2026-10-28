@@ -246,7 +246,8 @@ class _SummaryCard extends StatelessWidget {
     final school = [
       ?name(data.universities, p?.universityId),
       ?name(data.majors, p?.majorId),
-      if (p?.grade case final g?) '$g학년',
+      // 졸업이면 학년은 보이지 않는다(저장된 값은 그대로 둔다).
+      if (p?.grade case final g? when p?.enrollmentStatus != 'graduated') '$g학년',
     ].join(' ');
     final line = [if (school.isNotEmpty) school, ?_statusNames[p?.enrollmentStatus]].join(' · ');
     return GwCard(
