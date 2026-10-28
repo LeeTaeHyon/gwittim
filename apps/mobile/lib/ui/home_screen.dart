@@ -170,11 +170,13 @@ class HomeScreenState extends State<HomeScreen> {
     final caption = captionStyle(context);
     final list = data.list;
     final briefing = buildBriefing(list, data.saved, _today);
+    // 맞춤 추천이면 관련 공고 중에서만 마감을 센다.
+    final candidates = deadlineCandidates(list);
     final upcoming = [
-      for (final e in list.items)
+      for (final e in candidates)
         if ((daysLeft(e.notice, _today) ?? 99) <= 14) e,
     ]..sort((a, b) => a.notice.applicationDeadline!.date.compareTo(b.notice.applicationDeadline!.date));
-    final undated = list.items.where((e) => e.notice.applicationDeadline == null).length;
+    final undated = candidates.where((e) => e.notice.applicationDeadline == null).length;
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -186,12 +188,12 @@ class HomeScreenState extends State<HomeScreen> {
         if (!briefing.isEmpty) ...[
           _BriefingCard(
             briefing: briefing,
-            urgentCount: list.items.where((e) => (daysLeft(e.notice, _today) ?? 99) <= urgentDays).length,
+            urgentCount: candidates.where((e) => (daysLeft(e.notice, _today) ?? 99) <= urgentDays).length,
             onOpen: () => _openBriefing(briefing),
           ),
           const SizedBox(height: 28),
         ],
-        SectionTitle('다가오는 마감', trailing: Text('앞으로 2주', style: caption)),
+        SectionTitle('다가오는 마감', trailing: Text(list.personalized ? '맞춤 공고 · 앞으로 2주' : '앞으로 2주', style: caption)),
         const SizedBox(height: 12),
         GwCard(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -201,7 +203,10 @@ class HomeScreenState extends State<HomeScreen> {
               if (upcoming.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  child: Text('앞으로 2주 안에 마감되는 공고가 없어요.', style: TextStyle(fontSize: 15, color: c.sub)),
+                  child: Text(
+                    list.personalized ? '맞춤 공고 중 앞으로 2주 안에 마감되는 공고가 없어요.' : '앞으로 2주 안에 마감되는 공고가 없어요.',
+                    style: TextStyle(fontSize: 15, color: c.sub),
+                  ),
                 ),
               for (final e in upcoming)
                 _UpcomingRow(
@@ -305,7 +310,8 @@ class _Header extends StatelessWidget {
     final p = profile;
     final who = [
       if (p?.majorId case final m?) majors[m] ?? '',
-      if (p?.grade case final g?) '$g학년',
+      // 졸업이면 학년 대신 '졸업'
+      if (p?.enrollmentStatus == 'graduated') '졸업' else if (p?.grade case final g?) '$g학년',
     ].where((s) => s.isNotEmpty).join(' ');
     return Row(
       children: [
@@ -366,6 +372,7 @@ class _ProfilePrompt extends StatelessWidget {
 }
 
 /// 오늘의 귀띔: 숫자 요약만 보이고 공고 제목은 다시 쓰지 않는다 (2026-10-25 팀장 결정 Q3).
+/// 0건인 칸은 보이지 않는다.
 class _BriefingCard extends StatelessWidget {
   const _BriefingCard({required this.briefing, required this.urgentCount, required this.onOpen});
 
@@ -390,31 +397,25 @@ class _BriefingCard extends StatelessWidget {
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.accent),
           ),
           const SizedBox(height: 6),
-          Text.rich(
-            TextSpan(
-              style: headline,
-              children: [
-                const TextSpan(text: '오늘 챙길 소식 '),
-                markSpan('${briefing.count}가지', headline),
-              ],
-            ),
-          ),
+          Text('오늘의 주요 소식', style: headline),
           const SizedBox(height: 14),
           IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: 8,
               children: [
-                Expanded(
-                  child: _Stat(count: urgentCount, label: '마감 임박', urgent: urgentCount > 0),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _Stat(count: briefing.related.length, label: '맞춤 공고'),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _Stat(count: briefing.changed.length, label: '마감 바뀐\n저장 공고'),
-                ),
+                if (urgentCount > 0)
+                  Expanded(
+                    child: _Stat(count: urgentCount, label: '마감 임박', urgent: true),
+                  ),
+                if (briefing.related.isNotEmpty)
+                  Expanded(
+                    child: _Stat(count: briefing.related.length, label: '맞춤 공고'),
+                  ),
+                if (briefing.changed.isNotEmpty)
+                  Expanded(
+                    child: _Stat(count: briefing.changed.length, label: '마감 바뀐\n저장 공고'),
+                  ),
               ],
             ),
           ),
@@ -444,12 +445,8 @@ class _Stat extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '$count개',
-              style: TextStyle(
-                fontSize: 19,
-                fontWeight: FontWeight.w700,
-                color: count == 0 ? c.muted : (urgent ? c.urgent : c.ink),
-              ),
+              '$count건',
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: urgent ? c.urgent : c.ink),
             ),
             const SizedBox(height: 2),
             Text(label, maxLines: 2, style: TextStyle(fontSize: 12, height: 1.35, color: c.sub)),

@@ -4,6 +4,7 @@ import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/main.dart';
 import 'package:gwittim/ui/briefing_data.dart';
+import 'package:gwittim/ui/briefing_screen.dart';
 import 'package:gwittim/ui/home_screen.dart';
 import 'package:gwittim/ui/notices_screen.dart';
 import 'package:gwittim/ui/report_screen.dart';
@@ -186,11 +187,47 @@ void main() {
         ],
         today,
       );
-      expect(b.urgent?.notice.noticeId, 'b');
+      expect(b.urgent?.notice.noticeId, 'a'); // b가 더 가깝지만 관련 이유가 없어 마감 임박에 넣지 않는다
       expect(b.related.map((e) => e.notice.noticeId), ['a', 'c']);
       expect(b.changed.single.notice.noticeId, 's');
       expect(deadlineChangeText(b.changed.single), '마감이 3일 늦춰졌어요');
       expect(b.count, 3);
+    });
+
+    test('마감 후보: 맞춤 추천이면 관련 공고만, 최신 모드면 전부', () {
+      final items = [
+        entry('a', deadline: '2026-10-20', reasons: ['role_match']),
+        entry('b', deadline: '2026-10-18', reasons: ['deadline_timing']),
+      ];
+      expect(deadlineCandidates(list(items)).map((e) => e.notice.noticeId), ['a']);
+      expect(deadlineCandidates(list(items, personalized: false)).map((e) => e.notice.noticeId), ['a', 'b']);
+      expect(buildBriefing(list(items, personalized: false), const [], today).urgent?.notice.noticeId, 'b');
+    });
+
+    test('지원 자격 확인 이유: 판정하지 못한 조건 이름, 없으면 원문 확인 한 줄', () {
+      Recommendation rec(List<ConditionResult> results) => Recommendation(
+        noticeId: 'a',
+        score: null,
+        eligibilityStatus: 'needs_check',
+        reasonCodes: const [],
+        conditionResults: results,
+      );
+      expect(
+        checkReasons(
+          rec(const [
+            ConditionResult(field: 'major_id', status: 'met', evidence: '전자공학과'),
+            ConditionResult(field: 'grade', status: 'unknown', evidence: '2~3학년', unknownReason: 'profile_missing'),
+            ConditionResult(
+              field: 'enrollment_status',
+              status: 'unknown',
+              evidence: '졸업 예정자',
+              unknownReason: 'condition_unresolved',
+            ),
+          ]),
+        ),
+        ['학년: 프로필에 없어 비교하지 못했어요', '재학 상태: 원문에서 확인 필요'],
+      );
+      expect(checkReasons(rec(const [])), ['자동으로 비교하지 못한 조건이 있어요. 원문에서 확인해 주세요.']);
     });
 
     test('전할 소식이 없으면 비어 있다 (latest 모드는 관련 공고를 세지 않음)', () {
@@ -261,10 +298,7 @@ void main() {
 
     test('우대 사항은 지원 자격 뒤에 따로 묶고 확인 필요 수에 넣지 않는다', () {
       final rows = checklistRows(
-        notice(
-          unresolved: ['해외여행 결격 사유가 없는 자', '남자의 경우 병역필 또는 면제자'],
-          preferred: ['외국어 능통자 (토익 850점 이상)', '운전면허 소지자'],
-        ),
+        notice(unresolved: ['해외여행 결격 사유가 없는 자', '남자의 경우 병역필 또는 면제자'], preferred: ['외국어 능통자 (토익 850점 이상)', '운전면허 소지자']),
         null,
         none,
       );
@@ -364,8 +398,11 @@ void main() {
     expect(find.text('D-13 · 17:00 마감 · 행사'), findsOneWidget); // 다가오는 마감: 남은 날·시각이 앞
     expect(find.text('10월 30일(금) 17:00 마감 · D-13'), findsOneWidget); // 카드: 7일 넘게 남으면 칩 없이 날짜 줄에
     expect(find.text('D-13'), findsNothing);
-    expect(find.text('오늘 챙길 소식 '), findsNothing); // 형광펜 조각은 별도 위젯
-    expect(find.textContaining('마감일이 정해지지 않은 공고 1개'), findsOneWidget);
+    expect(find.text('오늘의 주요 소식'), findsOneWidget); // 소식 종류 수는 세지 않는다
+    expect(find.textContaining('0건'), findsNothing); // 0건인 칸은 숨긴다
+    expect(find.text('맞춤 공고 · 앞으로 2주'), findsOneWidget);
+    // 선착순 샘플은 관련 이유가 없는 공고라 다가오는 마감 안내에서도 세지 않는다
+    expect(find.textContaining('마감일이 정해지지 않은 공고'), findsNothing);
 
     await tapVisible(tester, find.text(projectTitle).last);
 
@@ -424,6 +461,43 @@ void main() {
     expect(find.text('누구나 지원할 수 있어요'), findsOneWidget); // 이 샘플은 명시적 제한 없음
   });
 
+  testWidgets('브리핑 마감 임박: 날짜와 D-day, 관련 이유, 확인이 필요한 조건 이름', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: gwittimTheme(),
+        home: BriefingScreen(
+          briefing: Briefing(
+            urgent: RecommendationEntry(
+              recommendation: const Recommendation(
+                noticeId: 'a',
+                score: null,
+                eligibilityStatus: 'needs_check',
+                reasonCodes: ['role_match', 'deadline_timing'],
+                conditionResults: [
+                  ConditionResult(
+                    field: 'grade',
+                    status: 'unknown',
+                    evidence: '2~3학년',
+                    unknownReason: 'profile_missing',
+                  ),
+                ],
+              ),
+              notice: summary('데이터 분석 인턴', deadline: '2026-10-19'),
+            ),
+          ),
+          today: today,
+          onOpenNotice: (_, _) async {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('10월 19일 마감 · D-2'), findsOneWidget);
+    expect(find.text('희망 직무와 관련된 공고예요'), findsOneWidget);
+    expect(find.text('지원 자격 일부 확인 필요'), findsOneWidget);
+    expect(find.text('학년: 프로필에 없어 비교하지 못했어요'), findsOneWidget);
+    expect(find.textContaining('뒤 마감돼요'), findsNothing);
+  });
+
   testWidgets('하루 첫 실행에 브리핑, 같은 날 다시 열면 안 뜬다', (tester) async {
     final store = MemoryBriefingStore();
     final repo = await loaded(tester);
@@ -432,7 +506,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('오늘 챙길 소식이'), findsOneWidget);
+    expect(find.text('주요 소식'), findsOneWidget);
     expect(find.text('맞춤 공고'), findsOneWidget);
     expect(find.textContaining('합격 가능성을 뜻하지 않아요'), findsOneWidget);
     await tester.tap(find.text('확인했어요'));
@@ -445,7 +519,7 @@ void main() {
       GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: store),
     );
     await tester.pumpAndSettle();
-    expect(find.text('오늘 챙길 소식이'), findsNothing);
+    expect(find.text('주요 소식'), findsNothing);
   });
 
   testWidgets('프로필이 비면 최신순 안내와 프로필 입력 버튼', (tester) async {
@@ -458,7 +532,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('오늘 챙길 소식이'), findsNothing); // 전할 소식이 없으면 브리핑 없음
+    expect(find.text('주요 소식'), findsNothing); // 전할 소식이 없으면 브리핑 없음
     expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있어요'), findsOneWidget);
     expect(find.text('최신 공고'), findsOneWidget);
     await tester.tap(find.text('프로필 입력'));

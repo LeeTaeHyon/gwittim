@@ -261,7 +261,7 @@ void main() {
 
     double y(String text) => tester.getTopLeft(find.text(text)).dy;
     await tester.pump(const Duration(milliseconds: 3800)); // 14.8초: 장면 3 카드가 다 올라옴, 아직 원래 순서
-    expect(shown(tester, '추천 순서가 바뀌어요'), isTrue);
+    expect(shown(tester, '관심 분야에 맞춰 공고를 추천해요'), isTrue);
     expect(y('AI 해커톤 참가자 모집'), greaterThan(y('교내 디자인 공모전')));
     await tester.pump(const Duration(milliseconds: 2700)); // 17.5초: 관심 분야 칩을 고른 뒤
     expect(y('AI 해커톤 참가자 모집'), lessThan(y('교내 디자인 공모전')));
@@ -269,7 +269,7 @@ void main() {
     expect(tester.getTopLeft(find.byType(GoogleSignInButton)).dy, buttonTop);
 
     await tester.pump(const Duration(milliseconds: 4000)); // 21.5초: 다시 장면 1
-    expect(shown(tester, '추천 순서가 바뀌어요'), isFalse);
+    expect(shown(tester, '관심 분야에 맞춰 공고를 추천해요'), isFalse);
     expect(find.byKey(const ValueKey('typing')), findsOneWidget);
     expect(find.byKey(const ValueKey('progress-0')), findsNothing); // 진행 표시는 없다
     expect(find.textContaining('알림'), findsNothing); // 어느 장면도 알림을 약속하지 않는다

@@ -421,10 +421,10 @@ class _RankingScene extends StatelessWidget {
       _span(ms, 200, 500),
       _SceneCard(
         children: [
-          Text('관심 분야를 고르면', style: _kicker(c.accent)),
+          Text('맞춤 추천', style: _kicker(c.accent)),
           const SizedBox(height: 3),
           Text(
-            '추천 순서가 바뀌어요',
+            '관심 분야에 맞춰 공고를 추천해요',
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink),
           ),
           const SizedBox(height: 10),
