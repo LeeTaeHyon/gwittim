@@ -398,7 +398,9 @@ void main() {
     expect(find.text('D-13 · 17:00 마감 · 행사'), findsOneWidget); // 다가오는 마감: 남은 날·시각이 앞
     expect(find.text('10월 30일(금) 17:00 마감 · D-13'), findsOneWidget); // 카드: 7일 넘게 남으면 칩 없이 날짜 줄에
     expect(find.text('D-13'), findsNothing);
-    expect(find.text('오늘의 주요 소식'), findsOneWidget); // 소식 종류 수는 세지 않는다
+    expect(find.text('오늘 확인할 공고가 있어요'), findsOneWidget); // 소식 종류 수는 세지 않는다
+    expect(find.text('브리핑 자세히 보기'), findsOneWidget);
+    expect(find.textContaining(RegExp(r'^맞춤 공고 \d+건$')), findsOneWidget); // 작은 배지
     expect(find.textContaining('0건'), findsNothing); // 0건인 칸은 숨긴다
     expect(find.text('맞춤 공고 · 앞으로 2주'), findsOneWidget);
     // 선착순 샘플은 관련 이유가 없는 공고라 다가오는 마감 안내에서도 세지 않는다

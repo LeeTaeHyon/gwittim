@@ -372,7 +372,8 @@ class _ProfilePrompt extends StatelessWidget {
 }
 
 /// 오늘의 귀띔: 숫자 요약만 보이고 공고 제목은 다시 쓰지 않는다 (2026-10-25 팀장 결정 Q3).
-/// 0건인 칸은 보이지 않는다.
+/// 한 줄 제목과 작은 배지로 무슨 소식인지 바로 읽히게 하고, 0건인 배지는 보이지 않는다 (D-016 보완).
+/// 카드 전체를 누르면 브리핑이 열린다.
 class _BriefingCard extends StatelessWidget {
   const _BriefingCard({required this.briefing, required this.urgentCount, required this.onOpen});
 
@@ -385,73 +386,82 @@ class _BriefingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
-    final headline = TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: c.ink, height: 1.4);
+    final onlyChanged = urgentCount == 0 && briefing.related.isEmpty;
     return GwCard(
       bubble: true,
       onTap: onOpen,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '오늘의 귀띔',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.accent),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.accent),
           ),
-          const SizedBox(height: 6),
-          Text('오늘의 주요 소식', style: headline),
+          const SizedBox(height: 4),
+          Text(
+            onlyChanged ? '마감이 바뀐 저장 공고가 있어요' : '오늘 확인할 공고가 있어요',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.ink, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (urgentCount > 0) _Badge(icon: Icons.schedule_rounded, label: '마감 임박 $urgentCount건', urgent: true),
+              if (briefing.related.isNotEmpty)
+                _Badge(icon: Icons.auto_awesome_rounded, label: '맞춤 공고 ${briefing.related.length}건'),
+              if (briefing.changed.isNotEmpty)
+                _Badge(icon: Icons.update_rounded, label: '마감 바뀐 저장 공고 ${briefing.changed.length}건'),
+            ],
+          ),
           const SizedBox(height: 14),
-          IntrinsicHeight(
+          Divider(height: 1, thickness: 1, color: c.line),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: 8,
               children: [
-                if (urgentCount > 0)
-                  Expanded(
-                    child: _Stat(count: urgentCount, label: '마감 임박', urgent: true),
+                Expanded(
+                  child: Text(
+                    '브리핑 자세히 보기',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.sub),
                   ),
-                if (briefing.related.isNotEmpty)
-                  Expanded(
-                    child: _Stat(count: briefing.related.length, label: '맞춤 공고'),
-                  ),
-                if (briefing.changed.isNotEmpty)
-                  Expanded(
-                    child: _Stat(count: briefing.changed.length, label: '마감 바뀐\n저장 공고'),
-                  ),
+                ),
+                Icon(Icons.arrow_forward_rounded, size: 18, color: c.muted),
               ],
             ),
           ),
-          const SizedBox(height: 14),
-          SoftButton(label: '브리핑 보기', onPressed: onOpen),
         ],
       ),
     );
   }
 }
 
-class _Stat extends StatelessWidget {
-  const _Stat({required this.count, required this.label, this.urgent = false});
+/// 오늘의 귀띔 배지. 마감 임박만 빨간색, 나머지는 칩 색.
+class _Badge extends StatelessWidget {
+  const _Badge({required this.icon, required this.label, this.urgent = false});
 
-  final int count;
+  final IconData icon;
   final String label;
   final bool urgent;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
-    return MergeSemantics(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-        decoration: BoxDecoration(color: c.neutral, borderRadius: BorderRadius.circular(14)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$count건',
-              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: urgent ? c.urgent : c.ink),
-            ),
-            const SizedBox(height: 2),
-            Text(label, maxLines: 2, style: TextStyle(fontSize: 12, height: 1.35, color: c.sub)),
-          ],
-        ),
+    final fg = urgent ? c.urgent : c.onChip;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(color: urgent ? c.urgentSoft : c.chip, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg),
+          ),
+        ],
       ),
     );
   }
