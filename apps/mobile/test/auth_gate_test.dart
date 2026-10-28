@@ -284,4 +284,40 @@ void main() {
     expect(shown(tester, '공지에서 직접 확인'), isTrue); // 움직이지 않고 다 보인 채로 넘어간다
     expect(tester.hasRunningAnimations, isFalse);
   });
+
+  group('로그인 화면 크기 맞춤', () {
+    // (폭, 높이, 글자 배율, 스크롤 없이 들어가야 하는지). 위아래 시스템 막대 24씩.
+    for (final (w, h, scale, fits) in [
+      (360.0, 640.0, 1.0, false),
+      (360.0, 760.0, 1.0, true),
+      (360.0, 780.0, 1.0, true),
+      (412.0, 915.0, 1.0, true),
+      (412.0, 915.0, 1.3, true),
+      (360.0, 780.0, 1.3, false),
+      (412.0, 915.0, 1.5, false),
+    ]) {
+      testWidgets('$w×$h 글자 $scale배: 버튼과 약관은 늘 보이고${fits ? ', 스크롤 없음' : ''}', (tester) async {
+        tester.view.physicalSize = Size(w * 3, h * 3);
+        tester.view.devicePixelRatio = 3;
+        tester.view.padding = const FakeViewPadding(top: 72, bottom: 72);
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.view.reset);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await pumpSignIn(tester);
+        await settle(tester);
+
+        final bottom = h - 24;
+        expect(tester.getRect(find.byType(GoogleSignInButton)).bottom, lessThanOrEqualTo(bottom));
+        expect(tester.getRect(find.textContaining('동의하게 돼요')).bottom, lessThanOrEqualTo(bottom));
+        final over = tester.state<ScrollableState>(find.byType(Scrollable).first).position.maxScrollExtent;
+        if (fits) expect(over, 0);
+        expect(tester.takeException(), isNull);
+
+        // 줄여 맞춘 뒤에도 소개 장면은 계속 돈다
+        await tester.pump(const Duration(milliseconds: 3000));
+        expect(shown(tester, '발표회 마감이'), isTrue);
+        expect(tester.hasRunningAnimations, isTrue);
+      });
+    }
+  });
 }
