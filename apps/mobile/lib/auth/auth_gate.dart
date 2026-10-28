@@ -92,6 +92,44 @@ class SignInScreen extends StatefulWidget {
 class _SignInScreenState extends State<SignInScreen> {
   bool _busy = false;
 
+  final _scroll = ScrollController();
+  final _demoKey = GlobalKey();
+
+  /// 화면에 다 들어가지 않을 때 줄이는 단계: 0 그대로, 1 여백을 줄임, 2 소개 장면도 줄임(최대 0.75배).
+  /// 그래도 넘치는 아주 작은 화면·큰 글자에서만 스크롤한다.
+  int _fit = 0;
+  double _demoScale = 1;
+  double _demoHeight = 0;
+
+  /// 화면 크기·글자 크기가 바뀌면 처음부터 다시 맞춘다.
+  (Size, double)? _fittedFor;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _fitLater() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients || _fit == 2) return;
+      final over = _scroll.position.maxScrollExtent;
+      if (over <= 0.5) return;
+      if (_fit == 0) {
+        setState(() => _fit = 1);
+        _fitLater();
+        return;
+      }
+      final natural = _demoKey.currentContext?.size?.height ?? 0;
+      if (natural <= 0) return;
+      setState(() {
+        _fit = 2;
+        _demoHeight = natural;
+        _demoScale = ((natural - over) / natural).clamp(0.75, 1.0);
+      });
+    });
+  }
+
   Future<void> _signIn() async {
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -115,59 +153,90 @@ class _SignInScreenState extends State<SignInScreen> {
       value: statusBarStyle(Brightness.dark), // 로그인 바탕은 라이트·다크 모두 어둡다
       child: Scaffold(
         backgroundColor: c.loginBg,
+        // Google 버튼과 약관 줄은 늘 화면 아래에 둔다. 위쪽(로고·소개)이 화면보다 길면 위쪽만 스크롤한다.
         body: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, box) => SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: box.maxHeight - 28),
-                child: IntrinsicHeight(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const SizedBox(height: 60),
-                      const Align(alignment: Alignment.centerLeft, child: GwLogo(height: 56)),
-                      const SizedBox(height: 28),
-                      Semantics(
-                        header: true,
-                        child: Text(
-                          '몰랐던 기회를\n먼저 귀띔해 드려요',
-                          style: TextStyle(
-                            fontSize: 30,
-                            height: 1.38,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.9,
-                            color: c.loginInk,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, box) {
+                      final key = (box.biggest, MediaQuery.textScalerOf(context).scale(16));
+                      if (key != _fittedFor) {
+                        _fittedFor = key;
+                        _fit = 0;
+                        _demoScale = 1;
+                        _fitLater();
+                      }
+                      Widget demo = KeyedSubtree(key: _demoKey, child: const SignInDemo());
+                      if (_fit == 2 && _demoScale < 1) {
+                        demo = SizedBox(
+                          height: _demoHeight * _demoScale,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.topLeft,
+                            child: SizedBox(width: box.maxWidth, child: demo),
+                          ),
+                        );
+                      }
+                      return SingleChildScrollView(
+                        controller: _scroll,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: box.maxHeight),
+                          child: IntrinsicHeight(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                SizedBox(height: _fit == 0 ? 60 : 20),
+                                const Align(alignment: Alignment.centerLeft, child: GwLogo(height: 56)),
+                                const SizedBox(height: 28),
+                                Semantics(
+                                  header: true,
+                                  child: Text(
+                                    '몰랐던 기회를\n먼저 귀띔해 드려요',
+                                    style: TextStyle(
+                                      fontSize: 30,
+                                      height: 1.38,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: -0.9,
+                                      color: c.loginInk,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                Text(
+                                  // 추천은 관련도 순이라 '마감 순'이라고 쓰지 않는다.
+                                  '학교 공지 중 나에게 맞는 공고를 골라 지원 조건·마감과 함께 정리해 드려요.',
+                                  style: TextStyle(fontSize: 16, height: 1.6, color: c.loginSub),
+                                ),
+                                SizedBox(height: _fit == 0 ? 36 : 20),
+                                // 앱이 하는 일을 보여 주는 장면: 소식 말풍선 → 지원 전 체크리스트 → 관심 분야로 바뀌는 추천 순서
+                                demo,
+                                const Spacer(),
+                                SizedBox(height: _fit == 0 ? 36 : 20),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        // 추천은 관련도 순이라 '마감 순'이라고 쓰지 않는다.
-                        '학교 공지 중 나에게 맞는 공고를 골라 지원 조건·마감과 함께 정리해 드려요.',
-                        style: TextStyle(fontSize: 16, height: 1.6, color: c.loginSub),
-                      ),
-                      const SizedBox(height: 36),
-                      // 앱이 하는 일을 보여 주는 장면: 소식 말풍선 → 지원 전 체크리스트 → 관심 분야로 바뀌는 추천 순서
-                      const SignInDemo(),
-                      const Spacer(),
-                      const SizedBox(height: 36),
-                      GoogleSignInButton(label: 'Google 계정으로 시작하기', onPressed: _busy ? null : _signIn),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.lock_outline_rounded, size: 15, color: c.loginSub),
-                          const SizedBox(width: 6),
-                          Text('성적·학번은 묻지 않아요', style: TextStyle(fontSize: 13, color: c.loginSub)),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      _TermsLine(color: c.loginSub, linkColor: c.loginInk),
-                    ],
+                      );
+                    },
                   ),
                 ),
-              ),
+                GoogleSignInButton(label: 'Google 계정으로 시작하기', onPressed: _busy ? null : _signIn),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.lock_outline_rounded, size: 15, color: c.loginSub),
+                    const SizedBox(width: 6),
+                    Text('성적·학번은 묻지 않아요', style: TextStyle(fontSize: 13, color: c.loginSub)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                _TermsLine(color: c.loginSub, linkColor: c.loginInk),
+              ],
             ),
           ),
         ),
