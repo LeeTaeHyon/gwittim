@@ -90,14 +90,14 @@ List<CheckRow> checklistRows(
       final field = conditionFieldLabel(c.field);
       final value = profileValue(c.field);
       rows.add(switch (c.status) {
-        'met' => CheckRow(CheckState.met, value ?? '맞아요', field: field, evidence: c.evidence),
-        'not_met' => CheckRow(CheckState.notMet, '맞지 않아요', field: field, evidence: c.evidence),
+        'met' => CheckRow(CheckState.met, value ?? '충족', field: field, evidence: c.evidence),
+        'not_met' => CheckRow(CheckState.notMet, '미충족', field: field, evidence: c.evidence),
         _ when c.unknownReason == 'profile_missing' => CheckRow(
           CheckState.check,
-          '프로필에 없어요',
+          '프로필 미입력',
           field: field,
           evidence: c.evidence,
-          note: '프로필에 입력하면 자동으로 비교해 드려요.',
+          note: '프로필에 입력하면 자동으로 비교합니다.',
         ),
         _ => CheckRow(CheckState.check, '직접 확인', field: field, evidence: c.evidence),
       });
@@ -116,20 +116,20 @@ List<CheckRow> checklistRows(
         '직접 확인',
         evidence: u,
         note: _privateCondition.hasMatch(u)
-            ? '귀띔은 성적을 받지 않아요. 이 조건은 학교 공지에서 직접 확인해 주세요.'
-            : '자동으로 비교하지 못했어요. 학교 공지에서 확인해 주세요.',
+            ? '귀띔은 성적을 받지 않습니다. 이 조건은 학교 공지에서 직접 확인해 주세요.'
+            : '자동으로 비교하지 못했습니다. 학교 공지에서 확인해 주세요.',
       ),
     );
   }
   // 우대 사항은 지원 자격 뒤에, 확인 필요보다 약한 안내로 보인다 (D-015)
   for (final u in elig.unresolvedEvidence.where(preferred.contains)) {
-    rows.add(CheckRow(CheckState.info, '우대 사항', evidence: u, note: '갖추면 유리한 조건이에요.'));
+    rows.add(CheckRow(CheckState.info, '우대 사항', evidence: u, note: '갖추면 유리한 조건입니다.'));
   }
   if (elig.conditions.isEmpty && elig.unresolvedEvidence.isEmpty) {
     rows.add(
       elig.explicitlyUnrestricted
-          ? CheckRow(CheckState.met, '누구나 지원할 수 있어요', evidence: elig.unrestrictedEvidence)
-          : const CheckRow(CheckState.info, '공고에서 지원 조건을 찾지 못했어요', note: '조건이 없다는 뜻은 아니에요. 학교 공지를 확인해 주세요.'),
+          ? CheckRow(CheckState.met, '누구나 지원 가능', evidence: elig.unrestrictedEvidence)
+          : const CheckRow(CheckState.info, '공고에서 지원 조건을 찾지 못했습니다', note: '조건이 없다는 뜻은 아닙니다. 학교 공지를 확인해 주세요.'),
     );
   }
   return groupCheckRows(rows);
@@ -244,7 +244,7 @@ class _ReportScreenState extends State<ReportScreen> {
       }
       if (!mounted) return;
       setState(() => _saved = !wasSaved);
-      messenger.showSnackBar(SnackBar(content: Text(wasSaved ? '저장을 취소했어요.' : '저장했어요.')));
+      messenger.showSnackBar(SnackBar(content: Text(wasSaved ? '저장이 취소되었습니다.' : '공고가 저장되었습니다.')));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(errorMessage(e))));
     }
@@ -253,7 +253,7 @@ class _ReportScreenState extends State<ReportScreen> {
   Future<void> _open(String url) async {
     final ok = await widget.openUrl(Uri.parse(url));
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('원문을 열지 못했어요.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('원문을 열지 못했습니다.')));
     }
   }
 
@@ -280,7 +280,7 @@ class _ReportScreenState extends State<ReportScreen> {
             }
             final notice = snapshot.data;
             if (notice == null) {
-              return const MessageView(title: '공고를 찾을 수 없어요', detail: '학교 공지에서 지워졌거나 아직 정리 중일 수 있어요.');
+              return const MessageView(title: '공고를 찾을 수 없습니다', detail: '학교 공지에서 삭제되었거나 아직 정리 중일 수 있습니다.');
             }
             return _body(notice);
           },
@@ -391,7 +391,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                     // D-019: 알림톡은 열 수 있는 웹 원문이 없다. 받은 카톡 메시지가 원문이다
                     null => Text(
-                      '카카오톡 알림톡으로 받은 공지라 원문 링크가 없어요.',
+                      '카카오톡 알림톡으로 받은 공지라 원문 링크가 없습니다.',
                       textAlign: TextAlign.center,
                       style: captionStyle(context),
                     ),
@@ -460,7 +460,7 @@ class _SummaryBubble extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(color: c.card.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(10)),
-              child: Text('학교 공지를 바탕으로 정리했어요', style: TextStyle(fontSize: 12, color: c.muted)),
+              child: Text('학교 공지를 바탕으로 정리', style: TextStyle(fontSize: 12, color: c.muted)),
             ),
           ),
         ],
@@ -549,18 +549,18 @@ class _Checklist extends StatelessWidget {
   Widget build(BuildContext context) {
     final badge = switch (status) {
       'met' => const Pill('조건 충족', tone: PillTone.point),
-      'needs_check' => const Pill('확인이 필요해요', tone: PillTone.check),
-      'not_met' => const Pill('맞지 않아요', tone: PillTone.urgent),
+      'needs_check' => const Pill('확인 필요', tone: PillTone.check),
+      'not_met' => const Pill('조건 미충족', tone: PillTone.urgent),
       _ => null,
     };
     int countOf(CheckState s) => rows.where((r) => r.state == s).fold(0, (n, r) => n + r.count);
     final checks = countOf(CheckState.check);
     final mets = countOf(CheckState.met);
     final intro = status == null
-        ? '공고에서 찾은 조건이에요.'
+        ? '공고에서 찾은 조건입니다.'
         : checks > 0
-        ? (mets > 0 ? '조건 $mets개는 맞아요. $checks개는 직접 확인해 주세요.' : '$checks개 조건은 직접 확인해 주세요.')
-        : '공고에서 찾은 조건을 내 프로필과 비교했어요.';
+        ? (mets > 0 ? '조건 $mets개 충족. $checks개는 직접 확인해 주세요.' : '$checks개 조건은 직접 확인해 주세요.')
+        : '공고에서 찾은 조건을 내 프로필과 비교했습니다.';
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 36, 24, 0),
       child: Column(
@@ -574,7 +574,7 @@ class _Checklist extends StatelessWidget {
           if (!notice.eligibility.extractionComplete)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text('첨부파일·이미지에 조건이 더 있을 수 있어요. 지원 전에 원문을 확인해 주세요.', style: captionStyle(context)),
+              child: Text('첨부파일·이미지에 조건이 더 있을 수 있습니다. 지원 전에 원문을 확인해 주세요.', style: captionStyle(context)),
             ),
         ],
       ),
@@ -606,7 +606,7 @@ class _CheckLineState extends State<_CheckLine> {
       CheckState.met => _box(c.point, Icon(Icons.check_rounded, size: 16, color: c.pointTick, semanticLabel: '충족')),
       CheckState.notMet => _box(
         c.urgentFill,
-        Icon(Icons.close_rounded, size: 16, color: c.onUrgentFill, semanticLabel: '맞지 않음'),
+        Icon(Icons.close_rounded, size: 16, color: c.onUrgentFill, semanticLabel: '미충족'),
       ),
       CheckState.check => Container(
         width: 24,
@@ -797,23 +797,23 @@ class _Reasons extends StatelessWidget {
     if (words.isNotEmpty) {
       // 받침 있는 '전공'은 '과', 나머지는 '와'
       spans.add(TextSpan(text: words.last == '전공' ? '과 관련 있' : '와 관련 있'));
-      spans.add(TextSpan(text: soon ? '고 ' : '어요.'));
+      spans.add(TextSpan(text: soon ? '고 ' : '습니다.'));
     }
-    if (soon) spans.addAll([markSpan('2주 안에', style), const TextSpan(text: ' 마감돼요.')]);
+    if (soon) spans.addAll([markSpan('2주 안에', style), const TextSpan(text: ' 마감됩니다.')]);
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 36, 24, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionTitle('이래서 추천했어요'),
+          const SectionTitle('추천 이유'),
           const SizedBox(height: 12),
           Text.rich(TextSpan(style: style, children: spans)),
           const SizedBox(height: 8),
           Text(
             [
-              '추천 순서를 정한 이유예요. 합격 가능성을 뜻하지 않아요.',
+              '관심사·희망 직무·전공·마감 시기로 정한 순서입니다. 합격 가능성과는 관계없습니다.',
               if (recommendation.reasonCodes.contains('major_prior_match'))
-                '학과 졸업생 진로는 커리어넷 학과정보 통계(2020 조사)로 계산했어요.',
+                '학과 졸업생 진로는 커리어넷 학과정보 통계(2020 조사)로 계산했습니다.',
             ].join('\n'),
             style: TextStyle(fontSize: 12.5, height: 1.6, color: context.gw.muted),
           ),
@@ -849,8 +849,8 @@ class _Schedule extends StatelessWidget {
             dot: (left ?? 99) <= urgentDays ? _Dot.urgent : _Dot.main,
             bold: true,
             lines: [
-              if (left != null) (left == 0 ? '오늘 마감이에요' : '$left일 남았어요'),
-              if (!deadline.hasTime) '마감 시각은 공고에 나와 있지 않아요',
+              if (left != null) (left == 0 ? '오늘 마감' : 'D-$left'),
+              if (!deadline.hasTime) '공고에 마감 시각 없음',
               if (n.deadlineNote != null) n.deadlineNote!,
             ],
           ),
@@ -872,7 +872,7 @@ class _Schedule extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Text(
-                n.deadlineNote ?? '마감일이 공고에 나와 있지 않아요. 학교 공지를 확인해 주세요.',
+                n.deadlineNote ?? '마감일이 공고에 나와 있지 않습니다. 학교 공지를 확인해 주세요.',
                 style: TextStyle(fontSize: 14, color: c.sub),
               ),
             ),
@@ -880,7 +880,7 @@ class _Schedule extends StatelessWidget {
           // 오래된 정보 안내는 요약 아래 상자로 올렸다.
           if (stale == null && verified != null)
             Text(
-              '${verified.month}월 ${verified.day}일 ${verified.hour.toString().padLeft(2, '0')}:${verified.minute.toString().padLeft(2, '0')} 기준이에요',
+              '${verified.month}월 ${verified.day}일 ${verified.hour.toString().padLeft(2, '0')}:${verified.minute.toString().padLeft(2, '0')} 기준',
               style: captionStyle(context),
             ),
         ],
@@ -937,8 +937,8 @@ class _Event extends StatelessWidget {
             l,
             style: TextStyle(
               fontSize: 13,
-              color: dot == _Dot.urgent && l.endsWith('남았어요') ? c.urgent : c.muted,
-              fontWeight: dot == _Dot.urgent && l.endsWith('남았어요') ? FontWeight.w600 : FontWeight.w400,
+              color: dot == _Dot.urgent && l.startsWith('D-') ? c.urgent : c.muted,
+              fontWeight: dot == _Dot.urgent && l.startsWith('D-') ? FontWeight.w600 : FontWeight.w400,
             ),
           ),
       ],

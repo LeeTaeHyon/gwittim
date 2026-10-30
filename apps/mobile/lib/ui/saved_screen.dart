@@ -143,7 +143,7 @@ class SavedScreenState extends State<SavedScreen> {
       } else {
         await widget.repository.saveNotice(id);
       }
-      _say(messenger, wasSaved ? '저장을 취소했어요.' : '저장했어요.');
+      _say(messenger, wasSaved ? '저장이 취소되었습니다.' : '공고가 저장되었습니다.');
     } catch (err) {
       if (mounted) setState(() => wasSaved ? _unsaved.remove(id) : _unsaved.add(id));
       _say(messenger, errorMessage(err));
@@ -160,7 +160,7 @@ class SavedScreenState extends State<SavedScreen> {
     try {
       await widget.repository.deleteSaved(id);
       if (mounted) setState(() => _entries = [...?_entries]..remove(e));
-      _say(messenger, '목록에서 지웠어요.');
+      _say(messenger, '목록에서 삭제되었습니다.');
     } catch (err) {
       _say(messenger, errorMessage(err));
     } finally {
@@ -212,7 +212,7 @@ class SavedScreenState extends State<SavedScreen> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: TipBubble(
-                  title: '마감일이 바뀐 공고가 ${changed.length}개 있어요',
+                  title: '마감일이 바뀐 공고 ${changed.length}개',
                   detail: _changeDetail(changed),
                   onTap: () => _open(changed.first),
                 ),
@@ -222,8 +222,8 @@ class SavedScreenState extends State<SavedScreen> {
             SliverFillRemaining(
               hasScrollBody: false,
               child: MessageView(
-                title: '아직 저장한 공고가 없어요',
-                detail: '공고 리포트에서 북마크를 누르면 여기에 모여요.',
+                title: '저장된 공고가 없습니다',
+                detail: '공고 리포트에서 북마크를 누르면 여기에 모입니다.',
                 action: widget.onBrowse == null ? null : (label: '공고 둘러보기', onPressed: widget.onBrowse!),
               ),
             )
@@ -265,7 +265,7 @@ class SavedScreenState extends State<SavedScreen> {
                         ),
                     ],
                     const SizedBox(height: 20),
-                    Text('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 바뀌어요.', style: captionStyle(context)),
+                    Text('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 갱신됩니다.', style: captionStyle(context)),
                   ],
                 ),
               ),
@@ -345,7 +345,7 @@ class _SavedRow extends StatelessWidget {
                   const SizedBox(height: 4),
                   if (removed)
                     Text(
-                      '학교 공지에서 삭제됐어요',
+                      '학교 공지에서 삭제됨',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.urgent),
                     )
                   else
@@ -358,7 +358,7 @@ class _SavedRow extends StatelessWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         const Pill('마감일 바뀜'),
-                        Text(before == null ? '저장할 때는 마감일이 없었어요' : '저장할 때는 ${shortDate(before)}', style: meta),
+                        Text(before == null ? '저장 당시 마감일 없음' : '저장 당시 ${shortDate(before)}', style: meta),
                       ],
                     ),
                   ],
@@ -400,11 +400,11 @@ class _SavedRow extends StatelessWidget {
     final left = daysLeft(n, today);
     final lead = [
       if (n.lifecycleStatus == 'closed')
-        '모집이 끝났어요'
+        '모집 마감'
       else if (deadline == null)
-        n.deadlineNote ?? '마감일이 공고에 나와 있지 않아요'
+        n.deadlineNote ?? '공고에 마감일 없음'
       else if (deadline.day.isBefore(DateTime(today.year, today.month, today.day)))
-        '마감일이 지났어요'
+        '마감일 지남'
       else ...[
         if (left != null) left == 0 ? '오늘 마감' : 'D-$left',
         if (deadline.hasTime) '${deadline.time} 마감',

@@ -64,7 +64,7 @@ void main() {
         ),
       );
       expect(find.byType(GwBubbleMark), findsOneWidget);
-      expect(find.text('불러오지 못했어요'), findsOneWidget);
+      expect(find.text('불러오기 실패'), findsOneWidget);
       expect(find.text('잠시 후 다시 시도해 주세요.'), findsOneWidget);
       expect(find.byType(FilledButton), findsNothing);
       expect(find.byType(Icon), findsNothing); // 구름 아이콘 없음
@@ -223,8 +223,8 @@ void main() {
       final list = find.descendant(of: find.byType(BriefingScreen), matching: find.byType(Scrollable)).first;
       await tester.fling(list, const Offset(0, -3000), 3000);
       await tester.pumpAndSettle();
-      final caption = find.textContaining('합격 가능성을 뜻하지 않아요');
-      final button = find.widgetWithText(FilledButton, '확인했어요');
+      final caption = find.textContaining('합격 가능성과는 관계없습니다');
+      final button = find.widgetWithText(FilledButton, '확인');
       expect(tester.getBottomLeft(caption).dy, lessThanOrEqualTo(tester.getTopLeft(button).dy - 24));
 
       await tester.tap(find.byTooltip('브리핑 닫기'));

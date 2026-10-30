@@ -104,7 +104,7 @@ class NoticesScreenState extends State<NoticesScreen> {
           if (list.items.isEmpty)
             const SliverFillRemaining(
               hasScrollBody: false,
-              child: MessageView(title: '지금 보여드릴 공고가 없어요', detail: '학교 공지를 다시 확인하면 여기에 모여요.'),
+              child: MessageView(title: '표시할 공고가 없습니다', detail: '학교 공지를 다시 확인하면 여기에 표시됩니다.'),
             )
           else
             SliverPadding(
@@ -150,7 +150,7 @@ class NoticeCard extends StatelessWidget {
     // 확인 필요는 목록에서 회색으로 차분하게 보인다 (D-009).
     final chip = soon
         ? ddayPill(n, today)
-        : (status == 'met' ? null : Pill(status == 'not_met' ? '조건 불충족' : '확인 필요', tone: PillTone.neutral));
+        : (status == 'met' ? null : Pill(status == 'not_met' ? '조건 미충족' : '확인 필요', tone: PillTone.neutral));
     final reason = r.reasonCodes.any(personalReasons.containsKey)
         ? r.reasonCodes.map(reasonText).firstWhere((t) => t.isNotEmpty, orElse: () => '')
         : '';
@@ -194,7 +194,7 @@ class NoticeCard extends StatelessWidget {
               style: TextStyle(fontSize: 14, color: c.sub),
             )
           else
-            Text(n.deadlineNote ?? '마감일이 공고에 나와 있지 않아요', style: TextStyle(fontSize: 14, color: c.sub)),
+            Text(n.deadlineNote ?? '공고에 마감일 없음', style: TextStyle(fontSize: 14, color: c.sub)),
           if (status == 'met' || reason.isNotEmpty || (soon && status != 'met')) ...[
             const SizedBox(height: 6),
             Row(
@@ -214,7 +214,7 @@ class NoticeCard extends StatelessWidget {
                         // 칩 자리를 D-day가 차지하면 조건 상태는 여기에 둔다.
                         if (soon && status != 'met')
                           TextSpan(
-                            text: '${reason.isEmpty ? '' : ' · '}${status == 'not_met' ? '조건 불충족' : '조건 확인 필요'}',
+                            text: '${reason.isEmpty ? '' : ' · '}${status == 'not_met' ? '조건 미충족' : '조건 확인 필요'}',
                             style: muted,
                           ),
                       ],

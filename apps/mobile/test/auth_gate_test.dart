@@ -93,7 +93,7 @@ void main() {
       scrollable: find.descendant(of: find.byType(ProfileScreen), matching: find.byType(Scrollable)).first,
     );
     await settle(tester);
-    expect(find.text('Google 계정으로 로그인했어요'), findsOneWidget);
+    expect(find.text('Google 계정으로 로그인됨'), findsOneWidget);
     await tester.tap(find.text('로그아웃'));
     await settle(tester);
     expect(find.text('Google 계정으로 시작하기'), findsOneWidget);
@@ -108,11 +108,11 @@ void main() {
     await settle(tester);
 
     expect(find.bySemanticsLabel('귀띔'), findsOneWidget); // 직접 그린 로고 (D-011)
-    expect(find.text('몰랐던 기회를\n먼저 귀띔해 드려요'), findsOneWidget);
+    expect(find.text('귀띔이 맞춤 공고를\n먼저 안내해 드립니다'), findsOneWidget);
     expect(find.byType(GoogleSignInButton), findsOneWidget);
     expect(find.descendant(of: find.byType(GoogleSignInButton), matching: find.byType(GoogleLogo)), findsOneWidget);
-    expect(find.text('성적·학번은 묻지 않아요'), findsOneWidget);
-    expect(find.text('시작하면 이용약관과 개인정보 처리방침에 동의하게 돼요'), findsOneWidget);
+    expect(find.text('성적·학번은 묻지 않습니다'), findsOneWidget);
+    expect(find.text('시작하면 이용약관과 개인정보 처리방침에 동의한 것으로 봅니다'), findsOneWidget);
     expect(find.textContaining('알림'), findsNothing);
     expect(find.textContaining('알려'), findsNothing);
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
@@ -143,7 +143,7 @@ void main() {
     await settle(tester);
     await tester.tap(find.text('Google 계정으로 시작하기'));
     await settle(tester);
-    expect(find.text('로그인하지 못했어요. 잠시 후 다시 시도해 주세요.'), findsOneWidget);
+    expect(find.text('로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.'), findsOneWidget);
     expect(find.textContaining('DEVELOPER_ERROR'), findsNothing);
   });
 
@@ -156,7 +156,7 @@ void main() {
     await settle(tester);
     await tester.tap(find.text('Google 계정으로 시작하기'));
     await settle(tester);
-    expect(find.text('로그인을 마치지 못했어요. 기기에 Google 계정이 있는지 확인해 주세요.'), findsOneWidget);
+    expect(find.text('로그인을 마치지 못했습니다. 기기에 Google 계정이 있는지 확인해 주세요.'), findsOneWidget);
     // 로그인 화면에 남고, 알림이 사라지면 다시 누를 수 있다
     await tester.pump(const Duration(seconds: 5));
     await settle(tester);
@@ -255,13 +255,13 @@ void main() {
     for (var i = 0; i < 3; i++) {
       expect(box(i, 'on'), findsOneWidget);
     }
-    expect(shown(tester, '2개는 맞아요'), isTrue);
+    expect(shown(tester, '2개 충족'), isTrue);
     expect(shown(tester, '장학생 선발 공고'), isFalse);
     expect(tester.getTopLeft(find.byType(GoogleSignInButton)).dy, buttonTop);
 
     double y(String text) => tester.getTopLeft(find.text(text)).dy;
     await tester.pump(const Duration(milliseconds: 3800)); // 14.8초: 장면 3 카드가 다 올라옴, 아직 원래 순서
-    expect(shown(tester, '관심 분야에 맞춰 공고를 추천해요'), isTrue);
+    expect(shown(tester, '관심 분야에 맞춘 공고 추천'), isTrue);
     expect(y('AI 해커톤 참가자 모집'), greaterThan(y('교내 디자인 공모전')));
     await tester.pump(const Duration(milliseconds: 2700)); // 17.5초: 관심 분야 칩을 고른 뒤
     expect(y('AI 해커톤 참가자 모집'), lessThan(y('교내 디자인 공모전')));
@@ -269,7 +269,7 @@ void main() {
     expect(tester.getTopLeft(find.byType(GoogleSignInButton)).dy, buttonTop);
 
     await tester.pump(const Duration(milliseconds: 4000)); // 21.5초: 다시 장면 1
-    expect(shown(tester, '관심 분야에 맞춰 공고를 추천해요'), isFalse);
+    expect(shown(tester, '관심 분야에 맞춘 공고 추천'), isFalse);
     expect(find.byKey(const ValueKey('typing')), findsOneWidget);
     expect(find.byKey(const ValueKey('progress-0')), findsNothing); // 진행 표시는 없다
     expect(find.textContaining('알림'), findsNothing); // 어느 장면도 알림을 약속하지 않는다
@@ -295,9 +295,9 @@ void main() {
     auth.start();
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('typing')), findsNothing);
-    expect(find.text('발표회 마감이 3일 늦춰졌어요'), findsOneWidget);
+    expect(find.text('발표회 마감 3일 연장'), findsOneWidget);
     final opacities = tester.widgetList<Opacity>(
-      find.ancestor(of: find.text('발표회 마감이 3일 늦춰졌어요'), matching: find.byType(Opacity)),
+      find.ancestor(of: find.text('발표회 마감 3일 연장'), matching: find.byType(Opacity)),
     );
     expect(opacities.every((o) => o.opacity == 1), isTrue);
 
@@ -330,7 +330,7 @@ void main() {
 
         final bottom = h - 24;
         expect(tester.getRect(find.byType(GoogleSignInButton)).bottom, lessThanOrEqualTo(bottom));
-        expect(tester.getRect(find.textContaining('동의하게 돼요')).bottom, lessThanOrEqualTo(bottom));
+        expect(tester.getRect(find.textContaining('동의한 것으로 봅니다')).bottom, lessThanOrEqualTo(bottom));
         final over = tester.state<ScrollableState>(find.byType(Scrollable).first).position.maxScrollExtent;
         if (fits) expect(over, 0);
         expect(tester.takeException(), isNull);

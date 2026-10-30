@@ -57,7 +57,7 @@ void main() {
       GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: noBriefing),
     );
     await tester.pumpAndSettle();
-    expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있어요'), findsOneWidget);
+    expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있습니다'), findsOneWidget);
 
     await tester.tap(find.byTooltip('내 정보'));
     await tester.pumpAndSettle();
@@ -80,7 +80,7 @@ void main() {
 
     await tester.tap(find.byTooltip('뒤로'));
     await tester.pumpAndSettle();
-    expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있어요'), findsNothing);
+    expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있습니다'), findsNothing);
   });
 
   testWidgets('상세에서 저장 → 저장 탭에 마감 변경 안내 → 저장 취소 → 다시 열면 빈 목록', (tester) async {
@@ -97,7 +97,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('저장'));
     await tester.pumpAndSettle();
-    expect(find.text('저장했어요.'), findsOneWidget);
+    expect(find.text('공고가 저장되었습니다.'), findsOneWidget);
     expect(find.byTooltip('저장 취소'), findsOneWidget);
 
     // 저장 이후 공고 마감이 바뀐 상황: 저장 당시 10/28, 최신 10/30
@@ -117,15 +117,15 @@ void main() {
     expect(find.text('1개'), findsOneWidget);
     expect(find.text('그 이후'), findsOneWidget); // 10/17(토) 기준 10/30은 다다음 주
     expect(find.text('D-13 · 17:00 마감 · 행사'), findsOneWidget);
-    expect(find.text('마감일이 바뀐 공고가 1개 있어요'), findsOneWidget);
+    expect(find.text('마감일이 바뀐 공고 1개'), findsOneWidget);
     expect(find.text('$title · 10월 28일(수) 17:00 → 10월 30일(금) 17:00'), findsOneWidget);
     expect(find.text('마감일 바뀜'), findsOneWidget);
-    expect(find.text('저장할 때는 10월 28일(수) 17:00'), findsOneWidget);
+    expect(find.text('저장 당시 10월 28일(수) 17:00'), findsOneWidget);
 
     Finder inSaved(Finder f) => find.descendant(of: find.byType(SavedScreen), matching: f);
     await tester.tap(inSaved(find.byTooltip('저장 취소')));
     await tester.pumpAndSettle();
-    expect(find.text('저장을 취소했어요.'), findsOneWidget);
+    expect(find.text('저장이 취소되었습니다.'), findsOneWidget);
     expect(inSaved(find.byTooltip('저장')), findsOneWidget); // 다시 켤 수 있게 남겨 둔다
     expect(find.text('0개'), findsOneWidget);
 
@@ -133,7 +133,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('저장함'));
     await tester.pumpAndSettle();
-    expect(find.text('아직 저장한 공고가 없어요'), findsOneWidget);
+    expect(find.text('저장된 공고가 없습니다'), findsOneWidget);
 
     // 빈 화면의 '공고 둘러보기'는 공고 탭으로 간다
     await tester.tap(find.text('공고 둘러보기'));

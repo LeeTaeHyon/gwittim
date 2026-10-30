@@ -86,7 +86,7 @@ class BriefingScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
               child: Text(
-                '추천 순서는 관심사·희망 직무·전공·학과 통계·마감 시기로 정해요. 합격 가능성을 뜻하지 않아요.',
+                '추천 순서는 관심사·희망 직무·전공·학과 통계·마감 시기로 정합니다. 합격 가능성과는 관계없습니다.',
                 style: TextStyle(fontSize: 12.5, height: 1.6, color: c.muted),
               ),
             ),
@@ -115,7 +115,7 @@ class BriefingScreen extends StatelessWidget {
               top: false,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                child: FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('확인했어요')),
+                child: FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('확인')),
               ),
             ),
           ),
@@ -298,10 +298,10 @@ class _MajorPickBubbleState extends State<_MajorPickBubble> {
     if (!mounted) return;
     setState(
       () => _answered = interested
-          ? '알려 주셔서 고마워요. 학과 통계 추천을 계속 보여 드릴게요.'
+          ? '답변 감사합니다. 학과 통계 추천을 계속 표시합니다.'
           : stopped
-          ? '관심 없다는 답이 이어져서 학과 통계 추천을 $majorPickPauseDays일 동안 쉬어요.'
-          : '이 공고는 다시 권하지 않을게요.',
+          ? '관심 없음 답이 이어져 학과 통계 추천을 $majorPickPauseDays일 동안 표시하지 않습니다.'
+          : '이 공고는 다시 추천하지 않습니다.',
     );
   }
 
@@ -326,11 +326,11 @@ class _MajorPickBubbleState extends State<_MajorPickBubble> {
           ),
           const SizedBox(height: 6),
           Text(
-            '직접 고른 분야가 아니라, 같은 학과 졸업생이 많이 가는 분야라서 권해 드려요.',
+            '직접 고른 분야는 아니지만, 같은 학과 졸업생이 많이 가는 분야의 공고입니다.',
             style: TextStyle(fontSize: 14, height: 1.5, color: c.sub),
           ),
           const SizedBox(height: 4),
-          Text('커리어넷 학과정보 통계(2020 조사)로 골랐어요.', style: captionStyle(context)),
+          Text('커리어넷 학과정보 통계(2020 조사) 기준', style: captionStyle(context)),
           const SizedBox(height: 16),
           SoftButton(label: '공고 보기', onPressed: widget.onOpen),
           if (widget.onAnswer != null) ...[
@@ -341,7 +341,7 @@ class _MajorPickBubbleState extends State<_MajorPickBubble> {
               Text(text, style: TextStyle(fontSize: 14, height: 1.5, color: c.sub))
             else ...[
               Text(
-                '이런 추천을 계속 받아 볼까요?',
+                '이런 추천을 계속 받으시겠습니까?',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body),
               ),
               const SizedBox(height: 10),
@@ -349,8 +349,8 @@ class _MajorPickBubbleState extends State<_MajorPickBubble> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  SoftButton(label: '관심 있어요', icon: null, onPressed: () => _answer(true)),
-                  SoftButton(label: '관심 없어요', icon: null, onPressed: () => _answer(false)),
+                  SoftButton(label: '관심 있음', icon: null, onPressed: () => _answer(true)),
+                  SoftButton(label: '관심 없음', icon: null, onPressed: () => _answer(false)),
                 ],
               ),
             ],
@@ -465,7 +465,7 @@ class _SavedSoonBubble extends StatelessWidget {
           Text('저장한 공고', style: _kicker(c)),
           const SizedBox(height: 6),
           Text(n.title, style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
-          Text(left == 0 ? '오늘 신청이 마감돼요' : '신청 마감이 $left일 남았어요', style: _title(c).copyWith(color: c.urgent)),
+          Text(left == 0 ? '오늘 신청 마감' : '신청 마감 D-$left', style: _title(c).copyWith(color: c.urgent)),
           const SizedBox(height: 6),
           Text(
             '${deadline.day.month}월 ${deadline.day.day}일${deadline.hasTime ? ' ${deadline.time}' : ''} 마감',
@@ -473,7 +473,7 @@ class _SavedSoonBubble extends StatelessWidget {
           ),
           if (entries.length > 1) ...[
             const SizedBox(height: 4),
-            Text('저장한 공고 ${entries.length - 1}건도 이틀 안에 마감돼요', style: captionStyle(context)),
+            Text('저장한 공고 ${entries.length - 1}건도 이틀 안에 마감', style: captionStyle(context)),
           ],
           const SizedBox(height: 16),
           SoftButton(label: '공고 보기', onPressed: onOpen),
@@ -558,7 +558,7 @@ class _ListBubble extends StatelessWidget {
           if (entries.length > 3)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text('외 ${entries.length - 3}건은 공고 탭에서 볼 수 있어요', style: captionStyle(context)),
+              child: Text('외 ${entries.length - 3}건은 공고 탭에서 볼 수 있습니다', style: captionStyle(context)),
             ),
         ],
       ),
@@ -623,7 +623,7 @@ class _ChangedBubble extends StatelessWidget {
           ),
           if (more > 0) ...[
             const SizedBox(height: 10),
-            Text('다른 저장 공고 $more개도 마감이 바뀌었어요', style: captionStyle(context)),
+            Text('마감일이 바뀐 저장 공고 $more개 더', style: captionStyle(context)),
           ],
         ],
       ),
