@@ -389,7 +389,7 @@ void main() {
     expect(opened.single.toString(), contains('mjc.ac.kr/bbs/data/view.do'));
   });
 
-  testWidgets('알림톡 공고: 원문 링크 대신 안내 문구, 발송 시각 표시 (D-016)', (tester) async {
+  testWidgets('알림톡 공고: 원문 링크 대신 안내 문구, 발송 시각 표시 (D-019)', (tester) async {
     final base = notice();
     final kakao = Notice(
       summary: NoticeSummary(

@@ -22,7 +22,7 @@
     "schema_version": { "$ref": "common.schema.json#/$defs/schema_version" },
     "source_id": { "$ref": "common.schema.json#/$defs/code", "description": "출처 설정 ID (게시판 단위, 예: mjc_www_notice)." },
     "source_notice_id": { "type": ["string", "null"], "minLength": 1, "description": "출처가 제공하는 공고 ID. 없으면 null (정규화 URL로 식별)." },
-    "source_url": { "type": ["string", "null"], "format": "uri", "description": "원문 URL. 웹 원문이 없는 출처(카카오톡 알림톡, D-016)는 null이고, 이때 source_notice_id가 있어야 한다." },
+    "source_url": { "type": ["string", "null"], "format": "uri", "description": "원문 URL. 웹 원문이 없는 출처(카카오톡 알림톡, D-019)는 null이고, 이때 source_notice_id가 있어야 한다." },
     "title": { "type": "string", "minLength": 1 },
     "body_text": { "type": "string", "description": "메뉴·푸터를 제거한 본문. 본문 이미지의 대체텍스트(alt)는 '[이미지 설명]' 줄 아래에 붙인다 (D-014)." },
     "published": {
