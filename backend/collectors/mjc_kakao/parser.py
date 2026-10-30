@@ -102,15 +102,24 @@ def clean_body(m: dict) -> str:
     return re.sub(r"\n{3,}", "\n\n", text)
 
 
+# 제목으로 쓰지 않는 인사·부서 소개·발송 안내 ("명지전문대학 원격교육지원센터입니다.", "즐거운 개강입니다!")
+GREETING_RE = re.compile(r"^\W*안녕하세요\W*(?:<?이름>?\s*님\W*)?")  # 가린 수신자 이름 호칭도 함께
+INTRO_RE = re.compile(
+    r"^\W*(?:명지전문대학\s*)?[가-힣A-Za-z·\s]{0,20}(?:센터|팀|실|과|처|원|단|관|본부|위원회|대학)\s*"
+    r"(?:입니다|에서\s*안내(?:해)?\s*드립니다)\W*"
+)
+SKIP_TITLE_RE = re.compile(r"^\W*저는\s.*봇\W*입니다|발송되는\s*메[세시]지|^\W*즐거운\s*\S+\s*입니다\W*$|^\W*<?이름>?\s*님\W*$")
+
+
 def title_of(text: str, room: str) -> str:
     short_room = room.replace("명지전문대학", "").strip()
     for l in text.splitlines():
         s = l.strip()
-        if not s or re.fullmatch(r"\[[^\]]*\]", s) or s in (room, short_room):
+        if not s or re.fullmatch(r"\[[^\]]*\]", s) or s in (room, short_room) or SKIP_TITLE_RE.search(s):
             continue
-        if s.startswith("안녕하세요") and len(s) < 40:
-            continue
-        return s[:80]
+        s = INTRO_RE.sub("", GREETING_RE.sub("", s)).strip()
+        if s:
+            return s[:80]
     return ""
 
 

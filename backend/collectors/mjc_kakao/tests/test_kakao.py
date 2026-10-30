@@ -109,3 +109,59 @@ def test_gemma_answer_replaces_model_when_unsure(tmp_path):
     for f in fields:
         assert "_analysis_version" not in f  # 정상 경로는 분석기 버전 그대로
     assert sum(f["category"] == "global" and f["interest_tags"] == ["global_language"] for f in fields) == sources["gemma"]
+
+
+# ---------- 연도 없는 날짜, 지난 공고, 제목 (D-016) ----------
+
+DATED = (
+    HEADER
+    + day("2026년 9월 9일 수요일")
+    + msg("오전 9:00", "[합성 샘플] 어학 아카데미 안내\n모집: 9월 11일(금)까지 선착순")
+    + day("2026년 10월 14일 수요일")
+    + msg("오전 9:00", "명지전문대학 합성센터입니다.\n[합성 샘플] 운동 특강 안내\n10월 16일 15시 체육관에서 진행")
+    + day("2026년 10월 21일 수요일")
+    + msg("오전 9:00", "[합성 샘플] 카드뉴스 공모전\n특강: 10월 29일 진행\n제출: 11/20(금)까지")
+)
+
+
+def by_title(notices: dict, word: str) -> dict:
+    return next(n for n in notices.values() if word in n["title"])
+
+
+def test_yearless_dates_fill_deadline_and_activity(tmp_path):
+    raws = to_raw_notices(export_dir(tmp_path, DATED))
+    notices = {}
+    run_kakao(raws, store=InMemoryStore(), sink=InMemorySink(), notices=notices, today=date(2026, 10, 30), analyzer=KakaoAnalyzer())
+    for n in notices.values():
+        assert schema_errors("notice", n) == [] and n["publication_status"] == "published"
+
+    academy = by_title(notices, "어학")
+    assert academy["application_deadline"]["date"] == "2026-09-11" and academy["lifecycle_status"] == "closed"
+    # 마감 없이 특강 날짜만 있는 안내: 활동일이 지나면 끝난 공고
+    lecture = by_title(notices, "운동 특강")
+    assert lecture["application_deadline"] is None
+    assert lecture["activity_period"]["start"] == {
+        "date": "2026-10-16", "time": "15:00", "timezone": "Asia/Seoul", "precision": "minute", "evidence": "10월 16일 15시 체육관에서 진행",
+    }
+    assert lecture["lifecycle_status"] == "closed"
+    contest = by_title(notices, "카드뉴스")
+    assert contest["application_deadline"]["date"] == "2026-11-20" and contest["lifecycle_status"] == "open"
+    assert contest["activity_period"]["start"]["date"] == "2026-10-29"
+
+
+def test_greeting_line_is_not_title(tmp_path):
+    raws = to_raw_notices(export_dir(tmp_path, DATED))
+    assert "[합성 샘플] 운동 특강 안내" in [r["title"] for r in raws]
+
+
+def test_past_kakao_notices_are_not_published_until_then_closed(tmp_path):
+    raws = to_raw_notices(export_dir(tmp_path, DATED))
+    store, sink, notices = InMemoryStore(), InMemorySink(), {}
+    report = run_kakao(raws, store=store, sink=sink, notices=notices, today=date(2026, 10, 30), analyzer=KakaoAnalyzer())
+    assert report.held_past == 2 and report.published == 1
+    assert [n["title"] for n in sink.public.values()] == ["[합성 샘플] 카드뉴스 공모전"]
+
+    # 게시한 공고는 마감이 지나도 closed 상태로 갱신해 게시한다. 처음부터 지난 공고는 계속 올리지 않는다
+    later = run_kakao(raws, store=store, sink=sink, notices=notices, today=date(2026, 11, 21), analyzer=KakaoAnalyzer())
+    assert later.held_past == 2
+    assert [n["lifecycle_status"] for n in sink.public.values()] == ["closed"]
