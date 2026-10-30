@@ -46,6 +46,7 @@ String reasonText(String code) => switch (code) {
   'interest_match' => '관심 분야와 관련된 공고예요',
   'role_match' => '희망 직무와 관련된 공고예요',
   'major_match' => '전공과 관련된 공고예요',
+  'major_prior_match' => '같은 학과 졸업생이 많이 가는 분야의 공고예요',
   'deadline_timing' => '2주 안에 신청이 마감돼요',
   'eligibility_met' => '확인된 지원 조건을 모두 충족해요',
   'eligibility_needs_check' => '지원 조건을 원문에서 확인해 주세요',
@@ -95,4 +96,9 @@ String eligibilityShort(String status) => switch (status) {
 };
 
 /// 개인화 추천 이유 코드 → 화면 낱말 (형광펜으로 강조)
-const personalReasons = {'interest_match': '관심 분야', 'role_match': '희망 직무', 'major_match': '전공'};
+const personalReasons = {
+  'interest_match': '관심 분야',
+  'role_match': '희망 직무',
+  'major_match': '전공',
+  'major_prior_match': '학과 졸업생 진로', // D-017: 관심사·직무를 고르지 않은 학생에게만
+};

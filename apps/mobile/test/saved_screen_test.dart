@@ -74,6 +74,9 @@ class SavedRepository implements NoticeRepository {
 
   @override
   Future<List<DictionaryItem>> dictionary(String name) async => [];
+
+  @override
+  Future<Map<String, List<String>>> majorInterests() async => {};
 }
 
 void main() {

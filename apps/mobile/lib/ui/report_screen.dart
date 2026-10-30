@@ -810,7 +810,11 @@ class _Reasons extends StatelessWidget {
           Text.rich(TextSpan(style: style, children: spans)),
           const SizedBox(height: 8),
           Text(
-            '추천 순서를 정한 이유예요. 합격 가능성을 뜻하지 않아요.',
+            [
+              '추천 순서를 정한 이유예요. 합격 가능성을 뜻하지 않아요.',
+              if (recommendation.reasonCodes.contains('major_prior_match'))
+                '학과 졸업생 진로는 커리어넷 학과정보 통계(2020 조사)로 계산했어요.',
+            ].join('\n'),
             style: TextStyle(fontSize: 12.5, height: 1.6, color: context.gw.muted),
           ),
         ],

@@ -29,6 +29,7 @@
           "interest_match",
           "role_match",
           "major_match",
+          "major_prior_match",
           "deadline_timing",
           "eligibility_met",
           "eligibility_needs_check"
