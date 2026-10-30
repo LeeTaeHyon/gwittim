@@ -1,4 +1,4 @@
-"""학습한 Keras 모델(임베딩 → 평균 풀링 → Dense)을 TensorFlow 없이 계산한다 (D-016).
+"""학습한 Keras 모델(임베딩 → 평균 풀링 → Dense)을 TensorFlow 없이 계산한다 (D-019).
 
 학습은 localModel/train_keras.py(Keras)에서 하고, localModel/export_weights.py가 가중치와 단어장만 꺼내
 models/<이름>.json(설정·단어장) + models/<이름>.bin(float32 가중치)으로 저장한다.

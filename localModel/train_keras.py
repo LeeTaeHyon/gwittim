@@ -21,7 +21,7 @@
   .venv/Scripts/python train_keras.py --all               관심사 4가지 조합을 모두 돌려 표로 비교
   .venv/Scripts/python train_keras.py --board             게시판 공고 보강분을 학습에 보탬 (보강 효과 비교용)
 
-학습 뒤 export_weights.py로 가중치를 backend/classifier/models/에 꺼내면 앱 배치가 쓴다 (D-016).
+학습 뒤 export_weights.py로 가중치를 backend/classifier/models/에 꺼내면 앱 배치가 쓴다 (D-019).
 
 관심사 모델은 배운 꼬리표 외에 '기타' 출력을 하나 더 둔다 (Gemma 라벨에 배운 적 없는 꼬리표가 있으면 1).
 이 확률과 문턱값 근처의 애매한 확률을 보고 Gemma로 넘기는 캐스케이드를 시험 세트로 시뮬레이션한다.

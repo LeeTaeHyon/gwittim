@@ -22,7 +22,7 @@ abstract class NoticeRepository {
   /// 프로필 입력 선택지: 'majors' / 'interests' / 'roles'
   Future<List<DictionaryItem>> dictionary(String name);
 
-  /// 학과 → 졸업생이 많이 가는 관심 분야 (D-017). 프로필 입력 화면의 참고용
+  /// 학과 → 졸업생이 많이 가는 관심 분야 (D-020). 프로필 입력 화면의 참고용
   Future<Map<String, List<String>>> majorInterests();
 
   Future<List<SavedEntry>> listSaved();
@@ -79,7 +79,7 @@ class AssetDictionaries {
 
   Map<String, List<String>>? _majorInterests;
 
-  /// 학과 졸업생 진로 통계(contracts/stats/major_prior.json 사본, assets/stats/, D-017).
+  /// 학과 졸업생 진로 통계(contracts/stats/major_prior.json 사본, assets/stats/, D-020).
   /// 학과 코드 → 많이 가는 관심 분야 코드 (확률 높은 순 3개). 읽지 못하면 빈 표.
   /// 프로필 입력 화면에 보여 주는 데만 쓰고, 프로필에 자동으로 넣지 않는다.
   Future<Map<String, List<String>>> majorInterests() async {

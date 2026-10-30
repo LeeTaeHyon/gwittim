@@ -2,7 +2,7 @@
 
 실행: uv run python -m tools.export_mobile_sample
 출력: apps/mobile/assets/sample/ (합성 자료), apps/mobile/assets/dictionaries/ (공통 사전 사본),
-      apps/mobile/assets/stats/ (학과 통계 확률표 사본, D-017)
+      apps/mobile/assets/stats/ (학과 통계 확률표 사본, D-020)
 """
 from __future__ import annotations
 

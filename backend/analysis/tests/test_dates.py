@@ -48,7 +48,7 @@ def test_minute_precision_uses_source_timezone():
     assert (info["precision"], info["timezone"]) == ("minute", "Asia/Seoul")
 
 
-# ---------- 연도 없는 날짜 (알림톡, D-016) ----------
+# ---------- 연도 없는 날짜 (알림톡, D-019) ----------
 
 @pytest.mark.parametrize(
     ("line", "anchor", "expected"),

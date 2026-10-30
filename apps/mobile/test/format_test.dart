@@ -49,7 +49,7 @@ void main() {
     expect(reasonText('interest_match'), contains('관심 분야'));
     expect(reasonText('eligibility_met'), contains('지원 조건'));
     expect(reasonText('unknown_code'), '');
-    expect(reasonText('major_prior_match'), contains('학과 졸업생')); // D-017
+    expect(reasonText('major_prior_match'), contains('학과 졸업생')); // D-020
   });
 
   test('원문 확인이 24시간을 넘으면 오래된 정보 안내 (D-006)', () {

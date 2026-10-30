@@ -1,4 +1,4 @@
-"""알림톡 수집 실행 (D-016). PC 카톡에서 학교 채널 대화를 내보낸 뒤 손으로 실행한다.
+"""알림톡 수집 실행 (D-019). PC 카톡에서 학교 채널 대화를 내보낸 뒤 손으로 실행한다.
 
 uv run python -m backend.collectors.mjc_kakao --export-dir <내보내기 txt 폴더>              # 로컬 파일만 (data/local/)
 uv run python -m backend.collectors.mjc_kakao --export-dir <폴더> --no-llm                   # Ollama 없이 (모델만)
