@@ -7,6 +7,7 @@ from __future__ import annotations
 from datetime import date
 
 from .config import PERSONAL_FACTORS, TIMING_BANDS, WEIGHTS
+from .major_prior import major_prior_factor
 
 
 def _overlap(profile_codes, notice_codes) -> float | None:
@@ -40,13 +41,14 @@ def factors(notice: dict, profile: dict, today: date) -> dict[str, float | None]
         "interest": _overlap(profile.get("interest_ids"), notice["interest_tags"]),
         "role": _overlap(profile.get("target_role_ids"), notice["related_roles"]),
         "major": major,
+        "major_prior": major_prior_factor(notice, profile),
         "timing": timing_factor(notice, today),
     }
 
 
 def score(factor_values: dict[str, float | None]) -> float | None:
     """100 × 가중합 / 평가 가능한 가중치 합. 개인화 요소가 모두 평가 불가면 None."""
-    if all(factor_values[name] is None for name in PERSONAL_FACTORS):
+    if all(factor_values.get(name) is None for name in PERSONAL_FACTORS):
         return None
     evaluable = {name: v for name, v in factor_values.items() if v is not None}
     total_weight = sum(WEIGHTS[name] for name in evaluable)

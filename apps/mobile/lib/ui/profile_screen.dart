@@ -33,7 +33,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileData {
-  const _ProfileData(this.profile, this.universities, this.majors, this.interests, this.roles);
+  const _ProfileData(this.profile, this.universities, this.majors, this.interests, this.roles, this.majorInterests);
 
   final UserProfile? profile;
   final List<DictionaryItem> universities;
@@ -41,7 +41,10 @@ class _ProfileData {
   final List<DictionaryItem> interests;
   final List<DictionaryItem> roles;
 
-  _ProfileData withProfile(UserProfile p) => _ProfileData(p, universities, majors, interests, roles);
+  /// 학과 → 졸업생이 많이 가는 관심 분야 (D-017)
+  final Map<String, List<String>> majorInterests;
+
+  _ProfileData withProfile(UserProfile p) => _ProfileData(p, universities, majors, interests, roles, majorInterests);
 }
 
 /// P0 대상 학교는 명지전문대 하나 (D-005 #6). 저장된 학교가 없을 때만 쓴다.
@@ -63,6 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await r.dictionary('majors'),
       await r.dictionary('interests'),
       await r.dictionary('roles'),
+      await r.majorInterests(),
     );
     _data = data;
     return data;
@@ -79,6 +83,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           majors: data.majors,
           interests: data.interests,
           roles: data.roles,
+          majorInterests: data.majorInterests,
         ),
       ),
     );
@@ -328,6 +333,7 @@ class ProfileEditScreen extends StatefulWidget {
     required this.majors,
     required this.interests,
     required this.roles,
+    required this.majorInterests,
   });
 
   final NoticeRepository repository;
@@ -336,6 +342,7 @@ class ProfileEditScreen extends StatefulWidget {
   final List<DictionaryItem> majors;
   final List<DictionaryItem> interests;
   final List<DictionaryItem> roles;
+  final Map<String, List<String>> majorInterests;
 
   @override
   State<ProfileEditScreen> createState() => _ProfileEditScreenState();
@@ -529,11 +536,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           ],
         ),
       ),
-      1 => (
-        '관심 분야',
-        '고른 분야와 관련된 공고를 먼저 보여 드려요.',
-        _ChoiceChips(items: widget.interests, selected: _interests, onChanged: (s) => setState(() => _interests = s)),
-      ),
+      1 => ('관심 분야', '고른 분야와 관련된 공고를 먼저 보여 드려요.', _interestBody(names[_majorId])),
       _ => (
         '희망 직무',
         '고른 직무와 관련된 공고를 먼저 보여 드려요.',
@@ -566,6 +569,31 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         Text(detail, style: caption),
         const SizedBox(height: 16),
         body,
+      ],
+    );
+  }
+
+  /// 관심 분야 단계. 학과를 골랐으면 졸업생이 많이 가는 분야를 먼저 보여 준다 (D-017).
+  /// 미리 고르지 않는다. 학생이 눌러야 프로필에 들어간다.
+  Widget _interestBody(String? majorName) {
+    void onChanged(Set<String> s) => setState(() => _interests = s);
+    final all = _ChoiceChips(items: widget.interests, selected: _interests, onChanged: onChanged);
+    final ids = widget.majorInterests[_majorId] ?? const <String>[];
+    final suggested = [for (final id in ids) ...widget.interests.where((i) => i.id == id)];
+    if (majorName == null || suggested.isEmpty) return all;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TipBubble(
+          title: '$majorName 졸업생은 이런 분야로 많이 가요',
+          detail: '커리어넷 학과정보의 졸업생 진로 통계(2020 조사)예요. 눌러서 고른 것만 저장돼요.',
+        ),
+        const SizedBox(height: 12),
+        _ChoiceChips(items: suggested, selected: _interests, onChanged: onChanged),
+        const SizedBox(height: 28),
+        const _FieldLabel('전체 분야'),
+        const SizedBox(height: 8),
+        all,
       ],
     );
   }

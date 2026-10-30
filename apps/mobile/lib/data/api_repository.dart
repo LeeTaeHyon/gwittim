@@ -102,6 +102,9 @@ class ApiNoticeRepository implements NoticeRepository {
   Future<List<DictionaryItem>> dictionary(String name) => _dictionaries.load(name);
 
   @override
+  Future<Map<String, List<String>>> majorInterests() => _dictionaries.majorInterests();
+
+  @override
   Future<UserProfile?> getProfile() =>
       _orNullIfNotFound(() async => UserProfile.fromJson(_json(await _send('GET', 'v1/profile'))));
 

@@ -7,6 +7,7 @@ import pytest
 
 from backend.contracts import schema_errors
 from backend.recommendation import evaluate, factors, recommend, score, timing_factor
+from backend.recommendation.major_prior import load_prior, major_prior_factor
 
 ROOT = Path(__file__).resolve().parents[3]
 TODAY = date(2026, 10, 17)
@@ -91,7 +92,8 @@ def test_no_deadline_is_not_evaluable(notices):
 
 def test_unevaluable_factors_leave_denominator(notices, profile):
     values = factors(notices[3], profile, TODAY)
-    assert values == {"interest": 1.0, "role": 1.0, "major": 1.0, "timing": 1.0}
+    # 관심사·직무를 고른 학생은 학과 통계를 평가하지 않는다
+    assert values == {"interest": 1.0, "role": 1.0, "major": 1.0, "major_prior": None, "timing": 1.0}
     assert score(values) == 100.0
     # 관심사·전공 평가 불가, 직무 불일치, 시기 0.6 → 100 × (0 + 10×0.6) / (35 + 10)
     assert score({"interest": None, "role": 0.0, "major": None, "timing": 0.6}) == pytest.approx(13.33)
@@ -193,3 +195,50 @@ def test_old_notice_without_deadline_excluded(notices, profile):
     for p in (profile, {}):
         ids = [i["notice"]["notice_id"] for i in recommend([old, recent, dated], p, today=TODAY, generated_at=NOW)["items"]]
         assert ids.count("n_synthetic_0002") == 0 and "n_recent" in ids and "n_synthetic_0001" in ids
+
+
+# ---------- 학과 통계 (D-017) ----------
+
+def major_only(major_id: str) -> dict:
+    return dict(fixture("user_profile/empty.json"), university_id="mjc", major_id=major_id)
+
+
+def test_major_prior_only_when_interests_and_roles_empty(notices, profile):
+    business = major_only("mjc.business_administration")
+    # 0001: business_marketing (경영학과 관심사 1위) → 1.0
+    assert major_prior_factor(notices[0], business) == 1.0
+    # 0003: culture_arts는 경영학과에서 거의 안 가는 분야 → 0에 가까움
+    assert major_prior_factor(notices[2], business) < 0.01
+    # 관심사나 직무를 하나라도 고르면 평가 불가
+    assert major_prior_factor(notices[0], dict(business, interest_ids=["software"])) is None
+    assert major_prior_factor(notices[0], dict(business, target_role_ids=["marketer"])) is None
+    # 통계표에 없는 학과(자유전공), 학과 미입력
+    assert major_prior_factor(notices[0], major_only("mjc.undeclared")) is None
+    assert major_prior_factor(notices[0], fixture("user_profile/empty.json")) is None
+
+
+def test_major_prior_does_not_change_scores_of_chosen_profiles(notices, profile):
+    for n in notices:
+        values = factors(n, profile, TODAY)
+        assert values["major_prior"] is None
+        assert score(values) == score({k: v for k, v in values.items() if k != "major_prior"})
+
+
+def test_major_only_profile_ranks_by_major_stats(notices):
+    out = recommend(notices, major_only("mjc.business_administration"), today=TODAY, generated_at=NOW)
+    assert schema_errors("recommendation_list_response", out) == []
+    assert out["mode"] == "personalized"
+    top = out["items"][0]["recommendation"]
+    assert out["items"][0]["notice"]["notice_id"] == "n_synthetic_0001"
+    assert "major_prior_match" in top["reason_codes"]
+    # 통계 값이 낮은 공고에는 이유를 붙이지 않는다
+    culture = next(i for i in out["items"] if i["notice"]["notice_id"] == "n_synthetic_0003")
+    assert "major_prior_match" not in culture["recommendation"]["reason_codes"]
+    assert culture["recommendation"]["score"] is not None  # 0점으로 평가됨 (학과 꼬리표가 없어도)
+
+
+def test_major_prior_table_covers_dictionary():
+    majors = json.loads((ROOT / "contracts/dictionaries/majors.json").read_text(encoding="utf-8"))["items"]
+    table = load_prior()
+    missing = sorted(m["id"] for m in majors if m["id"] not in table)
+    assert missing == ["mjc.undeclared"]  # 자유전공학과는 대응하는 커리어넷 학과가 없다

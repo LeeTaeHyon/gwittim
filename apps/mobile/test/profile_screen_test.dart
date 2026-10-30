@@ -48,6 +48,12 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// 고른 개수는 단계 제목 옆에 있다. 아래로 내려가 있으면 위로 올려서 본다.
+  Future<void> expectCount(WidgetTester tester, String text) async {
+    await tester.scrollUntilVisible(find.text(text), -200, scrollable: editList());
+    expect(find.text(text), findsOneWidget);
+  }
+
   Future<void> next(WidgetTester tester) async {
     await tester.tap(find.text('다음'));
     await tester.pumpAndSettle();
@@ -90,11 +96,15 @@ void main() {
     // 2단계 관심 분야: 칩을 여러 개 고르면 개수를 보이고, 다시 누르면 뺀다
     expect(find.bySemanticsLabel('2/3단계'), findsOneWidget);
     expect(find.text('0개 선택'), findsOneWidget);
-    await tapIn(tester, editList(), find.text('소프트웨어 개발'));
+    // 학과 졸업생이 많이 가는 분야를 먼저 보이지만 미리 고르지 않는다 (D-017)
+    expect(find.text('컴퓨터공학과 졸업생은 이런 분야로 많이 가요'), findsOneWidget);
+    expect(find.textContaining('커리어넷 학과정보'), findsOneWidget);
+    expect(find.text('소프트웨어 개발'), findsNWidgets(2)); // 추천 칸과 전체 분야
+    await tapIn(tester, editList(), find.text('소프트웨어 개발').first);
     await tapIn(tester, editList(), find.text('AI·데이터'));
-    expect(find.text('2개 선택'), findsOneWidget);
-    await tapIn(tester, editList(), find.text('소프트웨어 개발'));
-    expect(find.text('1개 선택'), findsOneWidget);
+    await expectCount(tester, '2개 선택');
+    await tapIn(tester, editList(), find.text('소프트웨어 개발').last); // 전체 분야 칸에서도 같은 선택
+    await expectCount(tester, '1개 선택');
 
     // 뒤로 가면 앞 단계로, 고른 값은 남아 있다
     await tester.tap(find.byTooltip('뒤로'));
@@ -125,6 +135,16 @@ void main() {
     expect(find.text('AI·데이터'), findsOneWidget);
     expect(find.text('소프트웨어 개발자'), findsOneWidget);
     expect(find.text('고치기'), findsOneWidget);
+  });
+
+  testWidgets('학과를 고르지 않았으면 관심 분야 단계에 학과 통계 칸이 없다', (tester) async {
+    await openProfile(tester);
+    await tester.tap(find.text('입력하기'));
+    await tester.pumpAndSettle();
+    await next(tester);
+    expect(find.textContaining('졸업생은 이런 분야로 많이 가요'), findsNothing);
+    expect(find.text('전체 분야'), findsNothing);
+    expect(find.text('소프트웨어 개발'), findsOneWidget);
   });
 
   testWidgets('저장에 실패하면 알리고 입력은 남긴다', (tester) async {

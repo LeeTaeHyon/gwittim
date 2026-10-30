@@ -41,7 +41,7 @@
      "eligibility_met"
     ],
     "generated_at": "2026-10-17T03:05:00Z",
-    "ranking_version": "rank-0.2"
+    "ranking_version": "rank-0.4"
    },
    "notice": {
     "notice_id": "n_synthetic_0004",
@@ -69,6 +69,50 @@
   },
   {
    "recommendation": {
+    "notice_id": "n_synthetic_kakao_0001",
+    "notice_version": 1,
+    "score": 12.0,
+    "eligibility_status": "needs_check",
+    "condition_results": [
+     {
+      "field": "enrollment_status",
+      "status": "met",
+      "evidence": "재학생",
+      "unknown_reason": null
+     }
+    ],
+    "reason_codes": [
+     "eligibility_needs_check"
+    ],
+    "generated_at": "2026-10-17T03:05:00Z",
+    "ranking_version": "rank-0.4"
+   },
+   "notice": {
+    "notice_id": "n_synthetic_kakao_0001",
+    "notice_version": 1,
+    "title": "[합성 샘플] 겨울방학 영어 회화 프로그램 참가자 모집",
+    "category": "global",
+    "source_url": null,
+    "published": {
+     "date": "2026-10-29",
+     "time": "14:05",
+     "timezone": "Asia/Seoul",
+     "precision": "minute",
+     "evidence": "카카오톡 수신 2026-10-29 14:05"
+    },
+    "application_deadline": {
+     "date": "2026-11-13",
+     "time": null,
+     "timezone": null,
+     "precision": "date",
+     "evidence": "~ 2026.11.13.(금)"
+    },
+    "deadline_note": null,
+    "lifecycle_status": "open"
+   }
+  },
+  {
+   "recommendation": {
     "notice_id": "n_synthetic_0003",
     "notice_version": 1,
     "score": 12.0,
@@ -78,7 +122,7 @@
      "eligibility_met"
     ],
     "generated_at": "2026-10-17T03:05:00Z",
-    "ranking_version": "rank-0.2"
+    "ranking_version": "rank-0.4"
    },
    "notice": {
     "notice_id": "n_synthetic_0003",
@@ -134,7 +178,7 @@
      "eligibility_met"
     ],
     "generated_at": "2026-10-17T03:05:00Z",
-    "ranking_version": "rank-0.2"
+    "ranking_version": "rank-0.4"
    },
    "notice": {
     "notice_id": "n_synthetic_0001",
@@ -171,7 +215,7 @@
      "eligibility_needs_check"
     ],
     "generated_at": "2026-10-17T03:05:00Z",
-    "ranking_version": "rank-0.2"
+    "ranking_version": "rank-0.4"
    },
    "notice": {
     "notice_id": "n_synthetic_0002",

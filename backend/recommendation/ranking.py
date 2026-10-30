@@ -7,6 +7,7 @@ from .config import (
     EXCLUDED_CATEGORIES,
     EXCLUDED_LIFECYCLE,
     EXCLUDED_PUBLICATION,
+    MAJOR_PRIOR_REASON_MIN,
     MAX_LIMIT,
     RANKING_VERSION,
     STALE_UNKNOWN_DAYS,
@@ -72,6 +73,8 @@ def recommend(notices: list[dict], profile: dict, *, today: date, generated_at: 
             item_score = score(values)
             if item_score is not None:
                 reason_codes += [code for name, code in _FACTOR_REASONS.items() if values[name] == 1.0]
+                if (values["major_prior"] or 0) >= MAJOR_PRIOR_REASON_MIN:
+                    reason_codes.append("major_prior_match")
                 if values["timing"] == 1.0:
                     reason_codes.append("deadline_timing")
         reason_codes.append("eligibility_met" if status == "met" else "eligibility_needs_check")
