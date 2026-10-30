@@ -89,5 +89,10 @@ key.properties
 # ===== 로컬 배치 데이터 (수집 원문·분석 결과) =====
 /data/
 
+# ===== 알림톡 모델 학습 (D-019): 카톡 원본·처리 자료(개인정보), Keras 모델·실험 결과 =====
+# 배치가 쓰는 가중치는 localModel/export_weights.py가 backend/classifier/models/로 꺼낸다
+/localModel/kakaoTalk_data/
+/localModel/models/
+
 # ===== Node =====
 node_modules/

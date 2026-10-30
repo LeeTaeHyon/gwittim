@@ -3,6 +3,7 @@
 실행: uv run python tools/validate_contracts.py
 
 - 스키마 자체가 Draft 2020-12 규격에 맞는지 확인한다.
+- contracts/stats/ 의 통계표는 "stats" 값과 같은 이름의 스키마와 사전 코드로 확인한다 (D-020).
 - fixtures/valid/<스키마>/ 의 샘플은 스키마 검증과 의미 검증을 모두 통과해야 한다.
 - fixtures/invalid/<스키마>/ 의 샘플은 {"_expect": ..., "data": ...} 형식이며,
   _expect.keyword/_expect.path 의 스키마 오류 또는 _expect.semantic 의 의미 규칙으로 거부돼야 한다.
@@ -115,6 +116,21 @@ def semantic_errors(data, dicts) -> list[str]:
     return check_dictionary_codes(data, dicts) + check_eligibility_status(data)
 
 
+def check_major_prior(data, dicts) -> list[str]:
+    """학과 통계 확률표(D-020): 코드가 사전에 있고, 학과마다 확률 합이 1에 가깝다."""
+    errors = []
+    for major_id, m in data["majors"].items():
+        if major_id not in dicts["majors"]:
+            errors.append(f"major_prior: {major_id!r} 가 majors 사전에 없음")
+        for key, dictionary in (("roles", "roles"), ("interests", "interests")):
+            unknown = sorted(set(m[key]) - dicts[dictionary])
+            if unknown:
+                errors.append(f"major_prior: {major_id}/{key} {unknown} 가 {dictionary} 사전에 없음")
+            if abs(sum(m[key].values()) - 1) > 0.01:
+                errors.append(f"major_prior: {major_id}/{key} 확률 합 {sum(m[key].values()):.3f}")
+    return errors
+
+
 # ---------- 실행 ----------
 
 def all_errors(error):
@@ -127,7 +143,7 @@ def main() -> int:
     registry, schemas = build_registry()
     dicts = load_dictionaries()
     failures: list[str] = []
-    counts = {"schemas": 0, "dictionaries": 0, "valid_pass": 0, "invalid_rejected": 0}
+    counts = {"schemas": 0, "dictionaries": 0, "stats": 0, "valid_pass": 0, "invalid_rejected": 0}
 
     for name, schema in schemas.items():
         Draft202012Validator.check_schema(schema)
@@ -143,6 +159,14 @@ def main() -> int:
             failures.append(f"[dictionary] {path.name}: {errs[0].message}")
         else:
             counts["dictionaries"] += 1
+
+    for path in sorted((CONTRACTS / "stats").glob("*.json")):
+        data = load(path)
+        errs = [e.message for e in validators[data["stats"]].iter_errors(data)] or check_major_prior(data, dicts)
+        if errs:
+            failures.append(f"[stats] {path.name}: {errs[0]}")
+        else:
+            counts["stats"] += 1
 
     for path in sorted(FIXTURES.glob("valid/*/*.json")):
         schema_name = path.parent.name
@@ -185,7 +209,7 @@ def main() -> int:
             counts["invalid_rejected"] += 1
 
     print(
-        f"schemas {counts['schemas']} OK, dictionaries {counts['dictionaries']} OK, "
+        f"schemas {counts['schemas']} OK, dictionaries {counts['dictionaries']} OK, stats {counts['stats']} OK, "
         f"valid fixtures {counts['valid_pass']} passed, invalid fixtures {counts['invalid_rejected']} rejected as expected"
     )
     for f in failures:

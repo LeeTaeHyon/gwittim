@@ -37,18 +37,19 @@ String lifecycleLabel(String status) => switch (status) {
 
 String eligibilityLabel(String status) => switch (status) {
   'met' => '지원 조건 충족',
-  'not_met' => '지원 조건 불충족',
+  'not_met' => '지원 조건 미충족',
   _ => '조건 확인 필요',
 };
 
 /// reason_codes 공통 템플릿 (SPEC §5·§6). '관심 분야 관련'과 '지원 조건 충족'을 구분한다.
 String reasonText(String code) => switch (code) {
-  'interest_match' => '관심 분야와 관련된 공고예요',
-  'role_match' => '희망 직무와 관련된 공고예요',
-  'major_match' => '전공과 관련된 공고예요',
-  'deadline_timing' => '2주 안에 신청이 마감돼요',
-  'eligibility_met' => '확인된 지원 조건을 모두 충족해요',
-  'eligibility_needs_check' => '지원 조건을 원문에서 확인해 주세요',
+  'interest_match' => '관심 분야 연관 공고',
+  'role_match' => '희망 직무 연관 공고',
+  'major_match' => '전공 연관 공고',
+  'major_prior_match' => '학과 졸업생이 많이 가는 분야의 공고',
+  'deadline_timing' => '2주 안에 신청 마감',
+  'eligibility_met' => '확인된 지원 조건 모두 충족',
+  'eligibility_needs_check' => '지원 조건 원문 확인 필요',
   _ => '',
 };
 
@@ -62,11 +63,11 @@ String conditionFieldLabel(String field) => switch (field) {
 
 /// D-006: 원문 마지막 확인이 24시간을 넘으면 안내한다. 정상이면 null.
 String? staleNotice(DateTime? lastVerifiedAt, DateTime now) {
-  if (lastVerifiedAt == null) return '원문 확인 시각을 알 수 없어요. 지원 전에 원문을 확인해 주세요.';
+  if (lastVerifiedAt == null) return '원문 확인 시각을 알 수 없습니다. 지원 전에 원문을 확인해 주세요.';
   final hours = now.difference(lastVerifiedAt).inHours;
   if (hours < 24) return null;
   final ago = hours < 48 ? '$hours시간' : '${hours ~/ 24}일';
-  return '마지막 확인 $ago 전이에요. 내용이 바뀌었을 수 있어요.';
+  return '$ago 전에 마지막으로 확인했습니다. 이후 내용이 바뀌었을 수 있습니다.';
 }
 
 /// 짧은 날짜: "10월 30일(금)", 시각이 확인된 경우에만 " 17:00"을 붙인다.
@@ -90,9 +91,14 @@ int? daysLeft(NoticeSummary n, DateTime today) {
 /// 목록 칩용 짧은 조건 상태
 String eligibilityShort(String status) => switch (status) {
   'met' => '조건 충족',
-  'not_met' => '조건 불충족',
+  'not_met' => '조건 미충족',
   _ => '조건 확인 필요',
 };
 
 /// 개인화 추천 이유 코드 → 화면 낱말 (형광펜으로 강조)
-const personalReasons = {'interest_match': '관심 분야', 'role_match': '희망 직무', 'major_match': '전공'};
+const personalReasons = {
+  'interest_match': '관심 분야',
+  'role_match': '희망 직무',
+  'major_match': '전공',
+  'major_prior_match': '학과 졸업생 진로', // D-020
+};

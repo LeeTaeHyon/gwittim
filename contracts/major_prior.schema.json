@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/major_prior.schema.json",
+  "title": "MajorPrior — 학과 → 직무·관심사 통계 확률표",
+  "description": "contracts/stats/major_prior.json 형식. 학과별 졸업생 진로 통계로 계산한 P(직무|학과)·P(관심사|학과). 사용자 프로필에 쓰지 않고, 관심사·직무가 빈 학생의 추천 보조 점수와 프로필 입력 화면의 추천 칩에만 쓴다. D-020.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["stats", "updated", "source", "source_url", "smoothing", "majors"],
+  "properties": {
+    "stats": { "const": "major_prior" },
+    "updated": { "type": "string", "format": "date" },
+    "source": { "type": "string", "minLength": 1 },
+    "source_url": { "type": "string", "format": "uri" },
+    "smoothing": { "type": "number", "minimum": 0 },
+    "majors": {
+      "type": "object",
+      "description": "키는 학과 사전 코드(major_id). 표에 없는 학과는 통계 점수를 쓰지 않는다.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["careernet_name", "roles", "interests"],
+        "properties": {
+          "careernet_name": { "type": "string", "minLength": 1, "description": "대응한 커리어넷 학과 이름" },
+          "roles": { "$ref": "#/$defs/distribution", "description": "직무 사전 코드 → 확률 (합 약 1)" },
+          "interests": { "$ref": "#/$defs/distribution", "description": "관심사 사전 코드 → 확률 (합 약 1)" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "distribution": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+    }
+  }
+}

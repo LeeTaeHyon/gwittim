@@ -48,6 +48,12 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// 고른 개수는 단계 제목 옆에 있다. 아래로 내려가 있으면 위로 올려서 본다.
+  Future<void> expectCount(WidgetTester tester, String text) async {
+    await tester.scrollUntilVisible(find.text(text), -200, scrollable: editList());
+    expect(find.text(text), findsOneWidget);
+  }
+
   Future<void> next(WidgetTester tester) async {
     await tester.tap(find.text('다음'));
     await tester.pumpAndSettle();
@@ -56,16 +62,34 @@ void main() {
   testWidgets('요약 카드 → 안내 → 설정. 비어 있으면 아직 입력하지 않았다고 보인다', (tester) async {
     await openProfile(tester);
     expect(find.text('내 정보'), findsWidgets);
-    expect(find.text('아직 입력하지 않았어요'), findsOneWidget);
+    expect(find.text('입력한 정보 없음'), findsOneWidget);
     expect(find.text('입력하기'), findsOneWidget);
-    expect(find.text('입력한 정보는 추천에만 써요'), findsOneWidget);
-    expect(find.textContaining('성적·학번은 받지 않아요'), findsOneWidget);
+    expect(find.text('입력한 정보는 추천에만 사용'), findsOneWidget);
+    expect(find.textContaining('성적·학번은 받지 않습니다'), findsOneWidget);
 
     double top(String text) => tester.getTopLeft(find.text(text)).dy;
-    expect(top('아직 입력하지 않았어요'), lessThan(top('입력한 정보는 추천에만 써요')));
+    expect(top('입력한 정보 없음'), lessThan(top('입력한 정보는 추천에만 사용')));
     await tester.scrollUntilVisible(find.text('라이트'), 200, scrollable: profileList());
     expect(top('설정'), lessThan(top('화면')));
     expect(find.text('계정'), findsNothing); // 로그인 모드가 아니면 계정 칸이 없다
+  });
+
+  testWidgets('졸업이면 학년 대신 졸업만 보인다 (요약 카드·홈 머리)', (tester) async {
+    final repo = SampleNoticeRepository(personalized: false);
+    await repo.updateProfile(
+      const UserProfile(
+        universityId: 'mjc',
+        majorId: 'mjc.computer_engineering',
+        grade: 2,
+        enrollmentStatus: 'graduated',
+      ),
+    );
+    await openProfile(tester, repository: repo);
+    expect(find.text('명지전문대학 컴퓨터공학과 · 졸업'), findsOneWidget);
+    expect(find.textContaining('2학년'), findsNothing);
+    await tester.tap(find.byTooltip('뒤로'));
+    await tester.pumpAndSettle();
+    expect(find.text('컴퓨터공학과 졸업'), findsOneWidget);
   });
 
   testWidgets('세 단계로 고치고 마지막 단계에서 저장하면 요약 카드가 바뀐다', (tester) async {
@@ -90,11 +114,15 @@ void main() {
     // 2단계 관심 분야: 칩을 여러 개 고르면 개수를 보이고, 다시 누르면 뺀다
     expect(find.bySemanticsLabel('2/3단계'), findsOneWidget);
     expect(find.text('0개 선택'), findsOneWidget);
-    await tapIn(tester, editList(), find.text('소프트웨어 개발'));
+    // 학과 졸업생이 많이 가는 분야를 먼저 보이지만 미리 고르지 않는다 (D-020)
+    expect(find.text('컴퓨터공학과 졸업생이 많이 가는 분야'), findsOneWidget);
+    expect(find.textContaining('커리어넷 학과정보'), findsOneWidget);
+    expect(find.text('소프트웨어 개발'), findsNWidgets(2)); // 추천 칸과 전체 분야
+    await tapIn(tester, editList(), find.text('소프트웨어 개발').first);
     await tapIn(tester, editList(), find.text('AI·데이터'));
-    expect(find.text('2개 선택'), findsOneWidget);
-    await tapIn(tester, editList(), find.text('소프트웨어 개발'));
-    expect(find.text('1개 선택'), findsOneWidget);
+    await expectCount(tester, '2개 선택');
+    await tapIn(tester, editList(), find.text('소프트웨어 개발').last); // 전체 분야 칸에서도 같은 선택
+    await expectCount(tester, '1개 선택');
 
     // 뒤로 가면 앞 단계로, 고른 값은 남아 있다
     await tester.tap(find.byTooltip('뒤로'));
@@ -110,7 +138,7 @@ void main() {
     await tapIn(tester, editList(), find.text('소프트웨어 개발자'));
     await tester.tap(find.text('저장하기'));
     await tester.pumpAndSettle();
-    expect(find.text('프로필을 저장했어요.'), findsOneWidget);
+    expect(find.text('프로필이 저장되었습니다.'), findsOneWidget);
     expect(find.byType(ProfileEditScreen), findsNothing);
 
     final p = (await repo.getProfile())!;
@@ -125,6 +153,16 @@ void main() {
     expect(find.text('AI·데이터'), findsOneWidget);
     expect(find.text('소프트웨어 개발자'), findsOneWidget);
     expect(find.text('고치기'), findsOneWidget);
+  });
+
+  testWidgets('학과를 고르지 않았으면 관심 분야 단계에 학과 통계 칸이 없다', (tester) async {
+    await openProfile(tester);
+    await tester.tap(find.text('입력하기'));
+    await tester.pumpAndSettle();
+    await next(tester);
+    expect(find.textContaining('졸업생이 많이 가는 분야'), findsNothing);
+    expect(find.text('전체 분야'), findsNothing);
+    expect(find.text('소프트웨어 개발'), findsOneWidget);
   });
 
   testWidgets('저장에 실패하면 알리고 입력은 남긴다', (tester) async {
@@ -166,7 +204,7 @@ void main() {
 
     await tester.enterText(inSheet(find.byType(TextField)), '없는학과');
     await tester.pumpAndSettle();
-    expect(inSheet(find.text('찾는 학과가 없어요')), findsOneWidget);
+    expect(inSheet(find.text('일치하는 학과가 없습니다')), findsOneWidget);
 
     await tester.enterText(inSheet(find.byType(TextField)), '보안');
     await tester.pumpAndSettle();
@@ -259,8 +297,8 @@ void main() {
     var signedOut = 0;
     await openProfile(tester, onSignOut: () async => signedOut++);
     await tapIn(tester, profileList(), find.text('탈퇴하기'));
-    expect(find.text('탈퇴는 아직 준비 중이에요.'), findsOneWidget);
-    expect(find.text('탈퇴하면 프로필과 저장한 공고가 지워져요. 공고 자체는 그대로 남아요.'), findsOneWidget);
+    expect(find.text('탈퇴 기능은 준비 중입니다.'), findsOneWidget);
+    expect(find.text('탈퇴하면 프로필과 저장한 공고가 삭제됩니다. 공고 자체는 그대로 남습니다.'), findsOneWidget);
     expect(signedOut, 0);
 
     await tapIn(tester, profileList(), find.text('로그아웃'));

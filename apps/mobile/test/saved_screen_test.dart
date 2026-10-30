@@ -74,6 +74,9 @@ class SavedRepository implements NoticeRepository {
 
   @override
   Future<List<DictionaryItem>> dictionary(String name) async => [];
+
+  @override
+  Future<Map<String, List<String>>> majorInterests() async => {};
 }
 
 void main() {
@@ -162,14 +165,14 @@ void main() {
       expect(find.text('지난 공고'), findsOneWidget);
       expect(find.text('다음 주 마감'), findsNothing); // 빈 묶음은 보이지 않는다
 
-      expect(find.text('마감일이 바뀐 공고가 1개 있어요'), findsOneWidget);
+      expect(find.text('마감일이 바뀐 공고 1개'), findsOneWidget);
       expect(find.text('공고 soon · 10월 21일(수) → 10월 23일(금)'), findsOneWidget);
       expect(find.text('D-3 · 공모전'), findsOneWidget); // 날짜만 확인된 마감은 시각 없이, 남은 날이 앞
       expect(find.text('선착순 마감 (정원 도달 시 조기 종료) · 공모전'), findsOneWidget);
-      expect(find.text('모집이 끝났어요 · 공모전'), findsOneWidget);
-      expect(find.text('학교 공지에서 삭제됐어요'), findsOneWidget);
+      expect(find.text('모집 마감 · 공모전'), findsOneWidget);
+      expect(find.text('학교 공지에서 삭제됨'), findsOneWidget);
       expect(find.text('목록에서 지우기'), findsOneWidget);
-      expect(find.text('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 바뀌어요.'), findsOneWidget);
+      expect(find.text('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 갱신됩니다.'), findsOneWidget);
 
       // 삭제된 공고에는 북마크 대신 지우기 버튼만 있다
       expect(find.byTooltip('저장 취소'), findsNWidgets(3));
@@ -183,8 +186,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repo.deleted, ['removed']);
-      expect(find.text('학교 공지에서 삭제됐어요'), findsNothing);
-      expect(find.text('목록에서 지웠어요.'), findsOneWidget);
+      expect(find.text('학교 공지에서 삭제됨'), findsNothing);
+      expect(find.text('목록에서 삭제되었습니다.'), findsOneWidget);
       expect(find.text('3개'), findsOneWidget);
     });
 
@@ -195,7 +198,7 @@ void main() {
       await tester.tap(bookmark);
       await tester.pumpAndSettle();
       expect(repo.deleted, ['first']);
-      expect(find.text('저장을 취소했어요.'), findsOneWidget);
+      expect(find.text('저장이 취소되었습니다.'), findsOneWidget);
       expect(find.text('공고 first'), findsOneWidget); // 바로 지우지 않고 다시 켤 수 있게 둔다
       expect(find.byTooltip('저장'), findsOneWidget);
       expect(find.text('3개'), findsOneWidget);
@@ -203,22 +206,22 @@ void main() {
       await tester.tap(bookmark);
       await tester.pumpAndSettle();
       expect(repo.savedAgain, ['first']);
-      expect(find.text('저장했어요.'), findsOneWidget);
+      expect(find.text('공고가 저장되었습니다.'), findsOneWidget);
       expect(find.text('4개'), findsOneWidget);
     });
 
     testWidgets('다크 테마에서도 같은 내용', (tester) async {
       await pump(tester, mode: ThemeMode.dark);
       expect(Theme.of(tester.element(find.byType(SavedScreen))).brightness, Brightness.dark);
-      expect(find.text('학교 공지에서 삭제됐어요'), findsOneWidget);
-      final removed = tester.widget<Text>(find.text('학교 공지에서 삭제됐어요'));
+      expect(find.text('학교 공지에서 삭제됨'), findsOneWidget);
+      final removed = tester.widget<Text>(find.text('학교 공지에서 삭제됨'));
       expect(removed.style?.color, GwColors.dark.urgent);
     });
 
     testWidgets('저장한 공고가 없으면 안내', (tester) async {
       repo = SavedRepository([]);
       await pump(tester);
-      expect(find.textContaining('저장한 공고가 없어요'), findsOneWidget);
+      expect(find.textContaining('저장된 공고가 없습니다'), findsOneWidget);
     });
   });
 }

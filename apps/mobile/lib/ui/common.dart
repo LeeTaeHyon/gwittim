@@ -13,8 +13,8 @@ String errorMessage(Object error) {
   if (error is RepositoryException) {
     return switch (error.kind) {
       RepositoryErrorKind.unauthenticated => '다시 로그인해 주세요.',
-      RepositoryErrorKind.permissionDenied => '볼 수 있는 권한이 없어요.',
-      RepositoryErrorKind.notFound => '공고를 찾을 수 없어요.',
+      RepositoryErrorKind.permissionDenied => '조회 권한이 없습니다.',
+      RepositoryErrorKind.notFound => '공고를 찾을 수 없습니다.',
       _ => '잠시 후 다시 시도해 주세요.',
     };
   }
@@ -26,7 +26,7 @@ void showRefreshFailed(BuildContext context, Object error) {
   final unavailable = error is! RepositoryException || error.kind == RepositoryErrorKind.unavailable;
   ScaffoldMessenger.maybeOf(context)
     ?..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(unavailable ? '새로 불러오지 못했어요. 인터넷 연결을 확인해 주세요.' : errorMessage(error))));
+    ..showSnackBar(SnackBar(content: Text(unavailable ? '새로 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.' : errorMessage(error))));
 }
 
 /// 빈 화면의 오류·안내. 글자 없는 로고 말풍선 그림, 한 줄 제목, 한 줄 설명, 앱 버튼.
@@ -42,7 +42,7 @@ class MessageView extends StatelessWidget {
 
   /// 불러오기 실패. 상세 오류는 보이지 않고 errorMessage 문구만 보인다.
   factory MessageView.error(Object error, {Key? key, VoidCallback? onRetry}) =>
-      MessageView(key: key, title: '불러오지 못했어요', detail: errorMessage(error), onRetry: onRetry);
+      MessageView(key: key, title: '불러오기 실패', detail: errorMessage(error), onRetry: onRetry);
 
   @override
   Widget build(BuildContext context) {

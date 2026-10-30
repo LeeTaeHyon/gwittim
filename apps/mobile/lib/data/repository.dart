@@ -22,6 +22,9 @@ abstract class NoticeRepository {
   /// 프로필 입력 선택지: 'majors' / 'interests' / 'roles'
   Future<List<DictionaryItem>> dictionary(String name);
 
+  /// 학과 → 졸업생이 많이 가는 관심 분야 (D-020). 프로필 입력 화면의 참고용
+  Future<Map<String, List<String>>> majorInterests();
+
   Future<List<SavedEntry>> listSaved();
 
   /// 반복 요청 안전
@@ -56,6 +59,7 @@ class AssetDictionaries {
     for (final name in names) {
       await load(name);
     }
+    await majorInterests();
   }
 
   Future<List<DictionaryItem>> load(String name) async {
@@ -72,6 +76,30 @@ class AssetDictionaries {
   }
 
   Future<Map<String, String>> categoryNames() async => {for (final i in await load('categories')) i.id: i.name};
+
+  Map<String, List<String>>? _majorInterests;
+
+  /// 학과 졸업생 진로 통계(contracts/stats/major_prior.json 사본, assets/stats/, D-020).
+  /// 학과 코드 → 많이 가는 관심 분야 코드 (확률 높은 순 3개). 읽지 못하면 빈 표.
+  /// 프로필 입력 화면에 보여 주는 데만 쓰고, 프로필에 자동으로 넣지 않는다.
+  Future<Map<String, List<String>>> majorInterests() async {
+    final cached = _majorInterests;
+    if (cached != null) return cached;
+    try {
+      final data = jsonDecode(await _bundle.loadString('assets/stats/major_prior.json')) as Map<String, dynamic>;
+      return _majorInterests = {
+        for (final MapEntry(:key, :value) in (data['majors'] as Map<String, dynamic>).entries)
+          key:
+              ((value['interests'] as Map<String, dynamic>).entries.toList()
+                    ..sort((a, b) => (b.value as num).compareTo(a.value as num)))
+                  .take(3)
+                  .map((e) => e.key)
+                  .toList(),
+      };
+    } on FlutterError {
+      return const {};
+    }
+  }
 }
 
 /// assets/sample/ 의 합성 자료로 동작한다. 자료는 tools/export_mobile_sample.py 로 만든다.
@@ -153,6 +181,9 @@ class SampleNoticeRepository implements NoticeRepository {
 
   @override
   Future<List<DictionaryItem>> dictionary(String name) => _dictionaries.load(name);
+
+  @override
+  Future<Map<String, List<String>>> majorInterests() => _dictionaries.majorInterests();
 
   @override
   Future<List<SavedEntry>> listSaved() async {
