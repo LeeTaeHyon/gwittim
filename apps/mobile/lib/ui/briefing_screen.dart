@@ -8,15 +8,25 @@ import 'theme.dart';
 
 typedef OpenNotice = Future<void> Function(NoticeSummary notice, Recommendation? recommendation);
 
+/// 학과 통계 추천에 답한다. 학과 통계 추천을 그만 보이게 됐으면 true (D-021).
+typedef AnswerMajorPick = Future<bool> Function(RecommendationEntry entry, bool interested);
+
 /// 귀띔 브리핑 (D-009, D-018). 하루 첫 실행 때 전체 화면으로 보이고, 홈의 '오늘의 귀띔'에서 다시 연다.
 /// 조건에 맞는 공고가 있는 소식만 보인다. 문장은 템플릿이다 (사용자별 LLM 생성 아님).
 /// 머리는 브랜드 면(네이비 + 라임), 소식 카드는 흰 바탕.
 class BriefingScreen extends StatelessWidget {
-  const BriefingScreen({super.key, required this.briefing, required this.today, required this.onOpenNotice});
+  const BriefingScreen({
+    super.key,
+    required this.briefing,
+    required this.today,
+    required this.onOpenNotice,
+    this.onAnswerMajorPick,
+  });
 
   final Briefing briefing;
   final DateTime today;
   final OpenNotice onOpenNotice;
+  final AnswerMajorPick? onAnswerMajorPick;
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +40,13 @@ class BriefingScreen extends StatelessWidget {
         ),
       if (briefing.urgent case final u?)
         _UrgentBubble(entry: u, today: today, onOpen: () => _open(context, u.notice, u.recommendation)),
+      if (briefing.majorPick case final m?)
+        _MajorPickBubble(
+          entry: m,
+          today: today,
+          onOpen: () => _open(context, m.notice, m.recommendation),
+          onAnswer: onAnswerMajorPick,
+        ),
       if (briefing.fresh.isNotEmpty)
         _ListBubble(
           kicker: '새 공고',
@@ -69,7 +86,7 @@ class BriefingScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
               child: Text(
-                '추천 순서는 관심사·희망 직무·전공·마감 시기로 정해요. 합격 가능성을 뜻하지 않아요.',
+                '추천 순서는 관심사·희망 직무·전공·학과 통계·마감 시기로 정해요. 합격 가능성을 뜻하지 않아요.',
                 style: TextStyle(fontSize: 12.5, height: 1.6, color: c.muted),
               ),
             ),
@@ -251,6 +268,99 @@ class _UrgentBubble extends StatelessWidget {
   }
 }
 
+/// 학과 통계로만 고른 공고를 고른 분야와 구분해 보이는 표시 (D-021)
+class MajorPickLabel extends StatelessWidget {
+  const MajorPickLabel({super.key});
+
+  @override
+  Widget build(BuildContext context) => const Pill('학과 통계 추천', tone: PillTone.neutral);
+}
+
+/// 학과 통계 추천 (D-021). 학생이 고르지 않은 분야를 앱이 먼저 권하는 것이라, 표시를 붙이고 원하는지 묻는다.
+class _MajorPickBubble extends StatefulWidget {
+  const _MajorPickBubble({required this.entry, required this.today, required this.onOpen, this.onAnswer});
+
+  final RecommendationEntry entry;
+  final DateTime today;
+  final VoidCallback onOpen;
+  final AnswerMajorPick? onAnswer;
+
+  @override
+  State<_MajorPickBubble> createState() => _MajorPickBubbleState();
+}
+
+class _MajorPickBubbleState extends State<_MajorPickBubble> {
+  /// 답한 뒤 보일 문장
+  String? _answered;
+
+  Future<void> _answer(bool interested) async {
+    final stopped = await widget.onAnswer!(widget.entry, interested);
+    if (!mounted) return;
+    setState(
+      () => _answered = interested
+          ? '알려 주셔서 고마워요. 학과 통계 추천을 계속 보여 드릴게요.'
+          : stopped
+          ? '관심 없다는 답이 이어져서 학과 통계 추천을 $majorPickPauseDays일 동안 쉬어요.'
+          : '이 공고는 다시 권하지 않을게요.',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final n = widget.entry.notice;
+    final left = daysLeft(n, widget.today)!;
+    final due = n.applicationDeadline!.day;
+    return GwCard(
+      bubble: true,
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const MajorPickLabel(),
+          const SizedBox(height: 10),
+          Text(n.title, style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(
+            '${due.month}월 ${due.day}일 마감 · ${left == 0 ? '오늘' : 'D-$left'}',
+            style: _title(c).copyWith(color: c.urgent),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '직접 고른 분야가 아니라, 같은 학과 졸업생이 많이 가는 분야라서 권해 드려요.',
+            style: TextStyle(fontSize: 14, height: 1.5, color: c.sub),
+          ),
+          const SizedBox(height: 4),
+          Text('커리어넷 학과정보 통계(2020 조사)로 골랐어요.', style: captionStyle(context)),
+          const SizedBox(height: 16),
+          SoftButton(label: '공고 보기', onPressed: widget.onOpen),
+          if (widget.onAnswer != null) ...[
+            const SizedBox(height: 16),
+            Divider(height: 1, thickness: 1, color: c.line),
+            const SizedBox(height: 14),
+            if (_answered case final text?)
+              Text(text, style: TextStyle(fontSize: 14, height: 1.5, color: c.sub))
+            else ...[
+              Text(
+                '이런 추천을 계속 받아 볼까요?',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  SoftButton(label: '관심 있어요', icon: null, onPressed: () => _answer(true)),
+                  SoftButton(label: '관심 없어요', icon: null, onPressed: () => _answer(false)),
+                ],
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// 브리핑 머리: 네이비 면 위에 귀띔 배지·날짜, 흰 제목('주요 소식'은 라임 면), 소식마다 반투명 배지.
 class _Hero extends StatelessWidget {
   const _Hero({required this.briefing, required this.today});
@@ -271,6 +381,7 @@ class _Hero extends StatelessWidget {
       if (b.urgent != null) '마감 임박',
       if (b.fresh.isNotEmpty) '새 공고 ${b.fresh.length}건',
       if (b.career.isNotEmpty) '진로 관련 ${b.career.length}건',
+      if (b.majorPick != null) '학과 통계 추천',
       if (b.changed.isNotEmpty) '마감 변경 ${b.changed.length}건',
     ];
     return Container(

@@ -249,6 +249,48 @@ void main() {
       expect(b.isEmpty, isTrue);
     });
 
+    test('학과 통계로만 고른 공고는 마감 임박과 따로, 답한 공고는 빼고 고른다 (D-021)', () {
+      final items = [
+        entry('통계', deadline: '2026-10-20', reasons: ['major_prior_match']),
+        entry('관심', deadline: '2026-10-22', reasons: ['interest_match', 'major_prior_match']),
+        entry('통계 가까움', deadline: '2026-10-19', reasons: ['major_prior_match']),
+        entry('통계 멂', deadline: '2026-11-20', reasons: ['major_prior_match']),
+      ];
+      const major = 'mjc.business_administration';
+      final b = buildBriefing(list(items), const [], today, majorId: major);
+      expect(b.urgent?.notice.noticeId, '관심'); // 학과 통계만 맞는 공고는 마감 임박에 섞지 않는다
+      expect(b.majorPick?.notice.noticeId, '통계 가까움');
+      expect(b.count, 2);
+      expect(deadlineCandidates(list(items)).map((e) => e.notice.noticeId), ['관심']);
+
+      final declined = const MajorPickState().answer('통계 가까움', false, major, today);
+      expect(buildBriefing(list(items), const [], today, picks: declined, majorId: major).majorPick?.notice.noticeId, '통계');
+      // 홈 다가오는 마감에는 '관심 없어요'라고 한 공고만 빠진다
+      expect(majorPicks(list(items), declined, major, today).map((e) => e.notice.noticeId), ['통계', '통계 멂']);
+    });
+
+    test('학과 통계 추천: 관심 없어요가 세 번 이어지면 30일 쉬고, 학과를 바꾸면 다시 본다 (D-021)', () {
+      const major = 'mjc.business_administration';
+      var s = const MajorPickState();
+      s = s.answer('a', false, major, today).answer('b', false, major, today);
+      expect(s.declineStreak, 2);
+      s = s.answer('c', true, major, today); // 관심 있어요는 이어진 수를 지운다
+      expect(s.declineStreak, 0);
+      s = s.answer('d', false, major, today).answer('e', false, major, today).answer('f', false, major, today);
+      expect(s.allows(major, today), isFalse);
+      expect(s.allows(major, today.add(const Duration(days: 29))), isFalse);
+      expect(s.allows(major, today.add(const Duration(days: 30))), isTrue);
+      expect(s.allows('mjc.computer_engineering', today), isTrue);
+      expect(majorPicks(list([entry('x', reasons: ['major_prior_match'])]), s, major, today), isEmpty);
+      expect(s.decided, {'a': false, 'b': false, 'c': true, 'd': false, 'e': false, 'f': false});
+
+      final again = MajorPickState.fromJson(s.toJson());
+      expect(again.decided, s.decided);
+      expect(again.stoppedOn, s.stoppedOn);
+      // 다른 학과로 답하면 이전 답은 버린다
+      expect(s.answer('g', false, 'mjc.computer_engineering', today).decided, {'g': false});
+    });
+
     test('마감 후보: 맞춤 추천이면 관련 공고만, 최신 모드면 전부', () {
       final items = [
         entry('a', deadline: '2026-10-20', reasons: ['role_match']),
@@ -610,6 +652,35 @@ void main() {
     expect(find.text('지원 자격 일부 확인 필요'), findsOneWidget);
     expect(find.text('학년: 프로필에 없어 비교하지 못했어요'), findsOneWidget);
     expect(find.textContaining('뒤 마감돼요'), findsNothing);
+  });
+
+  testWidgets('브리핑 학과 통계 추천: 안내 표시와 관심 있음·없음 답 (D-021)', (tester) async {
+    final answers = <bool>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: gwittimTheme(),
+        home: BriefingScreen(
+          briefing: Briefing(majorPick: entry('경영 사무 인턴', deadline: '2026-10-20', reasons: ['major_prior_match'])),
+          today: today,
+          onOpenNotice: (_, _) async {},
+          onAnswerMajorPick: (_, interested) async {
+            answers.add(interested);
+            return false;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('학과 통계 추천'), findsNWidgets(2)); // 머리 배지와 카드 표시
+    expect(find.textContaining('같은 학과 졸업생이 많이 가는 분야'), findsOneWidget);
+    // 아래 고정 버튼에 가리지 않게 끝까지 올린다
+    await tester.drag(find.byType(ListView), const Offset(0, -2000));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('관심 없어요'));
+    await tester.pumpAndSettle();
+    expect(answers, [false]);
+    expect(find.text('이 공고는 다시 권하지 않을게요.'), findsOneWidget);
+    expect(find.text('관심 있어요'), findsNothing);
   });
 
   testWidgets('하루 첫 실행에 브리핑, 같은 날 다시 열면 안 뜬다', (tester) async {

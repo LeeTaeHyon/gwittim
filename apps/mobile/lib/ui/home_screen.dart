@@ -21,6 +21,7 @@ class HomeData {
     required this.saved,
     required this.profile,
     required this.majors,
+    this.picks = const MajorPickState(),
   });
 
   final RecommendationList list;
@@ -28,6 +29,9 @@ class HomeData {
   final List<SavedEntry> saved;
   final UserProfile? profile;
   final Map<String, String> majors;
+
+  /// 학과 통계 추천에 대한 기기 기록 (D-021)
+  final MajorPickState picks;
 }
 
 /// 홈 (D-009): 오늘의 귀띔(숫자 요약) → 다가오는 마감 → 나에게 맞는 공고 상위 3개 → 저장한 공고 마감 변경.
@@ -89,7 +93,13 @@ class HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       // 프로필 줄만 빠진다.
     }
-    return HomeData(list: list, categories: categories, saved: saved, profile: profile, majors: majors);
+    var picks = const MajorPickState();
+    try {
+      picks = await widget.briefingStore.majorPicks();
+    } catch (_) {
+      // 기기 저장소를 못 쓰면 답하지 않은 상태로 본다.
+    }
+    return HomeData(list: list, categories: categories, saved: saved, profile: profile, majors: majors, picks: picks);
   }
 
   /// 프로필 저장·공고 저장 후 다시 받는다. 이미 보이는 내용은 받는 동안 그대로 둔다.
@@ -114,10 +124,45 @@ class HomeScreenState extends State<HomeScreen> {
 
   static bool _hasInterests(HomeData data) => data.profile?.interestIds.isNotEmpty ?? false;
 
+  Briefing _briefing(HomeData data) => buildBriefing(
+    data.list,
+    data.saved,
+    _today,
+    hasInterests: _hasInterests(data),
+    picks: data.picks,
+    majorId: data.profile?.majorId,
+  );
+
+  /// 학과 통계 추천에 '관심 있어요/없어요'를 답한다 (D-021). 그만 보이게 됐으면 true.
+  Future<bool> _answerMajorPick(RecommendationEntry e, bool interested) async {
+    final data = _data;
+    if (data == null) return false;
+    final majorId = data.profile?.majorId;
+    final next = data.picks.answer(e.notice.noticeId, interested, majorId, _today);
+    try {
+      await widget.briefingStore.saveMajorPicks(next);
+    } catch (_) {
+      // 기기에 못 남겨도 이번 화면에서는 답한 대로 보인다.
+    }
+    if (mounted) {
+      setState(
+        () => _data = HomeData(
+          list: data.list,
+          categories: data.categories,
+          saved: data.saved,
+          profile: data.profile,
+          majors: data.majors,
+          picks: next,
+        ),
+      );
+    }
+    return !next.allows(majorId, _today);
+  }
+
   Future<void> _maybeShowBriefing(HomeData data) async {
     if (_briefingChecked) return;
     _briefingChecked = true;
-    final briefing = buildBriefing(data.list, data.saved, _today, hasInterests: _hasInterests(data));
+    final briefing = _briefing(data);
     try {
       if (briefing.isEmpty || await widget.briefingStore.shownOn(_today)) return;
       await widget.briefingStore.markShown(_today);
@@ -129,7 +174,16 @@ class HomeScreenState extends State<HomeScreen> {
 
   void _openBriefing(Briefing briefing) {
     Navigator.of(context).push(
-      gwRoute(context, (_) => BriefingScreen(briefing: briefing, today: _today, onOpenNotice: _openNotice), rise: true),
+      gwRoute(
+        context,
+        (_) => BriefingScreen(
+          briefing: briefing,
+          today: _today,
+          onOpenNotice: _openNotice,
+          onAnswerMajorPick: _answerMajorPick,
+        ),
+        rise: true,
+      ),
     );
   }
 
@@ -171,11 +225,13 @@ class HomeScreenState extends State<HomeScreen> {
     final c = context.gw;
     final caption = captionStyle(context);
     final list = data.list;
-    final briefing = buildBriefing(list, data.saved, _today, hasInterests: _hasInterests(data));
+    final briefing = _briefing(data);
     // 맞춤 추천이면 관련 공고 중에서만 마감을 센다.
     final candidates = deadlineCandidates(list);
+    // 학과 통계로만 고른 공고는 안내 표시를 붙여 함께 보인다 (D-021)
+    final picks = {for (final e in majorPicks(list, data.picks, data.profile?.majorId, _today)) e.notice.noticeId};
     final upcoming = [
-      for (final e in candidates)
+      for (final e in [...candidates, ...list.items.where((e) => picks.contains(e.notice.noticeId))])
         if ((daysLeft(e.notice, _today) ?? 99) <= 14) e,
     ]..sort((a, b) => a.notice.applicationDeadline!.date.compareTo(b.notice.applicationDeadline!.date));
     final undated = candidates.where((e) => e.notice.applicationDeadline == null).length;
@@ -215,6 +271,7 @@ class HomeScreenState extends State<HomeScreen> {
                   entry: e,
                   category: data.categories[e.notice.category] ?? e.notice.category,
                   today: _today,
+                  majorPick: picks.contains(e.notice.noticeId),
                   onTap: () => _openNotice(e.notice, e.recommendation),
                 ),
               if (undated > 0)
@@ -389,7 +446,8 @@ class _BriefingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gw;
     final b = briefing;
-    final onlyChanged = urgentCount == 0 && b.savedSoon.isEmpty && b.fresh.isEmpty && b.career.isEmpty;
+    final onlyChanged =
+        urgentCount == 0 && b.savedSoon.isEmpty && b.fresh.isEmpty && b.career.isEmpty && b.majorPick == null;
     return GwCard(
       bubble: true,
       onTap: onOpen,
@@ -416,6 +474,7 @@ class _BriefingCard extends StatelessWidget {
               if (urgentCount > 0) _Badge(icon: Icons.schedule_rounded, label: '마감 임박 $urgentCount건', urgent: true),
               if (b.fresh.isNotEmpty) _Badge(icon: Icons.fiber_new_rounded, label: '새 공고 ${b.fresh.length}건'),
               if (b.career.isNotEmpty) _Badge(icon: Icons.explore_rounded, label: '진로 관련 ${b.career.length}건'),
+              if (b.majorPick != null) const _Badge(icon: Icons.school_rounded, label: '학과 통계 추천'),
               if (b.changed.isNotEmpty) _Badge(icon: Icons.update_rounded, label: '마감 바뀐 저장 공고 ${b.changed.length}건'),
             ],
           ),
@@ -472,12 +531,21 @@ class _Badge extends StatelessWidget {
 }
 
 class _UpcomingRow extends StatelessWidget {
-  const _UpcomingRow({required this.entry, required this.category, required this.today, required this.onTap});
+  const _UpcomingRow({
+    required this.entry,
+    required this.category,
+    required this.today,
+    required this.onTap,
+    this.majorPick = false,
+  });
 
   final RecommendationEntry entry;
   final String category;
   final DateTime today;
   final VoidCallback onTap;
+
+  /// 학과 통계로만 고른 공고 (D-021): 제목 위에 안내 표시
+  final bool majorPick;
 
   @override
   Widget build(BuildContext context) {
@@ -514,6 +582,7 @@ class _UpcomingRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (majorPick) ...[const MajorPickLabel(), const SizedBox(height: 4)],
                   Text(
                     n.title,
                     maxLines: 2,
