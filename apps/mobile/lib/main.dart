@@ -7,6 +7,7 @@ import 'auth/auth_gate.dart';
 import 'auth/auth_service.dart';
 import 'data/api_repository.dart';
 import 'data/repository.dart';
+import 'ui/app_info.dart';
 import 'ui/briefing_data.dart';
 import 'ui/calendar_screen.dart';
 import 'ui/common.dart';
@@ -28,6 +29,7 @@ const _devToken = String.fromEnvironment('GWITTIM_DEV_TOKEN');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerAppLicenses();
   // 화면 설정을 먼저 읽어서 첫 화면부터 고른 테마로 그린다 (D-010).
   final theme = await ThemeController.load(PrefsThemeStore());
   if (_apiBase.isEmpty) {
