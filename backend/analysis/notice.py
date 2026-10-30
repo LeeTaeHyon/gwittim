@@ -40,12 +40,23 @@ def notice_id_for(key: str) -> str:
 CLOSED_TITLE = re.compile(r"[\[(]\s*(?:모집\s*)?(?:마감|완료)\s*[\])]|모집\s*완료|모집\s*마감(?!\s*(?:일|임박|연장))")
 
 
-def lifecycle(deadline: dict | None, today: date, title: str = "") -> str:
+# 알림톡은 신청 마감 없이 특강·검사 날짜만 알리는 안내가 많다. 마감일이 없으면 활동 기간(본문의 마지막 날짜)이
+# 지났을 때 끝난 공고로 본다 (D-016). 게시판 공고에는 쓰지 않는다: 활동 기간이 길고 활동 중에도 안내가 유효한 경우가 많다.
+ACTIVITY_CLOSES = {"mjc_kakao"}
+
+
+def lifecycle(deadline: dict | None, today: date, title: str = "", activity: dict | None = None) -> str:
     if CLOSED_TITLE.search(title):
         return "closed"
     if deadline is None:
-        return "unknown"
+        last = activity and (activity["end"] or activity["start"])
+        return "closed" if last and date.fromisoformat(last["date"]) < today else "unknown"
     return "closed" if date.fromisoformat(deadline["date"]) < today else "open"
+
+
+def _lifecycle(notice: dict, today: date) -> str:
+    activity = notice["activity_period"] if notice["source_id"] in ACTIVITY_CLOSES else None
+    return lifecycle(notice["application_deadline"], today, notice["title"], activity)
 
 
 def _without_evidence(value):
@@ -114,7 +125,7 @@ def build_notice(
     raw = record.raw
     if previous and previous["notice_version"] == record.notice_version and previous["analysis_version"] == analyzer.version:
         reused = dict(previous, last_collected_at=record.last_collected_at, changed_fields=[])
-        reused["lifecycle_status"] = "removed" if record.removed else lifecycle(reused["application_deadline"], today, raw["title"])
+        reused["lifecycle_status"] = "removed" if record.removed else _lifecycle(reused, today)
         if reused["lifecycle_status"] != previous["lifecycle_status"]:
             reused["changed_fields"] = ["lifecycle_status"]
         return reused, []
@@ -139,7 +150,7 @@ def build_notice(
         "deadline_note": fields["deadline_note"],
         "activity_period": fields["activity_period"],
         "eligibility": fields["eligibility"],
-        "lifecycle_status": "removed" if record.removed else lifecycle(fields["application_deadline"], today, raw["title"]),
+        "lifecycle_status": None,
         "publication_status": "published",
         "notice_version": record.notice_version,
         "analysis_version": version,
@@ -147,6 +158,7 @@ def build_notice(
         "last_verified_at": raw["collected_at"],
         "changed_fields": [],
     }
+    notice["lifecycle_status"] = "removed" if record.removed else _lifecycle(notice, today)
     if previous:
         notice["changed_fields"] = [
             f for f in CHANGE_TRACKED if _without_evidence(notice[f]) != _without_evidence(previous.get(f))
