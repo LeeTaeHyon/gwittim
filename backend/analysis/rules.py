@@ -175,6 +175,8 @@ UNRESTRICTED = re.compile(
 UNRESOLVED = re.compile(r"평점|학점|성적|소득|연령|나이|만\s*\d+\s*세|우대|요건|거주|주민등록|소재|출신|국적")
 # 재학·휴학·졸업 밖의 학적 (같은 줄에 있으면 재학 상태 조건으로 만들지 않는다)
 OTHER_STATUS = re.compile(r"복학|입학\s*예정|편입|재입학|신입생")
+# 고졸 이상 학력: 대학생은 재학·휴학·졸업 모두 갖춘다 ('고등학교 졸업예정자'만은 해당 없음) (D-023)
+HIGH_SCHOOL_OR_MORE = re.compile(r"고등학교\s*졸업(?:자|\s*이상|\s*학력)|고졸\s*(?:이상|자|학력)")
 # 제출 서류 목록(성적증명서 등)과 '성적에 관계없이'는 지원 조건이 아니다. 혜택·출결·성적 조회 안내도 (D-023)
 NOT_CONDITION = re.compile(r"서류|증명서|확인서|사본|신청서|관계\s*없이|무관(?!심)|혜택|마일리지|결석|출석|성적\s*(?:조회|처리|입력)|이의\s*신청")
 # 학적·학년·학과를 빼는 말('휴학생은 추천 불가', '휴학생 제외'). 이런 줄을 허용 조건으로 읽으면 판정이 뒤집힌다
@@ -402,7 +404,9 @@ class RuleBasedAnalyzer:
                 add("grade", "eq", int(m[1]), line)
 
             statuses = [s for s, p in (("enrolled", r"재학생|재\s*[·ㆍ･,/]\s*휴학생"), ("on_leave", r"휴학생"), ("graduated", r"졸업생|졸업자")) if re.search(p, line)]
-            if statuses and OTHER_STATUS.search(line):
+            if HIGH_SCHOOL_OR_MORE.search(line) and not NOT_CONDITION.search(line):
+                add("enrollment_status", "in", ["enrolled", "on_leave", "graduated"], line)
+            elif statuses and OTHER_STATUS.search(line):
                 unresolved.append({"evidence": line, "note": None})  # 복학생·입학예정자 등은 프로필 재학 상태로 판정할 수 없다
             elif statuses:
                 add("enrollment_status", "eq" if len(statuses) == 1 else "in", statuses[0] if len(statuses) == 1 else statuses, line)
