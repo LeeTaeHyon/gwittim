@@ -136,11 +136,11 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       // false: 사용자가 창을 닫았거나, 기기에 Google 계정이 없어 창이 뜨지 않은 경우(둘을 구분할 수 없음)
       if (!await widget.auth.signInWithGoogle()) {
-        messenger.showSnackBar(const SnackBar(content: Text('로그인을 마치지 못했어요. 기기에 Google 계정이 있는지 확인해 주세요.')));
+        messenger.showSnackBar(const SnackBar(content: Text('로그인을 마치지 못했습니다. 기기에 Google 계정이 있는지 확인해 주세요.')));
       }
     } catch (_) {
       // 상세 오류는 화면에 보여주지 않는다 (SPEC §10)
-      messenger.showSnackBar(const SnackBar(content: Text('로그인하지 못했어요. 잠시 후 다시 시도해 주세요.')));
+      messenger.showSnackBar(const SnackBar(content: Text('로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -195,7 +195,9 @@ class _SignInScreenState extends State<SignInScreen> {
                                 Semantics(
                                   header: true,
                                   child: Text(
-                                    '몰랐던 기회를\n먼저 귀띔해 드려요',
+                                    '귀띔이 맞춤 공고를\n먼저 안내해 드립니다',
+                                    // 30pt 제목이라 큰 글자 설정에서는 1.2배까지만 키운다. 더 키우면 두 줄이 세 줄로 넘어간다.
+                                    textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.2),
                                     style: TextStyle(
                                       fontSize: 30,
                                       height: 1.38,
@@ -208,7 +210,7 @@ class _SignInScreenState extends State<SignInScreen> {
                                 const SizedBox(height: 14),
                                 Text(
                                   // 추천은 관련도 순이라 '마감 순'이라고 쓰지 않는다.
-                                  '학교 공지 중 나에게 맞는 공고를 골라 지원 조건·마감과 함께 정리해 드려요.',
+                                  '학교 공지 중 나에게 맞는 공고를 골라 지원 조건·마감과 함께 정리합니다.',
                                   style: TextStyle(fontSize: 16, height: 1.6, color: c.loginSub),
                                 ),
                                 SizedBox(height: _fit == 0 ? 36 : 20),
@@ -231,7 +233,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   children: [
                     Icon(Icons.lock_outline_rounded, size: 15, color: c.loginSub),
                     const SizedBox(width: 6),
-                    Text('성적·학번은 묻지 않아요', style: TextStyle(fontSize: 13, color: c.loginSub)),
+                    Text('성적·학번은 묻지 않습니다', style: TextStyle(fontSize: 13, color: c.loginSub)),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -263,7 +265,7 @@ class _TermsLine extends StatelessWidget {
           TextSpan(text: '이용약관', style: link),
           const TextSpan(text: '과 '),
           TextSpan(text: '개인정보 처리방침', style: link),
-          const TextSpan(text: '에 동의하게 돼요'),
+          const TextSpan(text: '에 동의한 것으로 봅니다'),
         ],
       ),
       textAlign: TextAlign.center,

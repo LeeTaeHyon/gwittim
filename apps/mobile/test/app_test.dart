@@ -195,7 +195,7 @@ void main() {
       expect(b.urgent?.notice.noticeId, 'a'); // b가 더 가깝지만 관련 이유가 없어 마감 임박에 넣지 않는다
       expect(b.fresh, isEmpty); // 게시일 미상은 새 공고로 보지 않는다
       expect(b.changed.single.notice.noticeId, 's');
-      expect(deadlineChangeText(b.changed.single), '마감이 3일 늦춰졌어요');
+      expect(deadlineChangeText(b.changed.single), '마감 3일 연장');
       expect(b.count, 2);
     });
 
@@ -269,7 +269,7 @@ void main() {
       expect(majorPicks(list(items), declined, major, today).map((e) => e.notice.noticeId), ['통계', '통계 멂']);
     });
 
-    test('학과 통계 추천: 관심 없어요가 세 번 이어지면 30일 쉬고, 학과를 바꾸면 다시 본다 (D-021)', () {
+    test('학과 통계 추천: 관심 없음이 세 번 이어지면 30일 쉬고, 학과를 바꾸면 다시 본다 (D-021)', () {
       const major = 'mjc.business_administration';
       var s = const MajorPickState();
       s = s.answer('a', false, major, today).answer('b', false, major, today);
@@ -322,9 +322,9 @@ void main() {
             ),
           ]),
         ),
-        ['학년: 프로필에 없어 비교하지 못했어요', '재학 상태: 원문에서 확인 필요'],
+        ['학년: 프로필에 없어 비교하지 못했습니다', '재학 상태: 원문에서 확인 필요'],
       );
-      expect(checkReasons(rec(const [])), ['자동으로 비교하지 못한 조건이 있어요. 원문에서 확인해 주세요.']);
+      expect(checkReasons(rec(const [])), ['자동으로 비교하지 못한 조건이 있습니다. 원문에서 확인해 주세요.']);
     });
 
     test('전할 소식이 없으면 비어 있다 (latest 모드는 관련 공고를 세지 않음)', () {
@@ -360,18 +360,18 @@ void main() {
 
     test('조건을 찾지 못하면 제한 없음으로 쓰지 않는다', () {
       final rows = checklistRows(notice(), null, none);
-      expect(rows.single.label, '공고에서 지원 조건을 찾지 못했어요');
+      expect(rows.single.label, '공고에서 지원 조건을 찾지 못했습니다');
       expect(rows.single.state, CheckState.info);
     });
 
     test('명시적 제한 없음만 누구나', () {
-      expect(checklistRows(notice(unrestricted: true), null, none).single.label, '누구나 지원할 수 있어요');
+      expect(checklistRows(notice(unrestricted: true), null, none).single.label, '누구나 지원 가능');
     });
 
     test('성적 조건은 직접 확인하고 성적을 받지 않는다고 안내', () {
       final row = checklistRows(notice(unresolved: ['직전 학기 평점 3.0 이상']), null, none).single;
       expect(row.state, CheckState.check);
-      expect(row.note, contains('성적을 받지 않아요'));
+      expect(row.note, contains('성적을 받지 않습니다'));
     });
 
     test('같은 종류 직접 확인 줄은 2개 이상이면 한 줄로 묶는다', () {
@@ -386,11 +386,11 @@ void main() {
       expect(rows.map((r) => r.label), ['학과', '직접 확인 3개', '직접 확인']);
       final grouped = rows[1];
       expect(grouped.evidences, ['직무 관련 자격증 소유자', '근무지 인접 거주자 우대', '주말 근무 가능자']);
-      expect(grouped.note, contains('자동으로 비교하지 못했어요'));
+      expect(grouped.note, contains('자동으로 비교하지 못했습니다'));
       expect(grouped.count, 3);
       // 성적 조건은 안내가 달라서 따로 남는다 (1개라 묶지 않음)
       expect(rows[2].evidences, ['직전 학기 평점 3.0 이상']);
-      expect(rows[2].note, contains('성적을 받지 않아요'));
+      expect(rows[2].note, contains('성적을 받지 않습니다'));
     });
 
     test('우대 사항은 지원 자격 뒤에 따로 묶고 확인 필요 수에 넣지 않는다', () {
@@ -452,7 +452,7 @@ void main() {
         rec,
         (f) => f == 'major_id' ? '컴퓨터공학과' : null,
       );
-      expect(rows.map((r) => (r.field, r.label)), [('학과', '컴퓨터공학과'), ('학년', '프로필에 없어요')]);
+      expect(rows.map((r) => (r.field, r.label)), [('학과', '컴퓨터공학과'), ('학년', '프로필 미입력')]);
       expect(rows.last.state, CheckState.check);
     });
 
@@ -501,7 +501,7 @@ void main() {
     expect(find.text('D-13 · 17:00 마감 · 행사'), findsOneWidget); // 다가오는 마감: 남은 날·시각이 앞
     expect(find.text('10월 30일(금) 17:00 마감 · D-13'), findsOneWidget); // 카드: 7일 넘게 남으면 칩 없이 날짜 줄에
     expect(find.text('D-13'), findsNothing);
-    expect(find.text('오늘 확인할 공고가 있어요'), findsOneWidget); // 소식 종류 수는 세지 않는다
+    expect(find.text('오늘 확인할 공고'), findsOneWidget); // 소식 종류 수는 세지 않는다
     expect(find.text('브리핑 자세히 보기'), findsOneWidget);
     expect(find.text('맞춤 공고 7건'), findsNothing); // 홈 숫자를 다시 세는 배지는 없앴다 (D-018)
     expect(find.textContaining('0건'), findsNothing); // 0건인 칸은 숨긴다
@@ -518,13 +518,13 @@ void main() {
     expect(find.textContaining('공고 “'), findsNothing);
 
     // 샘플은 10/17 확인이라 24시간이 지났다 (D-006): 빨간 글자가 아니라 요약 아래 상자로 보인다.
-    final stale = find.textContaining('마지막 확인');
+    final stale = find.textContaining('마지막으로 확인');
     expect(stale, findsOneWidget);
     expect(tester.widget<Text>(stale).style!.color, GwColors.light.body);
     expect(tester.getTopLeft(stale).dy, lessThan(tester.getTopLeft(find.text('지원 전 체크리스트')).dy));
-    await tester.scrollUntilVisible(find.text('이래서 추천했어요'), 200);
+    await tester.scrollUntilVisible(find.text('추천 이유'), 200);
     await tester.scrollUntilVisible(find.text('10월 30일(금) 17:00 · 신청 마감'), 200);
-    expect(find.text('13일 남았어요'), findsOneWidget);
+    expect(find.text('D-13'), findsOneWidget);
 
     await tester.tap(find.text('학교 공지에서 보기'));
     await tester.pumpAndSettle();
@@ -576,7 +576,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('명지전문대 카카오톡 알림톡'), findsOneWidget);
     expect(find.text('10월 15일(목) 14:05 발송'), findsOneWidget);
-    expect(find.text('카카오톡 알림톡으로 받은 공지라 원문 링크가 없어요.'), findsOneWidget);
+    expect(find.text('카카오톡 알림톡으로 받은 공지라 원문 링크가 없습니다.'), findsOneWidget);
     expect(find.text('학교 공지에서 보기'), findsNothing);
     expect(find.textContaining('원문 확인 시각'), findsNothing); // 알림톡은 재확인 안내 없음
     expect(opened, isEmpty);
@@ -595,10 +595,10 @@ void main() {
     expect(find.text('선착순 마감 (정원 도달 시 조기 종료)'), findsOneWidget);
     await tapVisible(tester, find.text(firstComeTitle));
 
-    expect(find.text('확인이 필요해요'), findsOneWidget);
+    expect(find.text('확인 필요'), findsOneWidget);
     expect(find.text('직접 확인'), findsOneWidget);
     expect(find.text('학교 공지에서 확인하기'), findsOneWidget);
-    expect(find.textContaining('첨부파일·이미지에 조건이 더 있을 수 있어요'), findsOneWidget);
+    expect(find.textContaining('첨부파일·이미지에 조건이 더 있을 수 있습니다'), findsOneWidget);
     expect(find.textContaining('23:59'), findsNothing);
   });
 
@@ -614,7 +614,7 @@ void main() {
     const title = '[합성 샘플] 학습성과 글쓰기 공모전';
     await tester.scrollUntilVisible(find.text(title), 200, scrollable: notices);
     await tapVisible(tester, find.text(title));
-    expect(find.text('누구나 지원할 수 있어요'), findsOneWidget); // 이 샘플은 명시적 제한 없음
+    expect(find.text('누구나 지원 가능'), findsOneWidget); // 이 샘플은 명시적 제한 없음
   });
 
   testWidgets('브리핑 마감 임박: 날짜와 D-day, 관련 이유, 확인이 필요한 조건 이름', (tester) async {
@@ -648,10 +648,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('10월 19일 마감 · D-2'), findsOneWidget);
-    expect(find.text('희망 직무와 관련된 공고예요'), findsOneWidget);
+    expect(find.text('희망 직무 연관 공고'), findsOneWidget);
     expect(find.text('지원 자격 일부 확인 필요'), findsOneWidget);
-    expect(find.text('학년: 프로필에 없어 비교하지 못했어요'), findsOneWidget);
-    expect(find.textContaining('뒤 마감돼요'), findsNothing);
+    expect(find.text('학년: 프로필에 없어 비교하지 못했습니다'), findsOneWidget);
+    expect(find.textContaining('일 뒤 마감'), findsNothing);
   });
 
   testWidgets('브리핑 학과 통계 추천: 안내 표시와 관심 있음·없음 답 (D-021)', (tester) async {
@@ -676,11 +676,11 @@ void main() {
     // 아래 고정 버튼에 가리지 않게 끝까지 올린다
     await tester.drag(find.byType(ListView), const Offset(0, -2000));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('관심 없어요'));
+    await tester.tap(find.text('관심 없음'));
     await tester.pumpAndSettle();
     expect(answers, [false]);
-    expect(find.text('이 공고는 다시 권하지 않을게요.'), findsOneWidget);
-    expect(find.text('관심 있어요'), findsNothing);
+    expect(find.text('이 공고는 다시 추천하지 않습니다.'), findsOneWidget);
+    expect(find.text('관심 있음'), findsNothing);
   });
 
   testWidgets('하루 첫 실행에 브리핑, 같은 날 다시 열면 안 뜬다', (tester) async {
@@ -693,8 +693,8 @@ void main() {
 
     expect(find.text('주요 소식'), findsOneWidget);
     expect(find.byType(BriefingScreen), findsOneWidget); // 머리는 네이비, 조건 소식만
-    expect(find.textContaining('합격 가능성을 뜻하지 않아요'), findsOneWidget);
-    await tester.tap(find.text('확인했어요'));
+    expect(find.textContaining('합격 가능성과는 관계없습니다'), findsOneWidget);
+    await tester.tap(find.text('확인'));
     await tester.pumpAndSettle();
     expect(find.text('다가오는 마감'), findsOneWidget);
     expect(find.text('오늘의 귀띔'), findsOneWidget);
@@ -718,11 +718,11 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('주요 소식'), findsNothing); // 전할 소식이 없으면 브리핑 없음
-    expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있어요'), findsOneWidget);
+    expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있습니다'), findsOneWidget);
     expect(find.text('최신 공고'), findsOneWidget);
     await tester.tap(find.text('프로필 입력'));
     await tester.pumpAndSettle();
-    expect(find.text('아직 입력하지 않았어요'), findsOneWidget); // 내 정보 요약 카드
+    expect(find.text('입력한 정보 없음'), findsOneWidget); // 내 정보 요약 카드
   });
 
   testWidgets('새로고침이 실패하면 목록은 두고 연결 안내를 띄운다', (tester) async {
@@ -737,7 +737,7 @@ void main() {
     repo.offline = true;
     await tester.fling(find.text('다가오는 마감'), const Offset(0, 400), 1000);
     await tester.pumpAndSettle();
-    expect(find.text('새로 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'), findsOneWidget);
+    expect(find.text('새로 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.'), findsOneWidget);
     expect(find.text('다가오는 마감'), findsOneWidget); // 보이던 내용은 그대로
   });
 
@@ -749,7 +749,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final home = find.byType(HomeScreen);
-    expect(find.descendant(of: home, matching: find.text('불러오지 못했어요')), findsOneWidget);
+    expect(find.descendant(of: home, matching: find.text('불러오기 실패')), findsOneWidget);
     expect(find.descendant(of: home, matching: find.text('잠시 후 다시 시도해 주세요.')), findsOneWidget);
     expect(find.textContaining('RepositoryException'), findsNothing);
     final before = repo.calls; // 홈과 공고 탭이 한 번씩 부른다

@@ -262,7 +262,7 @@ class HomeScreenState extends State<HomeScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   child: Text(
-                    list.personalized ? '맞춤 공고 중 앞으로 2주 안에 마감되는 공고가 없어요.' : '앞으로 2주 안에 마감되는 공고가 없어요.',
+                    list.personalized ? '맞춤 공고 중 앞으로 2주 안에 마감되는 공고가 없습니다.' : '앞으로 2주 안에 마감되는 공고가 없습니다.',
                     style: TextStyle(fontSize: 15, color: c.sub),
                   ),
                 ),
@@ -287,7 +287,7 @@ class HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          '마감일이 정해지지 않은 공고 $undated개(선착순 등)는 넣지 않았어요.',
+                          '마감일이 정해지지 않은 공고 $undated개(선착순 등)는 제외했습니다.',
                           style: TextStyle(fontSize: 13, height: 1.5, color: c.muted),
                         ),
                       ),
@@ -307,7 +307,7 @@ class HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 12),
         if (list.items.isEmpty)
           GwCard(
-            child: Text('지금 보여드릴 공고가 없어요.', style: TextStyle(fontSize: 15, color: c.sub)),
+            child: Text('표시할 공고가 없습니다.', style: TextStyle(fontSize: 15, color: c.sub)),
           ),
         for (final e in list.items.take(_homeCount)) ...[
           NoticeCard(
@@ -415,11 +415,11 @@ class _ProfilePrompt extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '프로필을 입력하면 맞춤 추천을 받을 수 있어요',
+            '프로필을 입력하면 맞춤 추천을 받을 수 있습니다',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: c.ink),
           ),
           const SizedBox(height: 4),
-          Text('지금은 최신 공고 순으로 보여드려요', style: TextStyle(fontSize: 14, color: c.sub)),
+          Text('현재 최신 공고 순으로 표시합니다', style: TextStyle(fontSize: 14, color: c.sub)),
           if (onOpenProfile != null) ...[
             const SizedBox(height: 12),
             SoftButton(label: '프로필 입력', onPressed: onOpenProfile!),
@@ -461,7 +461,7 @@ class _BriefingCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            onlyChanged ? '마감이 바뀐 저장 공고가 있어요' : '오늘 확인할 공고가 있어요',
+            onlyChanged ? '마감이 바뀐 저장 공고' : '오늘 확인할 공고',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.ink, height: 1.4),
           ),
           const SizedBox(height: 12),

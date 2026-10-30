@@ -66,7 +66,7 @@ bool isRelated(RecommendationEntry e) => e.recommendation.reasonCodes.any(chosen
 bool isMajorPick(RecommendationEntry e) =>
     !isRelated(e) && e.recommendation.reasonCodes.contains('major_prior_match');
 
-/// 학과 통계 추천 중 화면에 보일 것: 학생이 그만 보기로 하지 않았고, '관심 없어요'라고 한 공고가 아닌 것
+/// 학과 통계 추천 중 화면에 보일 것: 학생이 그만 보기로 하지 않았고, '관심 없음'라고 한 공고가 아닌 것
 List<RecommendationEntry> majorPicks(RecommendationList list, MajorPickState picks, String? majorId, DateTime today) =>
     list.personalized && picks.allows(majorId, today)
     ? [
@@ -167,26 +167,26 @@ List<String> checkReasons(Recommendation r) {
     for (final c in r.conditionResults)
       if (c.status == 'unknown')
         c.unknownReason == 'profile_missing'
-            ? '${conditionFieldLabel(c.field)}: 프로필에 없어 비교하지 못했어요'
+            ? '${conditionFieldLabel(c.field)}: 프로필에 없어 비교하지 못했습니다'
             : '${conditionFieldLabel(c.field)}: 원문에서 확인 필요',
   ];
-  return out.isEmpty ? const ['자동으로 비교하지 못한 조건이 있어요. 원문에서 확인해 주세요.'] : out;
+  return out.isEmpty ? const ['자동으로 비교하지 못한 조건이 있습니다. 원문에서 확인해 주세요.'] : out;
 }
 
 /// 저장 이후 마감 변경 문장. 기준은 최신 마감이다 (SPEC §5).
 String deadlineChangeText(SavedEntry e) {
   final before = e.saved.savedDeadlineSnapshot;
   final now = e.notice.applicationDeadline;
-  if (before == null) return '마감일이 새로 나왔어요';
-  if (now == null) return '마감일이 공고에서 빠졌어요';
+  if (before == null) return '마감일 추가';
+  if (now == null) return '마감일 삭제';
   final days = now.day.difference(before.day).inDays;
-  if (days > 0) return '마감이 $days일 늦춰졌어요';
-  if (days < 0) return '마감이 ${-days}일 당겨졌어요';
-  return '마감 시각이 바뀌었어요';
+  if (days > 0) return '마감 $days일 연장';
+  if (days < 0) return '마감 ${-days}일 단축';
+  return '마감 시각 변경';
 }
 
 /// 학과 통계 추천에 대한 학생의 답 (D-021). 기기에만 저장하고 서버에 보내지 않는다.
-/// 학습이 아니라 정해진 규칙이다: '관심 없어요'가 [majorPickStopAfter]번 이어지면 [majorPickPauseDays]일 동안 보이지 않는다.
+/// 학습이 아니라 정해진 규칙이다: '관심 없음'가 [majorPickStopAfter]번 이어지면 [majorPickPauseDays]일 동안 보이지 않는다.
 /// 학과를 바꾸면 처음부터 다시 본다.
 class MajorPickState {
   const MajorPickState({this.majorId, this.decided = const {}, this.declineStreak = 0, this.stoppedOn});
@@ -197,7 +197,7 @@ class MajorPickState {
   /// 공고 ID → 관심 있음(true) / 관심 없음(false)
   final Map<String, bool> decided;
 
-  /// 이어진 '관심 없어요' 수
+  /// 이어진 '관심 없음' 수
   final int declineStreak;
 
   /// 그만 보이기 시작한 날
@@ -237,7 +237,7 @@ class MajorPickState {
   );
 }
 
-/// '관심 없어요'가 이만큼 이어지면 학과 통계 추천을 쉰다.
+/// '관심 없음'가 이만큼 이어지면 학과 통계 추천을 쉰다.
 const majorPickStopAfter = 3;
 
 /// 쉬는 기간(일). 지나면 다시 보인다.

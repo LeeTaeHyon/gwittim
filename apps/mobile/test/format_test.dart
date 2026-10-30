@@ -55,8 +55,8 @@ void main() {
   test('원문 확인이 24시간을 넘으면 오래된 정보 안내 (D-006)', () {
     final now = DateTime.utc(2026, 10, 18, 12);
     expect(staleNotice(DateTime.utc(2026, 10, 18, 3), now), isNull);
-    expect(staleNotice(DateTime.utc(2026, 10, 17, 6), now), '마지막 확인 30시간 전이에요. 내용이 바뀌었을 수 있어요.');
-    expect(staleNotice(DateTime.utc(2026, 10, 14, 12), now), '마지막 확인 4일 전이에요. 내용이 바뀌었을 수 있어요.');
-    expect(staleNotice(null, now), contains('알 수 없어요'));
+    expect(staleNotice(DateTime.utc(2026, 10, 17, 6), now), '30시간 전에 마지막으로 확인했습니다. 이후 내용이 바뀌었을 수 있습니다.');
+    expect(staleNotice(DateTime.utc(2026, 10, 14, 12), now), '4일 전에 마지막으로 확인했습니다. 이후 내용이 바뀌었을 수 있습니다.');
+    expect(staleNotice(null, now), contains('알 수 없습니다'));
   });
 }

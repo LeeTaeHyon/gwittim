@@ -153,7 +153,7 @@ class _BubbleScene extends StatelessWidget {
     final bubbles = [
       _ExampleBubble(kicker: '마감 임박', kickerColor: c.urgent, text: '장학생 선발 공고 · D-6'),
       _ExampleBubble(kicker: '맞춤 공고', kickerColor: c.accent, text: '관심 분야와 관련된 공고 ', marked: '3개'),
-      _ExampleBubble(kicker: '저장한 공고', kickerColor: c.accent, text: '발표회 마감이 3일 늦춰졌어요'),
+      _ExampleBubble(kicker: '저장한 공고', kickerColor: c.accent, text: '발표회 마감 3일 연장'),
     ];
     const indents = [0.0, 32.0, 12.0];
     return Column(
@@ -326,7 +326,7 @@ class _ChecklistScene extends StatelessWidget {
           Opacity(
             opacity: _span(ms, 2900, 400),
             alwaysIncludeSemantics: true,
-            child: Text('2개는 맞아요 · 1개는 직접 확인해요', style: TextStyle(fontSize: 12.5, color: c.muted)),
+            child: Text('2개 충족 · 1개 직접 확인', style: TextStyle(fontSize: 12.5, color: c.muted)),
           ),
         ],
       ),
@@ -424,7 +424,7 @@ class _RankingScene extends StatelessWidget {
           Text('맞춤 추천', style: _kicker(c.accent)),
           const SizedBox(height: 3),
           Text(
-            '관심 분야에 맞춰 공고를 추천해요',
+            '관심 분야에 맞춘 공고 추천',
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink),
           ),
           const SizedBox(height: 10),

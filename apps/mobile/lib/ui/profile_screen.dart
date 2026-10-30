@@ -94,14 +94,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     widget.onSaved();
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('프로필을 저장했어요.')));
+      ..showSnackBar(const SnackBar(content: Text('프로필이 저장되었습니다.')));
   }
 
   /// 프로필·저장 데이터 삭제는 아직 서버 인터페이스가 없다 (D-010 한계). 화면 버튼만 둔다.
   void _withdraw() {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('탈퇴는 아직 준비 중이에요.')));
+      ..showSnackBar(const SnackBar(content: Text('탈퇴 기능은 준비 중입니다.')));
   }
 
   /// Flutter 기본 라이선스 화면. 패키지 라이선스와 Pretendard(registerAppLicenses)가 나온다.
@@ -156,7 +156,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 12),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 12),
-          child: TipBubble(title: '입력한 정보는 추천에만 써요', detail: '지원 조건 비교와 추천 순서에만 쓰고, 성적·학번은 받지 않아요.'),
+          child: TipBubble(title: '입력한 정보는 추천에만 사용', detail: '지원 조건 비교와 추천 순서에만 사용하며, 성적·학번은 받지 않습니다.'),
         ),
         const SizedBox(height: 32),
         const Padding(padding: EdgeInsets.symmetric(horizontal: 24), child: SectionTitle('설정')),
@@ -180,7 +180,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text('시스템 설정을 고르면 기기 화면 모드를 따라가요.', style: caption),
+                Text('시스템 설정을 선택하면 기기 화면 모드를 따릅니다.', style: caption),
                 if (widget.onSignOut case final signOut?) ...[
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 20),
@@ -200,11 +200,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Google 계정으로 로그인했어요',
+                                'Google 계정으로 로그인됨',
                                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body),
                               ),
                               const SizedBox(height: 2),
-                              Text('다른 사람은 내 프로필을 볼 수 없어요', style: TextStyle(fontSize: 13, color: c.muted)),
+                              Text('다른 사람은 내 프로필을 볼 수 없습니다', style: TextStyle(fontSize: 13, color: c.muted)),
                             ],
                           ),
                         ),
@@ -234,7 +234,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Text('탈퇴하면 프로필과 저장한 공고가 지워져요. 공고 자체는 그대로 남아요.', style: caption),
+                  Text('탈퇴하면 프로필과 저장한 공고가 삭제됩니다. 공고 자체는 그대로 남습니다.', style: caption),
                 ],
                 Padding(
                   padding: const EdgeInsets.only(top: 20, bottom: 4),
@@ -283,12 +283,12 @@ class _SummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            empty ? '아직 입력하지 않았어요' : line,
+            empty ? '입력한 정보 없음' : line,
             style: TextStyle(fontSize: 17, height: 1.45, fontWeight: FontWeight.w700, color: c.ink),
           ),
           const SizedBox(height: 4),
           Text(
-            empty ? '학적과 관심 분야를 입력하면 맞춤 추천을 받을 수 있어요.' : '추천과 지원 조건 비교에 쓰는 정보예요.',
+            empty ? '학적과 관심 분야를 입력하면 맞춤 추천을 받을 수 있습니다.' : '추천과 지원 조건 비교에 쓰는 정보입니다.',
             style: TextStyle(fontSize: 14, height: 1.5, color: c.sub),
           ),
           if (!empty) ...[
@@ -510,7 +510,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     final (title, detail, body) = switch (_step) {
       0 => (
         '학적',
-        '비워 둔 항목은 지원 조건을 "확인 필요"로 보여 드려요. 고른 칸을 다시 누르면 비울 수 있어요.',
+        '미입력 항목은 지원 조건에 "확인 필요"로 표시됩니다. 선택한 칸을 다시 누르면 선택이 해제됩니다.',
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -560,10 +560,10 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           ],
         ),
       ),
-      1 => ('관심 분야', '고른 분야와 관련된 공고를 먼저 보여 드려요.', _interestBody(names[_majorId])),
+      1 => ('관심 분야', '선택한 분야와 관련된 공고가 먼저 표시됩니다.', _interestBody(names[_majorId])),
       _ => (
         '희망 직무',
-        '고른 직무와 관련된 공고를 먼저 보여 드려요.',
+        '선택한 직무와 관련된 공고가 먼저 표시됩니다.',
         _ChoiceChips(items: widget.roles, selected: _roles, onChanged: (s) => setState(() => _roles = s)),
       ),
     };
@@ -609,8 +609,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TipBubble(
-          title: '$majorName 졸업생은 이런 분야로 많이 가요',
-          detail: '커리어넷 학과정보의 졸업생 진로 통계(2020 조사)예요. 눌러서 고른 것만 저장돼요.',
+          title: '$majorName 졸업생이 많이 가는 분야',
+          detail: '커리어넷 학과정보의 졸업생 진로 통계(2020 조사) 기준입니다. 누른 분야만 저장됩니다.',
         ),
         const SizedBox(height: 12),
         _ChoiceChips(items: suggested, selected: _interests, onChanged: onChanged),
@@ -850,7 +850,7 @@ class _PickerDialogState extends State<_PickerDialog> {
                     ? Padding(
                         padding: const EdgeInsets.symmetric(vertical: 36),
                         child: Text(
-                          '찾는 ${widget.title}가 없어요',
+                          '일치하는 ${widget.title}가 없습니다',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 15, color: c.muted),
                         ),
