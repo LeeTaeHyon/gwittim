@@ -102,3 +102,26 @@ def run_batch(
                 notices[key] = notice
                 _publish(notice, issues, sink, report)
     return report
+
+
+def run_kakao(
+    raws: Iterable[dict],
+    *,
+    store: PipelineStore,
+    sink: NoticeSink,
+    notices: dict[str, dict],
+    today: date,
+    analyzer: Analyzer | None = None,
+) -> BatchReport:
+    """알림톡 RawNotice 처리 (D-016). 게시판과 달리 원문 페이지가 없어 사라진 공고 확인은 하지 않는다."""
+    report = BatchReport()
+    for raw in raws:
+        report.collected += 1
+        result = ingest(raw, store)
+        report.outcomes[result.outcome.value] += 1
+        if result.outcome is Outcome.REJECTED or result.key is None:
+            continue
+        notice, issues = build_notice(store.get(result.key), today=today, previous=notices.get(result.key), analyzer=analyzer)
+        notices[result.key] = notice
+        _publish(notice, issues, sink, report)
+    return report

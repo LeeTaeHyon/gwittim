@@ -389,6 +389,57 @@ void main() {
     expect(opened.single.toString(), contains('mjc.ac.kr/bbs/data/view.do'));
   });
 
+  testWidgets('알림톡 공고: 원문 링크 대신 안내 문구, 발송 시각 표시 (D-016)', (tester) async {
+    final base = notice();
+    final kakao = Notice(
+      summary: NoticeSummary(
+        noticeId: 'n',
+        noticeVersion: 1,
+        title: '[합성 샘플] 겨울방학 영어 회화 프로그램 안내',
+        category: 'global',
+        sourceUrl: null,
+        published: const DateInfo(
+          date: '2026-10-15',
+          time: '14:05',
+          timezone: 'Asia/Seoul',
+          precision: 'minute',
+          evidence: '카카오톡 수신 2026-10-15 14:05',
+        ),
+        applicationDeadline: null,
+        deadlineNote: null,
+        lifecycleStatus: 'unknown',
+      ),
+      description: null,
+      applicationStart: null,
+      activityPeriod: null,
+      eligibility: base.eligibility,
+      lastVerifiedAt: null,
+      sourceId: 'mjc_kakao',
+    );
+    final opened = <Uri>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: gwittimTheme(),
+        home: ReportScreen(
+          repository: OneNoticeRepository(kakao),
+          noticeId: 'n',
+          openUrl: (u) async {
+            opened.add(u);
+            return true;
+          },
+          today: today,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('명지전문대 카카오톡 알림톡'), findsOneWidget);
+    expect(find.text('10월 15일(목) 14:05 발송'), findsOneWidget);
+    expect(find.text('카카오톡 알림톡으로 받은 공지라 원문 링크가 없어요.'), findsOneWidget);
+    expect(find.text('학교 공지에서 보기'), findsNothing);
+    expect(find.textContaining('원문 확인 시각'), findsNothing); // 알림톡은 재확인 안내 없음
+    expect(opened, isEmpty);
+  });
+
   testWidgets('선착순 공고: 마감 칩 없이 원문 설명, 리포트는 직접 확인과 첨부 안내', (tester) async {
     await tester.pumpWidget(
       GwittimApp(repository: await loaded(tester), openUrl: (_) async => true, today: today, briefingStore: noBriefing),

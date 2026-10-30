@@ -15,6 +15,7 @@
 | 불충족·미확인 공존 → not_met / 미확인 → needs_check / 전부 충족 → met | `valid/recommendation_list_response/*`, `invalid/recommendation_list_response/met_with_*` |
 | 내용 변경·버전 | `valid/notice/minute_precision_changed_deadline` |
 | review_pending·closed | `valid/notice/closed_review_pending` |
+| 웹 원문 없는 출처 (카카오톡 알림톡, D-016) | `valid/raw_notice/kakao_no_url`, `valid/notice/kakao_no_url`, `invalid/raw_notice/no_url_no_id` |
 | 개인화 불가 (latest) | `valid/recommendation_list_response/latest_no_profile` |
 | 저장 후 마감 변경 | `valid/saved_notice_list_response/deadline_changed_after_save` |
 

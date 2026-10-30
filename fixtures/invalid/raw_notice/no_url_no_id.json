@@ -1,0 +1,27 @@
+{
+  "_expect": {
+    "keyword": "type",
+    "path": "source_notice_id"
+  },
+  "data": {
+    "schema_version": "1.0",
+    "source_id": "mjc_kakao",
+    "source_notice_id": null,
+    "source_url": null,
+    "title": "[합성 샘플] 겨울방학 영어 회화 프로그램 참가자 모집",
+    "body_text": "[합성 샘플] 겨울방학 영어 회화 프로그램 참가자 모집\n대상: 재학생\n신청기간: 2026.11.02.(월) ~ 2026.11.13.(금)",
+    "published": {
+      "date": "2026-10-29",
+      "time": "14:05",
+      "timezone": "Asia/Seoul",
+      "precision": "minute",
+      "evidence": "카카오톡 수신 2026-10-29 14:05"
+    },
+    "collected_at": "2026-10-30T03:00:00Z",
+    "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000002",
+    "source_fields": {
+      "channel": "합성 채널"
+    },
+    "attachments": []
+  }
+}
