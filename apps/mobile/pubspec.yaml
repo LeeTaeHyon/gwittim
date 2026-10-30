@@ -67,6 +67,7 @@ flutter:
     - assets/sample/
     - assets/dictionaries/
     - assets/stats/
+    - assets/fonts/Pretendard-LICENSE.txt
 
   # Pretendard (SIL OFL 1.1, assets/fonts/Pretendard-LICENSE.txt) — D-009
   fonts:
