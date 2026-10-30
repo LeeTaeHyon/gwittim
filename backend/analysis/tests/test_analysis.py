@@ -357,7 +357,28 @@ def test_abbreviated_enrolled_and_on_leave():
     ]
 
 
-PRESENTATION_LINE ="2. 공모대상 : 재학생(전공심화과정 포함) / 개인 또는 팀(2명 이하)"
+@pytest.mark.parametrize(
+    "line",
+    [
+        "・고등학교 졸업자, 전문대/대학교 졸업자 및 2027년 2월이내 졸업예정자",
+        "• 고등학교 졸업이상의 학력 소지자(검정고시 합격자 및 전문대학 졸업자 포함) 또는 2027년 2월 고등학교 졸업예정자",
+    ],
+)
+def test_high_school_or_more_accepts_every_college_status(line):
+    """고졸 이상이면 대학생은 재학·휴학·졸업 모두 갖춘다. 졸업생만으로 읽으면 재학생이 미충족이 된다 (D-023)."""
+    elig = RuleBasedAnalyzer().analyze(raw_notice(f"지원자격\n{line}\n"), MJC)["eligibility"]
+    assert [(c["field"], c["operator"], c["value"]) for c in elig["conditions"]] == [
+        ("enrollment_status", "in", ["enrolled", "on_leave", "graduated"])
+    ]
+
+
+def test_high_school_documents_and_graduating_high_schoolers_are_not_conditions():
+    body = "제출서류\n· 고등학교 졸업 학력인정 증명서류\n특성화고 관련학과 고등학교 졸업예정자\n"
+    elig = RuleBasedAnalyzer().analyze(raw_notice(body), MJC)["eligibility"]
+    assert elig["conditions"] == []
+
+
+PRESENTATION_LINE = "2. 공모대상 : 재학생(전공심화과정 포함) / 개인 또는 팀(2명 이하)"
 
 
 @pytest.mark.parametrize(
