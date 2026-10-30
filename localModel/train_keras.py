@@ -144,7 +144,7 @@ def best_threshold(probs, ids, answer, tags):
 
 # ---------- 실험 하나 ----------
 
-def run(target, unit, arch, min_count=5, epochs=60, board=False, verbose=True):
+def run(target, unit, arch, min_count=5, epochs=60, board=False, verbose=True, board_weight=1.0):
     tf.keras.utils.set_random_seed(0)
     multi = target == "interest"
     key = "interest_ids" if multi else "category"
@@ -168,14 +168,14 @@ def run(target, unit, arch, min_count=5, epochs=60, board=False, verbose=True):
     tr_ids = [train_ids[k] for k in order[n_val:]]
 
     # 게시판 공고 보강: 학습 세트에만 보탠다 (검증·시험은 실제로 분류할 알림톡으로 유지)
-    n_board = 0
+    n_board, board_set = 0, set()
     if board and os.path.exists(os.path.join(DATA, "labels_gemma_board.jsonl")):
         board_notices, board_labels = read_jsonl("board_notices.jsonl"), read_jsonl("labels_gemma_board.jsonl")
         board_ids = [i for i in board_notices if i in board_labels]
         notices.update(board_notices)
         gemma.update(board_labels)
         tr_ids += board_ids
-        n_board = len(board_ids)
+        n_board, board_set = len(board_ids), set(board_ids)
 
     # 3. 정답 만들기
     if multi:
@@ -203,8 +203,11 @@ def run(target, unit, arch, min_count=5, epochs=60, board=False, verbose=True):
 
     # 5. 학습: 검증 손실이 6번 연속 나빠지면 멈추고 가장 좋았던 가중치로 되돌린다 (과적합 방지)
     model = build_model(tokenizer.vocabulary_size(), len(classes) + (1 if multi else 0), arch, multi)
+    # 게시판 공고는 알림톡과 꼬리표 분포가 달라 손실에 board_weight만큼만 반영할 수 있다
+    weights = np.array([board_weight if i in board_set else 1.0 for i in tr_ids], dtype="float32")
     model.fit(
-        x_tr, to_y(tr_ids), validation_data=(x_val, to_y(val_ids)), epochs=epochs, batch_size=16, verbose=0,
+        x_tr, to_y(tr_ids), sample_weight=weights, validation_data=(x_val, to_y(val_ids)), epochs=epochs,
+        batch_size=16, verbose=0,
         callbacks=[callbacks.EarlyStopping(patience=6, restore_best_weights=True)],
     )
 
@@ -325,12 +328,13 @@ def main():
     ap.add_argument("--epochs", type=int, default=60)
     ap.add_argument("--all", action="store_true", help="관심사 단어/글자 × LSTM/평균 풀링 4가지 비교")
     # 2026-10-30 실험: 관심사는 보강하면 오히려 나빠짐(장학·채용 공고와 알림톡의 꼬리표 분포가 다름), 카테고리는 비슷 → 기본은 끔
-    ap.add_argument("--board", action="store_true", help="게시판 공고 132건을 학습에 보탠다")
+    ap.add_argument("--board", action="store_true", help="게시판 공고(board_notices.jsonl)를 학습에 보탠다")
+    ap.add_argument("--board-weight", type=float, default=1.0, help="게시판 공고의 손실 가중치 (알림톡은 1)")
     args = ap.parse_args()
     board = args.board
 
     if not args.all:
-        run(args.target, args.unit, args.arch, args.min_count, args.epochs, board)
+        run(args.target, args.unit, args.arch, args.min_count, args.epochs, board, board_weight=args.board_weight)
         return
     results = [run("interest", u, a, args.min_count, args.epochs, board, verbose=False)
                for u in ("word", "char") for a in ("lstm", "avg")]
