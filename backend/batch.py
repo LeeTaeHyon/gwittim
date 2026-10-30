@@ -13,6 +13,7 @@ from backend.analysis.rules import Analyzer
 from backend.collectors.common import Outcome, PipelineStore, ingest, record_probe
 from backend.collectors.mjc_www.adapter import Board, collect, http_fetch, probe, view_url
 from backend.publish import NoticeSink, PublishOutcome, publish
+from backend.recommendation.ranking import is_stale
 
 MAX_PROBES_PER_RUN = 20  # 사라진 공고 확인 요청 상한 (학교 서버 부담)
 
@@ -27,6 +28,7 @@ class BatchReport:
     probed: int = 0
     removed: int = 0
     fetch_errors: list[str] = field(default_factory=list)
+    held_past: int = 0  # 알림톡: 이미 끝난 공고라 게시하지 않음
 
 
 def _publish(notice: dict, issues: list[str], sink: NoticeSink, report: BatchReport) -> None:
@@ -113,7 +115,11 @@ def run_kakao(
     today: date,
     analyzer: Analyzer | None = None,
 ) -> BatchReport:
-    """알림톡 RawNotice 처리 (D-016). 게시판과 달리 원문 페이지가 없어 사라진 공고 확인은 하지 않는다."""
+    """알림톡 RawNotice 처리 (D-016). 게시판과 달리 원문 페이지가 없어 사라진 공고 확인은 하지 않는다.
+
+    대화 내보내기에는 몇 달 치 지난 알림톡이 함께 들어 있다. 끝난 공고(closed, 마감 미상으로 오래된 공고)는
+    처음부터 게시하지 않는다. 한 번 게시한 공고는 끝나도 상태를 갱신해 게시한다 (앱에서 마감으로 보이게).
+    """
     report = BatchReport()
     for raw in raws:
         report.collected += 1
@@ -121,7 +127,15 @@ def run_kakao(
         report.outcomes[result.outcome.value] += 1
         if result.outcome is Outcome.REJECTED or result.key is None:
             continue
-        notice, issues = build_notice(store.get(result.key), today=today, previous=notices.get(result.key), analyzer=analyzer)
+        previous = notices.get(result.key)
+        notice, issues = build_notice(store.get(result.key), today=today, previous=previous, analyzer=analyzer)
         notices[result.key] = notice
+        if _past(notice, today) and (previous is None or _past(previous, today)):
+            report.held_past += 1
+            continue
         _publish(notice, issues, sink, report)
     return report
+
+
+def _past(notice: dict, today: date) -> bool:
+    return notice["lifecycle_status"] in ("closed", "removed") or is_stale(notice, today)
