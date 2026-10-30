@@ -92,8 +92,8 @@ def test_no_deadline_is_not_evaluable(notices):
 
 def test_unevaluable_factors_leave_denominator(notices, profile):
     values = factors(notices[3], profile, TODAY)
-    # 관심사·직무를 고른 학생은 학과 통계를 평가하지 않는다
-    assert values == {"interest": 1.0, "role": 1.0, "major": 1.0, "major_prior": None, "timing": 1.0}
+    # 컴공 학생에게 소프트웨어 공고는 학과 통계에서도 1위 분야
+    assert values == {"interest": 1.0, "role": 1.0, "major": 1.0, "major_prior": 1.0, "timing": 1.0}
     assert score(values) == 100.0
     # 관심사·전공 평가 불가, 직무 불일치, 시기 0.6 → 100 × (0 + 10×0.6) / (35 + 10)
     assert score({"interest": None, "role": 0.0, "major": None, "timing": 0.6}) == pytest.approx(13.33)
@@ -113,7 +113,7 @@ def test_personalized_list(notices, profile):
     assert "n_synthetic_0005" not in ids  # closed·review_pending 제외
     assert ids[0] == "n_synthetic_0004"  # 관심사·직무·전공·시기 모두 일치
     top = out["items"][0]["recommendation"]
-    assert top["reason_codes"] == ["interest_match", "role_match", "major_match", "deadline_timing", "eligibility_met"]
+    assert top["reason_codes"] == ["interest_match", "role_match", "major_match", "major_prior_match", "deadline_timing", "eligibility_met"]
     scores = [i["recommendation"]["score"] for i in out["items"]]
     scored = [s for s in scores if s is not None]
     assert scored == sorted(scored, reverse=True)
@@ -203,25 +203,27 @@ def major_only(major_id: str) -> dict:
     return dict(fixture("user_profile/empty.json"), university_id="mjc", major_id=major_id)
 
 
-def test_major_prior_only_when_interests_and_roles_empty(notices, profile):
+def test_major_prior_value(notices, profile):
     business = major_only("mjc.business_administration")
     # 0001: business_marketing (경영학과 관심사 1위) → 1.0
     assert major_prior_factor(notices[0], business) == 1.0
     # 0003: culture_arts는 경영학과에서 거의 안 가는 분야 → 0에 가까움
     assert major_prior_factor(notices[2], business) < 0.01
-    # 관심사나 직무를 하나라도 고르면 평가 불가
-    assert major_prior_factor(notices[0], dict(business, interest_ids=["software"])) is None
-    assert major_prior_factor(notices[0], dict(business, target_role_ids=["marketer"])) is None
+    # 관심사·직무를 골라도 같은 값으로 평가한다
+    assert major_prior_factor(notices[0], dict(business, interest_ids=["software"], target_role_ids=["marketer"])) == 1.0
     # 통계표에 없는 학과(자유전공), 학과 미입력
     assert major_prior_factor(notices[0], major_only("mjc.undeclared")) is None
     assert major_prior_factor(notices[0], fixture("user_profile/empty.json")) is None
 
 
-def test_major_prior_does_not_change_scores_of_chosen_profiles(notices, profile):
-    for n in notices:
-        values = factors(n, profile, TODAY)
-        assert values["major_prior"] is None
-        assert score(values) == score({k: v for k, v in values.items() if k != "major_prior"})
+def test_chosen_interest_outranks_major_stats(notices):
+    # 경영학과 학생이 culture_arts를 고르면, 학과 통계 1위 분야 공고(0001)보다 고른 분야 공고(0003)가 앞선다
+    student = dict(major_only("mjc.business_administration"), interest_ids=["culture_arts"])
+    out = recommend(notices, student, today=TODAY, generated_at=NOW)
+    ids = [i["notice"]["notice_id"] for i in out["items"]]
+    assert ids.index("n_synthetic_0003") < ids.index("n_synthetic_0001")
+    first = next(i for i in out["items"] if i["notice"]["notice_id"] == "n_synthetic_0001")["recommendation"]
+    assert "major_prior_match" in first["reason_codes"] and "interest_match" not in first["reason_codes"]
 
 
 def test_major_only_profile_ranks_by_major_stats(notices):

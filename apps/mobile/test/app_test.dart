@@ -339,7 +339,7 @@ void main() {
       expect(words, ['관심 분야', '전공']);
       expect(soon, isTrue);
 
-      // 관심사·직무를 고르지 않은 학생: 학과 통계 (D-017)
+      // 학과 통계 (D-017)
       final (prior, _) = reasonParts(
         Recommendation(noticeId: 'n', score: 80, eligibilityStatus: 'met', reasonCodes: const ['major_prior_match']),
       );
