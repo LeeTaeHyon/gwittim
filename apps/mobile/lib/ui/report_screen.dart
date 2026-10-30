@@ -16,7 +16,7 @@ const _sourceNames = {
   'mjc_www_scholarship': '명지전문대 장학공지',
   'mjc_www_job': '명지전문대 채용공지',
   'mjc_www_work': '명지전문대 근로게시판',
-  'mjc_kakao': '명지전문대 카카오톡 알림톡', // D-016: 웹 원문 링크 없음
+  'mjc_kakao': '명지전문대 카카오톡 알림톡', // D-019: 웹 원문 링크 없음
 };
 
 /// 체크리스트 한 줄의 상태
@@ -348,7 +348,7 @@ class _ReportScreenState extends State<ReportScreen> {
               ),
               if (notice.description != null) _SummaryBubble(text: notice.description!),
               // D-006: 원문 확인이 24시간을 넘으면 요약 바로 아래에 알린다. 원문은 아래 '학교 공지에서 보기'로 연다.
-              // 알림톡은 보낸 뒤 바뀌지 않으므로 원문 재확인 안내를 하지 않는다 (D-016)
+              // 알림톡은 보낸 뒤 바뀌지 않으므로 원문 재확인 안내를 하지 않는다 (D-019)
               if (n.sourceUrl != null)
                 if (staleNotice(notice.lastVerifiedAt, DateTime.now().toUtc()) case final stale?) _StaleBox(text: stale),
               if (changed != null) _ChangeBanner(entry: changed),
@@ -389,7 +389,7 @@ class _ReportScreenState extends State<ReportScreen> {
                       icon: const Icon(Icons.open_in_new_rounded, size: 18),
                       label: Text(rec?.eligibilityStatus == 'needs_check' ? '학교 공지에서 확인하기' : '학교 공지에서 보기'),
                     ),
-                    // D-016: 알림톡은 열 수 있는 웹 원문이 없다. 받은 카톡 메시지가 원문이다
+                    // D-019: 알림톡은 열 수 있는 웹 원문이 없다. 받은 카톡 메시지가 원문이다
                     null => Text(
                       '카카오톡 알림톡으로 받은 공지라 원문 링크가 없어요.',
                       textAlign: TextAlign.center,
