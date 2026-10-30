@@ -316,7 +316,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      n.title,
+                      keepAll(n.title),
                       style: TextStyle(fontSize: 24, height: 1.42, fontWeight: FontWeight.w700, color: c.ink),
                     ),
                     const SizedBox(height: 8),
@@ -391,7 +391,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                     // D-019: 알림톡은 열 수 있는 웹 원문이 없다. 받은 카톡 메시지가 원문이다
                     null => Text(
-                      '카카오톡 알림톡으로 받은 공지라 원문 링크가 없습니다.',
+                      keepAll('카카오톡 알림톡으로 받은 공지라 원문 링크가 없습니다.'),
                       textAlign: TextAlign.center,
                       style: captionStyle(context),
                     ),
@@ -451,7 +451,7 @@ class _SummaryBubble extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            text,
+            keepAll(text),
             style: TextStyle(fontSize: 16.5, height: 1.65, fontWeight: FontWeight.w500, color: c.body),
           ),
           const SizedBox(height: 10),
@@ -491,7 +491,7 @@ class _StaleBox extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(text, style: TextStyle(fontSize: 14, height: 1.5, color: c.body)),
+            child: Text(keepAll(text), style: TextStyle(fontSize: 14, height: 1.5, color: c.body)),
           ),
         ],
       ),
@@ -568,13 +568,13 @@ class _Checklist extends StatelessWidget {
         children: [
           SectionTitle('지원 전 체크리스트', trailing: badge),
           const SizedBox(height: 8),
-          Text(intro, style: TextStyle(fontSize: 14, height: 1.55, color: context.gw.sub)),
+          Text(keepAll(intro), style: TextStyle(fontSize: 14, height: 1.55, color: context.gw.sub)),
           const SizedBox(height: 8),
           for (final r in rows) _CheckLine(row: r),
           if (!notice.eligibility.extractionComplete)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text('첨부파일·이미지에 조건이 더 있을 수 있습니다. 지원 전에 원문을 확인해 주세요.', style: captionStyle(context)),
+              child: Text(keepAll('첨부파일·이미지에 조건이 더 있을 수 있습니다. 지원 전에 원문을 확인해 주세요.'), style: captionStyle(context)),
             ),
         ],
       ),
@@ -737,7 +737,7 @@ class _CheckLineState extends State<_CheckLine> {
                   bottomLeft: Radius.circular(5),
                 ),
               ),
-              child: Text(row.note!, style: TextStyle(fontSize: 13.5, height: 1.55, color: c.body)),
+              child: Text(keepAll(row.note!), style: TextStyle(fontSize: 13.5, height: 1.55, color: c.body)),
             ),
         ],
       ),
@@ -810,11 +810,11 @@ class _Reasons extends StatelessWidget {
           Text.rich(TextSpan(style: style, children: spans)),
           const SizedBox(height: 8),
           Text(
-            [
+            keepAll([
               '관심사·희망 직무·전공·마감 시기로 정한 순서입니다. 합격 가능성과는 관계없습니다.',
               if (recommendation.reasonCodes.contains('major_prior_match'))
                 '학과 졸업생 진로는 커리어넷 학과정보 통계(2020 조사)로 계산했습니다.',
-            ].join('\n'),
+            ].join('\n')),
             style: TextStyle(fontSize: 12.5, height: 1.6, color: context.gw.muted),
           ),
         ],
@@ -872,7 +872,7 @@ class _Schedule extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Text(
-                n.deadlineNote ?? '마감일이 공고에 나와 있지 않습니다. 학교 공지를 확인해 주세요.',
+                keepAll(n.deadlineNote ?? '마감일이 공고에 나와 있지 않습니다. 학교 공지를 확인해 주세요.'),
                 style: TextStyle(fontSize: 14, color: c.sub),
               ),
             ),

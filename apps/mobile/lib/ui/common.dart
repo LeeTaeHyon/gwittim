@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/repository.dart';
 import 'components.dart';
+import 'format.dart';
 import 'logo.dart';
 import 'theme.dart';
 
@@ -26,7 +27,7 @@ void showRefreshFailed(BuildContext context, Object error) {
   final unavailable = error is! RepositoryException || error.kind == RepositoryErrorKind.unavailable;
   ScaffoldMessenger.maybeOf(context)
     ?..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(unavailable ? '새로 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.' : errorMessage(error))));
+    ..showSnackBar(SnackBar(content: Text(keepAll(unavailable ? '새로 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.' : errorMessage(error)))));
 }
 
 /// 빈 화면의 오류·안내. 글자 없는 로고 말풍선 그림, 한 줄 제목, 한 줄 설명, 앱 버튼.
@@ -64,7 +65,7 @@ class MessageView extends StatelessWidget {
             if (detail != null) ...[
               const SizedBox(height: 4),
               Text(
-                detail!,
+                keepAll(detail!),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 15, height: 1.5, color: c.sub),
               ),

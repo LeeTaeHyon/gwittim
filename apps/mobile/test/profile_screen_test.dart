@@ -6,6 +6,8 @@ import 'package:gwittim/main.dart';
 import 'package:gwittim/ui/briefing_data.dart';
 import 'package:gwittim/ui/profile_screen.dart';
 
+import 'finders.dart';
+
 /// 프로필 저장만 실패한다.
 class SaveFails extends SampleNoticeRepository {
   SaveFails() : super(personalized: false);
@@ -65,7 +67,7 @@ void main() {
     expect(find.text('입력한 정보 없음'), findsOneWidget);
     expect(find.text('입력하기'), findsOneWidget);
     expect(find.text('입력한 정보는 추천에만 사용'), findsOneWidget);
-    expect(find.textContaining('성적·학번은 받지 않습니다'), findsOneWidget);
+    expect(findTextContaining('성적·학번은 받지 않습니다'), findsOneWidget);
 
     double top(String text) => tester.getTopLeft(find.text(text)).dy;
     expect(top('입력한 정보 없음'), lessThan(top('입력한 정보는 추천에만 사용')));
@@ -116,7 +118,7 @@ void main() {
     expect(find.text('0개 선택'), findsOneWidget);
     // 학과 졸업생이 많이 가는 분야를 먼저 보이지만 미리 고르지 않는다 (D-020)
     expect(find.text('컴퓨터공학과 졸업생이 많이 가는 분야'), findsOneWidget);
-    expect(find.textContaining('커리어넷 학과정보'), findsOneWidget);
+    expect(findTextContaining('커리어넷 학과정보'), findsOneWidget);
     expect(find.text('소프트웨어 개발'), findsNWidgets(2)); // 추천 칸과 전체 분야
     await tapIn(tester, editList(), find.text('소프트웨어 개발').first);
     await tapIn(tester, editList(), find.text('AI·데이터'));
@@ -298,7 +300,7 @@ void main() {
     await openProfile(tester, onSignOut: () async => signedOut++);
     await tapIn(tester, profileList(), find.text('탈퇴하기'));
     expect(find.text('탈퇴 기능은 준비 중입니다.'), findsOneWidget);
-    expect(find.text('탈퇴하면 프로필과 저장한 공고가 삭제됩니다. 공고 자체는 그대로 남습니다.'), findsOneWidget);
+    expect(findText('탈퇴하면 프로필과 저장한 공고가 삭제됩니다. 공고 자체는 그대로 남습니다.'), findsOneWidget);
     expect(signedOut, 0);
 
     await tapIn(tester, profileList(), find.text('로그아웃'));
