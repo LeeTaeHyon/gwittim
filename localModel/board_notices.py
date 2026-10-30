@@ -1,6 +1,7 @@
 """학교 홈페이지 게시판 공고(앱 수집 파이프라인 결과) → 알림톡과 같은 형식의 학습 보강 데이터.
 
 입력: ../data/local/pipeline/records.json (앱 로컬 배치가 모은 원문)
+      kakaoTalk_data/processed/board_history.json (board_history.py가 모은 지난 공고, 있으면 합침)
 출력: kakaoTalk_data/processed/board_notices.jsonl
   학습에만 보태고 시험에는 쓰지 않는다 (시험은 알림톡 사람 검수 세트).
   이후 label_gemma.py --input board_notices.jsonl --out labels_gemma_board.jsonl 로 라벨을 붙인다.
@@ -14,12 +15,17 @@ from kakao_preprocess import mask, title_of
 BASE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(BASE)
 RECORDS = os.path.join(ROOT, "data", "local", "pipeline", "records.json")
+HISTORY = os.path.join(BASE, "kakaoTalk_data", "processed", "board_history.json")
 OUT = os.path.join(BASE, "kakaoTalk_data", "processed", "board_notices.jsonl")
 
 
 def main():
+    records = {}
+    if os.path.exists(HISTORY):
+        with open(HISTORY, encoding="utf-8") as f:
+            records.update(json.load(f))
     with open(RECORDS, encoding="utf-8") as f:
-        records = json.load(f)
+        records.update(json.load(f))  # 같은 공고면 정기 수집 쪽(더 최근 원문)을 쓴다
     notices = []
     for key, rec in records.items():
         if rec.get("removed") or not key.startswith("mjc_www_"):  # 알림톡 기록(mjc_kakao)은 이미 학습 데이터에 있음
