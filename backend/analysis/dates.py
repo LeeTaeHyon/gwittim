@@ -107,3 +107,45 @@ def date_info(point: Point, evidence: str, timezone: str | None) -> dict:
         "precision": "minute" if point.time else "date",
         "evidence": evidence,
     }
+
+
+# ---------- 연도 없는 날짜 (알림톡, D-019) ----------
+# 알림톡은 '9월 11일(금)까지', '10/7(수) 17:00까지'처럼 연도를 거의 쓰지 않는다. 발송일이 정확해서
+# 발송일 근처(앞 60일 ~ 뒤 240일)에 오는 해로만 읽는다. 점·빗금 날짜는 요일·'까지'·시각이 붙을 때만 날짜로 본다
+# ('1/2', '3.5점' 같은 수를 날짜로 읽지 않게). 요일이 붙으면 달력과 맞아야 한다.
+_MD = re.compile(
+    r"(?<![\d.])(?P<m>1[0-2]|0?[1-9])\s*"
+    r"(?:월\s*(?P<d>3[01]|[12]\d|0?[1-9])\s*일"
+    r"|[./]\s*(?P<d2>3[01]|[12]\d|0?[1-9])(?![\d])\s*\.?(?=\s*(?:\(|까지|\d{1,2}\s*[:시])))"
+    r"\s*(?:\(\s*(?P<wd>[월화수목금토일])\s*\))?\s*(?:" + _CLOCK + r")?"
+)
+_YEAR_BEFORE = re.compile(r"(?:20\d{2}|\d{2})\s*[.\-/년]\s*$")
+_BEFORE_DAYS, _AFTER_DAYS = 60, 240
+
+
+def points_near(line: str, anchor: date) -> list[Point]:
+    """한 줄의 날짜를 모두 읽는다. 연도 있는 날짜는 parse_line 규칙, 연도 없는 날짜는 기준일(발송일) 근처의 해로."""
+    start, end = parse_line(line)
+    points = [p for p in (start, end) if p]
+    for m in _MD.finditer(line):
+        if _YEAR_BEFORE.search(line[: m.start()]):
+            continue  # 연도 있는 날짜의 월·일 부분 (위에서 읽음)
+        point = _near(m, anchor)
+        if point and point not in points:
+            points.append(point)
+    return points
+
+
+def _near(m: re.Match, anchor: date) -> Point | None:
+    month, day = int(m["m"]), int(m["d"] or m["d2"])
+    for year in (anchor.year, anchor.year + 1):
+        try:
+            candidate = date(year, month, day)
+        except ValueError:
+            continue
+        if m["wd"] and _WEEKDAYS[candidate.weekday()] != m["wd"]:
+            continue
+        if -_BEFORE_DAYS <= (candidate - anchor).days <= _AFTER_DAYS:
+            clock = _clock(m)
+            return None if clock is False else Point(candidate, clock)
+    return None

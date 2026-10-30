@@ -1,7 +1,8 @@
 """앱 샘플 Repository용 자산을 fixtures에서 만든다. 추천 결과는 백엔드 추천 함수 출력 그대로다.
 
 실행: uv run python -m tools.export_mobile_sample
-출력: apps/mobile/assets/sample/ (합성 자료), apps/mobile/assets/dictionaries/ (공통 사전 사본)
+출력: apps/mobile/assets/sample/ (합성 자료), apps/mobile/assets/dictionaries/ (공통 사전 사본),
+      apps/mobile/assets/stats/ (학과 통계 확률표 사본, D-020)
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ from backend.recommendation import recommend
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "apps/mobile/assets/sample"
 DICT_OUT = ROOT / "apps/mobile/assets/dictionaries"
+STATS_OUT = ROOT / "apps/mobile/assets/stats"
 TODAY = date(2026, 10, 17)
 GENERATED_AT = "2026-10-17T03:05:00Z"
 
@@ -30,6 +32,7 @@ def write(name: str, data, out: Path = OUT) -> None:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     DICT_OUT.mkdir(parents=True, exist_ok=True)
+    STATS_OUT.mkdir(parents=True, exist_ok=True)
     notices = [load(p) for p in sorted((ROOT / "fixtures/valid/notice").glob("*.json"))]
     profile = load(ROOT / "fixtures/valid/user_profile/complete.json")
     empty = load(ROOT / "fixtures/valid/user_profile/empty.json")
@@ -44,6 +47,7 @@ def main() -> None:
     write("recommendations_latest.json", latest)
     for name in ("categories", "majors", "interests", "roles", "universities"):
         write(f"{name}.json", load(ROOT / f"contracts/dictionaries/{name}.json"), DICT_OUT)  # 앱 공통(샘플·실제)
+    write("major_prior.json", load(ROOT / "contracts/stats/major_prior.json"), STATS_OUT)  # 프로필 화면 추천 칩
     write("profile.json", profile)
     print(f"notices {len(notices)}, personalized {len(personalized['items'])}, latest {len(latest['items'])}")
 

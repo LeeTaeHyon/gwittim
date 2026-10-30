@@ -49,6 +49,7 @@ class GwColors extends ThemeExtension<GwColors> {
     required this.tab,
     required this.onTab,
     required this.tabActive,
+    required this.hero,
   });
 
   /// 바탕
@@ -133,6 +134,9 @@ class GwColors extends ThemeExtension<GwColors> {
   final Color onTab;
   final Color tabActive;
 
+  /// 브랜드 면: 브리핑 머리 (라이트 네이비, 다크는 바탕보다 밝은 남색). 위 글자는 loginInk·loginSub, 배지는 lime.
+  final Color hero;
+
   static const light = GwColors(
     bg: Color(0xFFF3F4F8),
     card: Color(0xFFFFFFFF),
@@ -174,6 +178,7 @@ class GwColors extends ThemeExtension<GwColors> {
     tab: Color(0xFFFFFFFF),
     onTab: Color(0xFF646B80),
     tabActive: _navy,
+    hero: _navy,
   );
 
   static const dark = GwColors(
@@ -217,6 +222,7 @@ class GwColors extends ThemeExtension<GwColors> {
     tab: Color(0xFF191D33),
     onTab: Color(0xFF8C93AE),
     tabActive: Color(0xFFC9D2FF),
+    hero: Color(0xFF26306B),
   );
 
   static const _navy = Color(0xFF22306B);
@@ -227,7 +233,7 @@ class GwColors extends ThemeExtension<GwColors> {
     bg, card, cardSoft, neutral, ink, body, sub, muted, faint, line, cta, onCta, point, onPoint, pointTick, //
     accent, chip, onChip, lime, limeInk, marker, summary, urgent, urgentSoft, urgentFill, onUrgentFill, //
     check, checkSoft, checkBox, checkLine, checkMark, toast, onToast, loginBg, loginCard, loginSub, loginInk, //
-    tab, onTab, tabActive,
+    tab, onTab, tabActive, hero,
   ];
 
   static GwColors _fromList(List<Color> c) {
@@ -274,6 +280,7 @@ class GwColors extends ThemeExtension<GwColors> {
       tab: next(),
       onTab: next(),
       tabActive: next(),
+      hero: next(),
     );
   }
 

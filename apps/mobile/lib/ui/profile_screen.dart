@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../data/models.dart';
 import '../data/repository.dart';
+import 'app_info.dart';
 import 'common.dart';
 import 'components.dart';
+import 'logo.dart';
 import 'skeleton.dart';
 import 'theme.dart';
 
-/// 내 정보 (D-010, 2026-10-25 팀장 결정 Q5 B·Q6 A): 요약 카드 → 안내 → 설정(화면·계정).
+/// 내 정보 (D-010, 2026-10-25 팀장 결정 Q5 B·Q6 A): 요약 카드 → 안내 → 설정(화면·계정·앱 정보).
 /// 고치기는 학적 → 관심 분야 → 희망 직무 세 단계 화면에서 하고, 마지막 단계의 '저장하기'로 저장한다.
 /// 성적·소득·주민등록번호·학번·학생증은 받지 않는다 (SPEC §5).
 class ProfileScreen extends StatefulWidget {
@@ -33,7 +35,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileData {
-  const _ProfileData(this.profile, this.universities, this.majors, this.interests, this.roles);
+  const _ProfileData(this.profile, this.universities, this.majors, this.interests, this.roles, this.majorInterests);
 
   final UserProfile? profile;
   final List<DictionaryItem> universities;
@@ -41,7 +43,10 @@ class _ProfileData {
   final List<DictionaryItem> interests;
   final List<DictionaryItem> roles;
 
-  _ProfileData withProfile(UserProfile p) => _ProfileData(p, universities, majors, interests, roles);
+  /// 학과 → 졸업생이 많이 가는 관심 분야 (D-020)
+  final Map<String, List<String>> majorInterests;
+
+  _ProfileData withProfile(UserProfile p) => _ProfileData(p, universities, majors, interests, roles, majorInterests);
 }
 
 /// P0 대상 학교는 명지전문대 하나 (D-005 #6). 저장된 학교가 없을 때만 쓴다.
@@ -63,6 +68,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await r.dictionary('majors'),
       await r.dictionary('interests'),
       await r.dictionary('roles'),
+      await r.majorInterests(),
     );
     _data = data;
     return data;
@@ -79,6 +85,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           majors: data.majors,
           interests: data.interests,
           roles: data.roles,
+          majorInterests: data.majorInterests,
         ),
       ),
     );
@@ -87,14 +94,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     widget.onSaved();
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('프로필을 저장했어요.')));
+      ..showSnackBar(const SnackBar(content: Text('프로필이 저장되었습니다.')));
   }
 
   /// 프로필·저장 데이터 삭제는 아직 서버 인터페이스가 없다 (D-010 한계). 화면 버튼만 둔다.
   void _withdraw() {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('탈퇴는 아직 준비 중이에요.')));
+      ..showSnackBar(const SnackBar(content: Text('탈퇴 기능은 준비 중입니다.')));
+  }
+
+  /// Flutter 기본 라이선스 화면. 패키지 라이선스와 Pretendard(registerAppLicenses)가 나온다.
+  void _openLicenses() {
+    Navigator.of(context).push(
+      gwRoute(
+        context,
+        (_) => const LicensePage(
+          applicationName: '귀띔',
+          applicationVersion: appVersion,
+          applicationIcon: Padding(padding: EdgeInsets.all(12), child: GwLogo(height: 40)),
+        ),
+      ),
+    );
   }
 
   @override
@@ -135,7 +156,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 12),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 12),
-          child: TipBubble(title: '입력한 정보는 추천에만 써요', detail: '지원 조건 비교와 추천 순서에만 쓰고, 성적·학번은 받지 않아요.'),
+          child: TipBubble(title: '입력한 정보는 추천에만 사용', detail: '지원 조건 비교와 추천 순서에만 사용하며, 성적·학번은 받지 않습니다.'),
         ),
         const SizedBox(height: 32),
         const Padding(padding: EdgeInsets.symmetric(horizontal: 24), child: SectionTitle('설정')),
@@ -159,7 +180,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text('시스템 설정을 고르면 기기 화면 모드를 따라가요.', style: caption),
+                Text('시스템 설정을 선택하면 기기 화면 모드를 따릅니다.', style: caption),
                 if (widget.onSignOut case final signOut?) ...[
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 20),
@@ -179,11 +200,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Google 계정으로 로그인했어요',
+                                'Google 계정으로 로그인됨',
                                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body),
                               ),
                               const SizedBox(height: 2),
-                              Text('다른 사람은 내 프로필을 볼 수 없어요', style: TextStyle(fontSize: 13, color: c.muted)),
+                              Text('다른 사람은 내 프로필을 볼 수 없습니다', style: TextStyle(fontSize: 13, color: c.muted)),
                             ],
                           ),
                         ),
@@ -213,8 +234,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Text('탈퇴하면 프로필과 저장한 공고가 지워져요. 공고 자체는 그대로 남아요.', style: caption),
+                  Text('탈퇴하면 프로필과 저장한 공고가 삭제됩니다. 공고 자체는 그대로 남습니다.', style: caption),
                 ],
+                Padding(
+                  padding: const EdgeInsets.only(top: 20, bottom: 4),
+                  child: Divider(height: 1, color: c.line),
+                ),
+                const _InfoRow(label: '버전', value: appVersion),
+                Divider(height: 1, color: c.line),
+                _InfoRow(label: '오픈소스 라이선스', onTap: _openLicenses),
               ],
             ),
           ),
@@ -246,7 +274,8 @@ class _SummaryCard extends StatelessWidget {
     final school = [
       ?name(data.universities, p?.universityId),
       ?name(data.majors, p?.majorId),
-      if (p?.grade case final g?) '$g학년',
+      // 졸업이면 학년은 보이지 않는다(저장된 값은 그대로 둔다).
+      if (p?.grade case final g? when p?.enrollmentStatus != 'graduated') '$g학년',
     ].join(' ');
     final line = [if (school.isNotEmpty) school, ?_statusNames[p?.enrollmentStatus]].join(' · ');
     return GwCard(
@@ -254,12 +283,12 @@ class _SummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            empty ? '아직 입력하지 않았어요' : line,
+            empty ? '입력한 정보 없음' : line,
             style: TextStyle(fontSize: 17, height: 1.45, fontWeight: FontWeight.w700, color: c.ink),
           ),
           const SizedBox(height: 4),
           Text(
-            empty ? '학적과 관심 분야를 입력하면 맞춤 추천을 받을 수 있어요.' : '추천과 지원 조건 비교에 쓰는 정보예요.',
+            empty ? '학적과 관심 분야를 입력하면 맞춤 추천을 받을 수 있습니다.' : '추천과 지원 조건 비교에 쓰는 정보입니다.',
             style: TextStyle(fontSize: 14, height: 1.5, color: c.sub),
           ),
           if (!empty) ...[
@@ -328,6 +357,7 @@ class ProfileEditScreen extends StatefulWidget {
     required this.majors,
     required this.interests,
     required this.roles,
+    required this.majorInterests,
   });
 
   final NoticeRepository repository;
@@ -336,6 +366,7 @@ class ProfileEditScreen extends StatefulWidget {
   final List<DictionaryItem> majors;
   final List<DictionaryItem> interests;
   final List<DictionaryItem> roles;
+  final Map<String, List<String>> majorInterests;
 
   @override
   State<ProfileEditScreen> createState() => _ProfileEditScreenState();
@@ -479,7 +510,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     final (title, detail, body) = switch (_step) {
       0 => (
         '학적',
-        '비워 둔 항목은 지원 조건을 "확인 필요"로 보여 드려요. 고른 칸을 다시 누르면 비울 수 있어요.',
+        '미입력 항목은 지원 조건에 "확인 필요"로 표시됩니다. 선택한 칸을 다시 누르면 선택이 해제됩니다.',
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -529,14 +560,10 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           ],
         ),
       ),
-      1 => (
-        '관심 분야',
-        '고른 분야와 관련된 공고를 먼저 보여 드려요.',
-        _ChoiceChips(items: widget.interests, selected: _interests, onChanged: (s) => setState(() => _interests = s)),
-      ),
+      1 => ('관심 분야', '선택한 분야와 관련된 공고가 먼저 표시됩니다.', _interestBody(names[_majorId])),
       _ => (
         '희망 직무',
-        '고른 직무와 관련된 공고를 먼저 보여 드려요.',
+        '선택한 직무와 관련된 공고가 먼저 표시됩니다.',
         _ChoiceChips(items: widget.roles, selected: _roles, onChanged: (s) => setState(() => _roles = s)),
       ),
     };
@@ -566,6 +593,31 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         Text(detail, style: caption),
         const SizedBox(height: 16),
         body,
+      ],
+    );
+  }
+
+  /// 관심 분야 단계. 학과를 골랐으면 졸업생이 많이 가는 분야를 먼저 보여 준다 (D-020).
+  /// 미리 고르지 않는다. 학생이 눌러야 프로필에 들어간다.
+  Widget _interestBody(String? majorName) {
+    void onChanged(Set<String> s) => setState(() => _interests = s);
+    final all = _ChoiceChips(items: widget.interests, selected: _interests, onChanged: onChanged);
+    final ids = widget.majorInterests[_majorId] ?? const <String>[];
+    final suggested = [for (final id in ids) ...widget.interests.where((i) => i.id == id)];
+    if (majorName == null || suggested.isEmpty) return all;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TipBubble(
+          title: '$majorName 졸업생이 많이 가는 분야',
+          detail: '커리어넷 학과정보의 졸업생 진로 통계(2020 조사) 기준입니다. 누른 분야만 저장됩니다.',
+        ),
+        const SizedBox(height: 12),
+        _ChoiceChips(items: suggested, selected: _interests, onChanged: onChanged),
+        const SizedBox(height: 28),
+        const _FieldLabel('전체 분야'),
+        const SizedBox(height: 8),
+        all,
       ],
     );
   }
@@ -615,6 +667,37 @@ class _FieldLabel extends StatelessWidget {
       text,
       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.gw.sub),
     );
+  }
+}
+
+/// 설정 > 앱 정보 줄. 값만 보이거나(버전), 누르면 다른 화면을 연다(라이선스).
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, this.value, this.onTap});
+
+  final String label;
+  final String? value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final row = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 52),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: c.body),
+            ),
+          ),
+          if (value case final v?) Text(v, style: TextStyle(fontSize: 15, color: c.muted)),
+          if (onTap != null) Icon(Icons.chevron_right_rounded, size: 20, color: c.muted),
+        ],
+      ),
+    );
+    if (onTap == null) return MergeSemantics(child: row);
+    return InkWell(onTap: onTap, borderRadius: BorderRadius.circular(12), child: row);
   }
 }
 
@@ -767,7 +850,7 @@ class _PickerDialogState extends State<_PickerDialog> {
                     ? Padding(
                         padding: const EdgeInsets.symmetric(vertical: 36),
                         child: Text(
-                          '찾는 ${widget.title}가 없어요',
+                          '일치하는 ${widget.title}가 없습니다',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 15, color: c.muted),
                         ),
