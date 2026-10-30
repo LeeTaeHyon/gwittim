@@ -4,6 +4,7 @@ import '../data/repository.dart';
 import '../main.dart';
 import '../ui/briefing_data.dart';
 import '../ui/common.dart';
+import '../ui/format.dart';
 import '../ui/logo.dart';
 import '../ui/skeleton.dart';
 import '../ui/theme.dart';
@@ -136,11 +137,11 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       // false: 사용자가 창을 닫았거나, 기기에 Google 계정이 없어 창이 뜨지 않은 경우(둘을 구분할 수 없음)
       if (!await widget.auth.signInWithGoogle()) {
-        messenger.showSnackBar(const SnackBar(content: Text('로그인을 마치지 못했습니다. 기기에 Google 계정이 있는지 확인해 주세요.')));
+        messenger.showSnackBar(SnackBar(content: Text(keepAll('로그인을 마치지 못했습니다. 기기에 Google 계정이 있는지 확인해 주세요.'))));
       }
     } catch (_) {
       // 상세 오류는 화면에 보여주지 않는다 (SPEC §10)
-      messenger.showSnackBar(const SnackBar(content: Text('로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.')));
+      messenger.showSnackBar(SnackBar(content: Text(keepAll('로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.'))));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -210,7 +211,7 @@ class _SignInScreenState extends State<SignInScreen> {
                                 const SizedBox(height: 14),
                                 Text(
                                   // 추천은 관련도 순이라 '마감 순'이라고 쓰지 않는다.
-                                  '학교 공지 중 나에게 맞는 공고를 골라 지원 조건·마감과 함께 정리합니다.',
+                                  keepAll('학교 공지 중 나에게 맞는 공고를 골라 지원 조건·마감과 함께 정리합니다.'),
                                   style: TextStyle(fontSize: 16, height: 1.6, color: c.loginSub),
                                 ),
                                 SizedBox(height: _fit == 0 ? 36 : 20),
