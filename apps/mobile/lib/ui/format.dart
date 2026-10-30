@@ -100,5 +100,5 @@ const personalReasons = {
   'interest_match': '관심 분야',
   'role_match': '희망 직무',
   'major_match': '전공',
-  'major_prior_match': '학과 졸업생 진로', // D-017: 관심사·직무를 고르지 않은 학생에게만
+  'major_prior_match': '학과 졸업생 진로', // D-017
 };
