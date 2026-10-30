@@ -1,4 +1,4 @@
-"""학습한 Keras 모델에서 가중치·단어장만 꺼내 앱 배치용 파일로 저장한다 (D-016).
+"""학습한 Keras 모델에서 가중치·단어장만 꺼내 앱 배치용 파일로 저장한다 (D-019).
 
 출력: backend/classifier/models/<이름>.json (설정·단어장·문턱값·자체 점검 예시) + <이름>.bin (float32 가중치)
 배치는 TensorFlow 없이 backend/classifier/text_model.py로 같은 계산을 한다.

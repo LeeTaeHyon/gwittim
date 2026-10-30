@@ -41,7 +41,7 @@ class _ProfileData {
   final List<DictionaryItem> interests;
   final List<DictionaryItem> roles;
 
-  /// 학과 → 졸업생이 많이 가는 관심 분야 (D-017)
+  /// 학과 → 졸업생이 많이 가는 관심 분야 (D-020)
   final Map<String, List<String>> majorInterests;
 
   _ProfileData withProfile(UserProfile p) => _ProfileData(p, universities, majors, interests, roles, majorInterests);
@@ -573,7 +573,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     );
   }
 
-  /// 관심 분야 단계. 학과를 골랐으면 졸업생이 많이 가는 분야를 먼저 보여 준다 (D-017).
+  /// 관심 분야 단계. 학과를 골랐으면 졸업생이 많이 가는 분야를 먼저 보여 준다 (D-020).
   /// 미리 고르지 않는다. 학생이 눌러야 프로필에 들어간다.
   Widget _interestBody(String? majorName) {
     void onChanged(Set<String> s) => setState(() => _interests = s);

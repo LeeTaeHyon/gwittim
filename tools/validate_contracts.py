@@ -3,7 +3,7 @@
 실행: uv run python tools/validate_contracts.py
 
 - 스키마 자체가 Draft 2020-12 규격에 맞는지 확인한다.
-- contracts/stats/ 의 통계표는 "stats" 값과 같은 이름의 스키마와 사전 코드로 확인한다 (D-017).
+- contracts/stats/ 의 통계표는 "stats" 값과 같은 이름의 스키마와 사전 코드로 확인한다 (D-020).
 - fixtures/valid/<스키마>/ 의 샘플은 스키마 검증과 의미 검증을 모두 통과해야 한다.
 - fixtures/invalid/<스키마>/ 의 샘플은 {"_expect": ..., "data": ...} 형식이며,
   _expect.keyword/_expect.path 의 스키마 오류 또는 _expect.semantic 의 의미 규칙으로 거부돼야 한다.
@@ -117,7 +117,7 @@ def semantic_errors(data, dicts) -> list[str]:
 
 
 def check_major_prior(data, dicts) -> list[str]:
-    """학과 통계 확률표(D-017): 코드가 사전에 있고, 학과마다 확률 합이 1에 가깝다."""
+    """학과 통계 확률표(D-020): 코드가 사전에 있고, 학과마다 확률 합이 1에 가깝다."""
     errors = []
     for major_id, m in data["majors"].items():
         if major_id not in dicts["majors"]:

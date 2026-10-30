@@ -197,7 +197,7 @@ def test_old_notice_without_deadline_excluded(notices, profile):
         assert ids.count("n_synthetic_0002") == 0 and "n_recent" in ids and "n_synthetic_0001" in ids
 
 
-# ---------- 학과 통계 (D-017) ----------
+# ---------- 학과 통계 (D-020) ----------
 
 def major_only(major_id: str) -> dict:
     return dict(fixture("user_profile/empty.json"), university_id="mjc", major_id=major_id)

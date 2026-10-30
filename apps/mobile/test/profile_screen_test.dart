@@ -96,7 +96,7 @@ void main() {
     // 2단계 관심 분야: 칩을 여러 개 고르면 개수를 보이고, 다시 누르면 뺀다
     expect(find.bySemanticsLabel('2/3단계'), findsOneWidget);
     expect(find.text('0개 선택'), findsOneWidget);
-    // 학과 졸업생이 많이 가는 분야를 먼저 보이지만 미리 고르지 않는다 (D-017)
+    // 학과 졸업생이 많이 가는 분야를 먼저 보이지만 미리 고르지 않는다 (D-020)
     expect(find.text('컴퓨터공학과 졸업생은 이런 분야로 많이 가요'), findsOneWidget);
     expect(find.textContaining('커리어넷 학과정보'), findsOneWidget);
     expect(find.text('소프트웨어 개발'), findsNWidgets(2)); // 추천 칸과 전체 분야

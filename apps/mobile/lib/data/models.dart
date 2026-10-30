@@ -57,7 +57,7 @@ class NoticeSummary {
   final int noticeVersion;
   final String title;
   final String category;
-  /// 원문 링크. 웹 원문이 없는 카카오톡 알림톡은 null (D-016).
+  /// 원문 링크. 웹 원문이 없는 카카오톡 알림톡은 null (D-019).
   final String? sourceUrl;
   final DateInfo? published;
   final DateInfo? applicationDeadline;

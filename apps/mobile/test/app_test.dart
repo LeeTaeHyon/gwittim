@@ -339,7 +339,7 @@ void main() {
       expect(words, ['관심 분야', '전공']);
       expect(soon, isTrue);
 
-      // 학과 통계 (D-017)
+      // 학과 통계 (D-020)
       final (prior, _) = reasonParts(
         Recommendation(noticeId: 'n', score: 80, eligibilityStatus: 'met', reasonCodes: const ['major_prior_match']),
       );
@@ -398,7 +398,7 @@ void main() {
     expect(opened.single.toString(), contains('mjc.ac.kr/bbs/data/view.do'));
   });
 
-  testWidgets('알림톡 공고: 원문 링크 대신 안내 문구, 발송 시각 표시 (D-016)', (tester) async {
+  testWidgets('알림톡 공고: 원문 링크 대신 안내 문구, 발송 시각 표시 (D-019)', (tester) async {
     final base = notice();
     final kakao = Notice(
       summary: NoticeSummary(

@@ -1,4 +1,4 @@
-"""알림톡 수집(D-016)을 합성 카톡 내보내기 파일로 검증한다. 실제 대화는 쓰지 않는다."""
+"""알림톡 수집(D-019)을 합성 카톡 내보내기 파일로 검증한다. 실제 대화는 쓰지 않는다."""
 from datetime import date
 
 from backend.analysis.kakao import KakaoAnalyzer
@@ -111,7 +111,7 @@ def test_gemma_answer_replaces_model_when_unsure(tmp_path):
     assert sum(f["category"] == "global" and f["interest_tags"] == ["global_language"] for f in fields) == sources["gemma"]
 
 
-# ---------- 연도 없는 날짜, 지난 공고, 제목 (D-016) ----------
+# ---------- 연도 없는 날짜, 지난 공고, 제목 (D-019) ----------
 
 DATED = (
     HEADER

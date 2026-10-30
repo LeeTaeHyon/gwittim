@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gwittim.invalid/contracts/major_prior.schema.json",
   "title": "MajorPrior — 학과 → 직무·관심사 통계 확률표",
-  "description": "contracts/stats/major_prior.json 형식. 학과별 졸업생 진로 통계로 계산한 P(직무|학과)·P(관심사|학과). 사용자 프로필에 쓰지 않고, 관심사·직무가 빈 학생의 추천 보조 점수와 프로필 입력 화면의 추천 칩에만 쓴다. D-017.",
+  "description": "contracts/stats/major_prior.json 형식. 학과별 졸업생 진로 통계로 계산한 P(직무|학과)·P(관심사|학과). 사용자 프로필에 쓰지 않고, 관심사·직무가 빈 학생의 추천 보조 점수와 프로필 입력 화면의 추천 칩에만 쓴다. D-020.",
   "type": "object",
   "additionalProperties": false,
   "required": ["stats", "updated", "source", "source_url", "smoothing", "majors"],

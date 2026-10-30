@@ -201,7 +201,7 @@
         "notice_version": { "type": "integer", "minimum": 1 },
         "title": { "type": "string", "minLength": 1 },
         "category": { "$ref": "#/$defs/code" },
-        "source_url": { "type": ["string", "null"], "format": "uri", "description": "원문 링크. 웹 원문이 없는 출처(카카오톡 알림톡, D-016)는 null." },
+        "source_url": { "type": ["string", "null"], "format": "uri", "description": "원문 링크. 웹 원문이 없는 출처(카카오톡 알림톡, D-019)는 null." },
         "published": { "oneOf": [{ "$ref": "#/$defs/date_info" }, { "type": "null" }] },
         "application_deadline": { "oneOf": [{ "$ref": "#/$defs/date_info" }, { "type": "null" }] },
         "deadline_note": { "type": ["string", "null"] },
