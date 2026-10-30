@@ -335,3 +335,86 @@ def test_tidied_evidence_still_passes_source_check():
     notice, issues = build_notice(record, today=TODAY)
     assert issues == []
     assert "○" not in "".join(u["evidence"] for u in notice["eligibility"]["unresolved_conditions"])
+
+
+def test_excluded_status_is_not_read_as_allowed():
+    """'휴학생 … 추천 불가'를 재학·휴학 허용으로 읽으면 판정이 뒤집힌다 (D-023)."""
+    body = "근로 대상\n- 휴학생 및 정규학기를 초과한 학기의 재학생은 추천 불가\n다. 재등록생, 휴학생 제외/전공심화학생 및 신입생 가능\n"
+    elig = RuleBasedAnalyzer().analyze(raw_notice(body), MJC)["eligibility"]
+    assert elig["conditions"] == []
+    assert [u["evidence"] for u in elig["unresolved_conditions"]] == [
+        "휴학생 및 정규학기를 초과한 학기의 재학생은 추천 불가",
+        "재등록생, 휴학생 제외/전공심화학생 및 신입생 가능",
+    ]
+    assert elig["extraction_complete"] is False
+
+
+def test_abbreviated_enrolled_and_on_leave():
+    """'재·휴학생'은 재학생과 휴학생이다. 휴학생만으로 읽으면 재학생이 미충족이 된다."""
+    elig = RuleBasedAnalyzer().analyze(raw_notice("참석대상 : 창업동아리 및 재·휴학생\n"), MJC)["eligibility"]
+    assert [(c["field"], c["operator"], c["value"]) for c in elig["conditions"]] == [
+        ("enrollment_status", "in", ["enrolled", "on_leave"])
+    ]
+
+
+PRESENTATION_LINE ="2. 공모대상 : 재학생(전공심화과정 포함) / 개인 또는 팀(2명 이하)"
+
+
+@pytest.mark.parametrize(
+    "text, keep",
+    [
+        # 지원 자격이 아닌 것: 팀 구성, 주제, 이미 판정한 줄의 일부, 대상을 넓히는 말, 혜택, 일정, 안내
+        ("개인 또는 팀(2명 이하)", False),
+        ("지정주제 중 택 1", False),
+        ("전공심화과정 포함", False),
+        ("외국인 유학생 포함", False),
+        ("전공심화 학생 신청 가능", False),
+        ("장학금 마일리지 10점 적립", False),
+        ("공모기간 : ~12.14.(일) 23시 59분까지", False),
+        ("관심 있는 학생들", False),
+        ("직전학기 12학점 이수", False),  # 규칙이 낸 '직전학기 12학점 이수자'와 같은 조건
+        # 신청자 본인 조건
+        ("토익 750점 이상(영어 전공학과 800점 이상)", True),
+        ("학자금지원구간이 9구간 이내", True),
+        ("남자의 경우 병역필 또는 면제자", True),
+        ("18세~40세 미만", True),
+        ("3월 또는 9월 중 학적변동(휴학 등) 발생자", True),
+        ("“국가근로장학사업 승인자”만 가능(학자금지원구간 9구간 이하)", True),
+        ("재학생 및 외국유학생", True),
+    ],
+)
+def test_llm_unresolved_keeps_only_applicant_conditions(text, keep):
+    from backend.analysis.rules import is_llm_condition
+
+    conditions = [{"field": "enrollment_status", "evidence": PRESENTATION_LINE}]
+    unresolved = [{"evidence": "직전학기 12학점 이수자", "note": None}]
+    assert is_llm_condition(text, conditions, unresolved) is keep
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "* 참여혜택 : 성적우수/향상장학금, 마일리지 포인트, 모바일 쿠폰 등",
+        "- 1학점은 결석갯수가 4개부터, 2학점은 8개부터, 3학점은 12개부터 F처리 됨",
+        "강의평가를 완료하지 않은 경우 [성적조회 및 이의신청] 기간에 성적조회가 불가하오니 참여 부탁드립니다.",
+    ],
+)
+def test_benefit_and_attendance_lines_are_not_unresolved(line):
+    elig = RuleBasedAnalyzer().analyze(raw_notice("대상: 우리대학 재학생\n" + line), MJC)["eligibility"]
+    assert elig["unresolved_conditions"] == []
+
+
+def test_llm_preferred_items_are_kept_without_keywords():
+    """'우대사항' 항목 아래 줄은 낱말 목록 밖이어도 받는다. 우대 사항으로 따로 묶인다 (D-015, D-023)."""
+    from backend.analysis.rules import is_llm_condition
+
+    lines = [
+        "우대사항",
+        "○ 주말, 야간 촬영 및 외근 등 유연근무 가능자",
+        "○ 무관심 또는 거절 고객을 설득해본 경험이 있으신 분",
+        "3. 지원방법",
+        "○ 취재, 보도 업무에 이해가 있는 자",
+    ]
+    assert is_llm_condition("주말, 야간 촬영 및 외근 등 유연근무 가능자", [], [], lines) is True
+    assert is_llm_condition("무관심 또는 거절 고객을 설득해본 경험이 있으신 분", [], [], lines) is True
+    assert is_llm_condition("취재, 보도 업무에 이해가 있는 자", [], [], lines) is False  # 우대 항목 밖, 낱말 없음
