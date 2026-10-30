@@ -33,7 +33,10 @@ Future<void> main() async {
   // 화면 설정을 먼저 읽어서 첫 화면부터 고른 테마로 그린다 (D-010).
   final theme = await ThemeController.load(PrefsThemeStore());
   if (_apiBase.isEmpty) {
-    _run(GwittimApp(repository: SampleNoticeRepository(), openUrl: _openExternal, themeController: theme));
+    _run(
+      GwittimApp(repository: SampleNoticeRepository(), openUrl: _openExternal, themeController: theme),
+      source: '샘플 자료',
+    );
     return;
   }
   final baseUrl = Uri.parse(_apiBase.endsWith('/') ? _apiBase : '$_apiBase/');
@@ -44,6 +47,7 @@ Future<void> main() async {
         openUrl: _openExternal,
         themeController: theme,
       ),
+      source: '로컬 서버',
     );
     return;
   }
@@ -60,7 +64,32 @@ Future<void> main() async {
 }
 
 /// 시작 인트로를 씌워 실행한다 (D-011).
-void _run(Widget app) => runApp(Intro(child: app));
+/// [source]가 있으면 dev 서버가 아닌 자료로 도는 실행이라 왼쪽 위에 띠로 표시한다.
+void _run(Widget app, {String? source}) {
+  final child = Intro(child: app);
+  runApp(source == null ? child : DataSourceBanner(label: source, child: child));
+}
+
+/// 합성 샘플·로컬 서버로 도는 실행을 dev 서버 실행과 헷갈리지 않게 왼쪽 위 모서리에 띠를 붙인다.
+/// DEBUG 띠(오른쪽 위)와 겹치지 않고, 서버 주소를 넣은 빌드에는 붙지 않는다.
+class DataSourceBanner extends StatelessWidget {
+  const DataSourceBanner({super.key, required this.label, required this.child});
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Banner(
+      message: label,
+      location: BannerLocation.topStart,
+      textDirection: TextDirection.ltr,
+      layoutDirection: TextDirection.ltr,
+      color: const Color(0xE03446A8),
+      child: child,
+    );
+  }
+}
 
 Future<bool> _openExternal(Uri url) => launchUrl(url, mode: LaunchMode.externalApplication);
 
