@@ -16,7 +16,7 @@ from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
 
-ANALYSIS_VERSION = "rule-0.6"  # 0.6: 미해석 조건 정리·우대 사항 표시(D-015). 0.5: 근로·근무 기간은 마감 아님. 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
+ANALYSIS_VERSION = "rule-0.7"  # 0.7: LLM 미해석 조건은 신청자 본인 조건만(D-023). 0.6: 미해석 조건 정리·우대 사항 표시(D-015). 0.5: 근로·근무 기간은 마감 아님. 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
 
 
 class Analyzer(Protocol):
@@ -175,8 +175,10 @@ UNRESTRICTED = re.compile(
 UNRESOLVED = re.compile(r"평점|학점|성적|소득|연령|나이|만\s*\d+\s*세|우대|요건|거주|주민등록|소재|출신|국적")
 # 재학·휴학·졸업 밖의 학적 (같은 줄에 있으면 재학 상태 조건으로 만들지 않는다)
 OTHER_STATUS = re.compile(r"복학|입학\s*예정|편입|재입학|신입생")
-# 제출 서류 목록(성적증명서 등)과 '성적에 관계없이'는 지원 조건이 아니다
-NOT_CONDITION = re.compile(r"서류|증명서|확인서|사본|신청서|관계\s*없이|무관")
+# 제출 서류 목록(성적증명서 등)과 '성적에 관계없이'는 지원 조건이 아니다. 혜택·출결·성적 조회 안내도 (D-023)
+NOT_CONDITION = re.compile(r"서류|증명서|확인서|사본|신청서|관계\s*없이|무관(?!심)|혜택|마일리지|결석|출석|성적\s*(?:조회|처리|입력)|이의\s*신청")
+# 학적·학년·학과를 빼는 말('휴학생은 추천 불가', '휴학생 제외'). 이런 줄을 허용 조건으로 읽으면 판정이 뒤집힌다
+EXCLUDES = re.compile(r"(?:재학생|휴학생|졸업생|졸업자|학년|학과|본교|우리\s*대학)[^,/()]{0,20}?(?:불가|제외|할\s*수\s*없)")
 SEE_ATTACHMENT = re.compile(r"(?:첨부|붙임|모집요강)[^\n]{0,10}참(?:조|고)")
 
 # ---------- 미해석 조건 정리 (D-015) ----------
@@ -257,6 +259,58 @@ def tidy_unresolved(items: list[dict], lines: list[str]) -> tuple[list[dict], bo
     return list(out.values()), dropped
 
 
+# ---------- LLM 미해석 조건 거르기 (D-023) ----------
+
+# 신청자 본인이 갖춰야 하는 조건을 말하는 낱말. 프로필로 판정하지 못하는 속성들
+PERSONAL_HINT = re.compile(
+    r"평점|학점|성적|백분위|이수(?:자|한|했|\s*중)"
+    r"|소득|학자금\s*지원|\d\s*구간|분위|기초\s*생활|차상위|저소득|수급"
+    r"|연령|나이|만\s*\d+\s*세|\d+\s*세\s*(?:이하|이상|미만)|출생"
+    r"|거주|주민등록|주소지|출신|국적|외국인|유학생"
+    r"|토익|TOEIC|TOEFL|IELTS|JLPT|HSK|OPIc|어학\s*(?:성적|점수)|자격증|면허|소지|보유"
+    r"|장애|유공|보훈|북한\s*이탈|다문화|한부모|다자녀|자립\s*준비|보호\s*종료|사회적\s*배려|미혼|병역|군필|결격"
+    r"|재직|직계|임직원|경력|경험이?\s*(?:있는|없는)|근속|추천(?:자|을|받)"
+    r"|(?:근무|근로|운전)\s*(?:가능|할\s*수)|(?:신청|입소|승인)한\s*(?:학생|자)|승인자"
+    r"|중복\s*(?:수혜|지원|신청|참여)\S*\s*불가|(?:자|생|대상)[은는]?\s*제외"
+    r"|학적|복학|편입|재입학|신입생|입학\s*예정|대학원생",
+    re.I,
+)
+# 프로필로 판정하는 학년·학적·학과 낱말. 이미 조건으로 읽은 줄 안의 문구면 다시 묻지 않는다
+PROFILE_HINT = re.compile(r"(?<!\d)[1-4]\s*학년(?!도)|재학|휴학|졸업|전공\s*심화|(?:학과|전공)\s*(?:학생|소속)")
+# 자격처럼 보여도 지원 자격이 아닌 문장: 팀 구성, 혜택, 제출·안내·요청
+NOT_ELIGIBILITY = re.compile(
+    r"팀|마일리지|포인트|환급|적립|인정|강좌|제출|준비|바랍니다|주세요|주시기|주셔야|부탁|유의|여러분|고자"
+)
+# 대상을 넓히는 말('유학생 포함', '전공심화 학생 신청 가능'). 제한을 함께 말하면 조건으로 둔다
+OPEN_TO = re.compile(r"포함\s*$|가능(?:한|함|합니다)?\s*[!.]?\s*$")
+LIMIT = re.compile(r"만\s*(?:가능|신청|지원)|불가|이상|이하|이내|미만")
+
+
+def _compact(text: str) -> str:
+    return re.sub(r"\s+", "", text)
+
+
+def is_llm_condition(text: str, conditions: list[dict], unresolved: list[dict], lines: list[str] = ()) -> bool:
+    """LLM이 낸 미해석 조건을 받을지. 신청자 본인 조건과 원문 '우대사항' 항목 아래 줄만 받고, 이미 보이는 문구는 다시 내지 않는다.
+
+    LLM은 일정·혜택·제출 방법·팀 구성·주제·대상 설명도 조건으로 내곤 한다. 받는 쪽을 좁게 둔다.
+    우대 사항은 지원 자격과 따로 묶여 확인 필요 수에 들지 않으니(D-015) 낱말과 관계없이 받는다.
+    """
+    if NOT_ELIGIBILITY.search(text) or NOT_CONDITION.search(text):
+        return False
+    if OPEN_TO.search(text) and not LIMIT.search(text):
+        return False
+    key = _compact(text)
+    if any(key in _compact(u["evidence"]) for u in unresolved):
+        return False  # 규칙이 이미 그 줄을 확인 항목으로 냈다
+    if lines and any(key in _compact(p) for p in _preferred_lines(lines)):
+        return True
+    if PERSONAL_HINT.search(text):
+        return True
+    # 이미 재학 상태·학년 조건으로 읽은 줄의 일부면 빼고, 따로 나온 학적 문구만 받는다
+    return bool(PROFILE_HINT.search(text)) and not any(key in _compact(c["evidence"]) for c in conditions)
+
+
 def _lines(raw: dict) -> list[str]:
     return [line.strip() for line in raw["body_text"].splitlines() if line.strip()]
 
@@ -331,6 +385,9 @@ class RuleBasedAnalyzer:
         majors = _dictionary("majors")
 
         def add(field, operator, value, evidence):
+            if EXCLUDES.search(evidence):  # 누구를 빼는 줄은 자동 판정하지 않고 직접 확인으로 (D-023)
+                unresolved.append({"evidence": evidence, "note": None})
+                return
             if not any(c["field"] == field for c in conditions):
                 conditions.append({"field": field, "operator": operator, "value": value, "evidence": evidence, "validation_status": "validated"})
 
@@ -344,7 +401,7 @@ class RuleBasedAnalyzer:
             elif m := GRADE_ONE.search(line):
                 add("grade", "eq", int(m[1]), line)
 
-            statuses = [s for s, p in (("enrolled", r"재학생"), ("on_leave", r"휴학생"), ("graduated", r"졸업생|졸업자")) if re.search(p, line)]
+            statuses = [s for s, p in (("enrolled", r"재학생|재\s*[·ㆍ･,/]\s*휴학생"), ("on_leave", r"휴학생"), ("graduated", r"졸업생|졸업자")) if re.search(p, line)]
             if statuses and OTHER_STATUS.search(line):
                 unresolved.append({"evidence": line, "note": None})  # 복학생·입학예정자 등은 프로필 재학 상태로 판정할 수 없다
             elif statuses:
