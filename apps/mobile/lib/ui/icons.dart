@@ -11,6 +11,9 @@ enum GwGlyph {
   /// 공고: 종이 한 장과 글줄 세 개
   notices,
 
+  /// 달력: 위에 고리 두 개, 머리 줄과 날짜 점
+  calendar,
+
   /// 저장함: 책갈피
   saved,
 
@@ -52,6 +55,13 @@ Path glyphOutline(GwGlyph glyph) => switch (glyph) {
       ..arcToPoint(const Offset(8, 4), radius: const Radius.circular(5))
       ..close(),
   GwGlyph.notices => Path()..addRRect(RRect.fromLTRBR(5, 3, 19, 21, const Radius.circular(3))),
+  GwGlyph.calendar =>
+    Path()
+      ..addRRect(RRect.fromLTRBR(4, 5, 20, 21, const Radius.circular(3)))
+      ..moveTo(8.5, 3)
+      ..lineTo(8.5, 7)
+      ..moveTo(15.5, 3)
+      ..lineTo(15.5, 7),
   GwGlyph.saved =>
     Path()
       ..moveTo(8, 3.5)
@@ -76,6 +86,15 @@ List<(Offset, Offset)> _innerLines(GwGlyph glyph) => switch (glyph) {
     (Offset(9, 8.5), Offset(15, 8.5)),
     (Offset(9, 12), Offset(15, 12)),
     (Offset(9, 15.5), Offset(13, 15.5)),
+  ],
+  // 길이 0인 선은 둥근 끝으로 점이 된다.
+  GwGlyph.calendar => const [
+    (Offset(6.5, 10.5), Offset(17.5, 10.5)),
+    (Offset(8.5, 14.5), Offset(8.5, 14.5)),
+    (Offset(12, 14.5), Offset(12, 14.5)),
+    (Offset(15.5, 14.5), Offset(15.5, 14.5)),
+    (Offset(8.5, 17.5), Offset(8.5, 17.5)),
+    (Offset(12, 17.5), Offset(12, 17.5)),
   ],
   _ => const [],
 };

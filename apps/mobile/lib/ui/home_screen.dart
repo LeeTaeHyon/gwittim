@@ -112,10 +112,12 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  static bool _hasInterests(HomeData data) => data.profile?.interestIds.isNotEmpty ?? false;
+
   Future<void> _maybeShowBriefing(HomeData data) async {
     if (_briefingChecked) return;
     _briefingChecked = true;
-    final briefing = buildBriefing(data.list, data.saved, _today);
+    final briefing = buildBriefing(data.list, data.saved, _today, hasInterests: _hasInterests(data));
     try {
       if (briefing.isEmpty || await widget.briefingStore.shownOn(_today)) return;
       await widget.briefingStore.markShown(_today);
@@ -169,12 +171,14 @@ class HomeScreenState extends State<HomeScreen> {
     final c = context.gw;
     final caption = captionStyle(context);
     final list = data.list;
-    final briefing = buildBriefing(list, data.saved, _today);
+    final briefing = buildBriefing(list, data.saved, _today, hasInterests: _hasInterests(data));
+    // 맞춤 추천이면 관련 공고 중에서만 마감을 센다.
+    final candidates = deadlineCandidates(list);
     final upcoming = [
-      for (final e in list.items)
+      for (final e in candidates)
         if ((daysLeft(e.notice, _today) ?? 99) <= 14) e,
     ]..sort((a, b) => a.notice.applicationDeadline!.date.compareTo(b.notice.applicationDeadline!.date));
-    final undated = list.items.where((e) => e.notice.applicationDeadline == null).length;
+    final undated = candidates.where((e) => e.notice.applicationDeadline == null).length;
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -186,12 +190,12 @@ class HomeScreenState extends State<HomeScreen> {
         if (!briefing.isEmpty) ...[
           _BriefingCard(
             briefing: briefing,
-            urgentCount: list.items.where((e) => (daysLeft(e.notice, _today) ?? 99) <= urgentDays).length,
+            urgentCount: candidates.where((e) => (daysLeft(e.notice, _today) ?? 99) <= urgentDays).length,
             onOpen: () => _openBriefing(briefing),
           ),
           const SizedBox(height: 28),
         ],
-        SectionTitle('다가오는 마감', trailing: Text('앞으로 2주', style: caption)),
+        SectionTitle('다가오는 마감', trailing: Text(list.personalized ? '맞춤 공고 · 앞으로 2주' : '앞으로 2주', style: caption)),
         const SizedBox(height: 12),
         GwCard(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -201,7 +205,10 @@ class HomeScreenState extends State<HomeScreen> {
               if (upcoming.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  child: Text('앞으로 2주 안에 마감되는 공고가 없어요.', style: TextStyle(fontSize: 15, color: c.sub)),
+                  child: Text(
+                    list.personalized ? '맞춤 공고 중 앞으로 2주 안에 마감되는 공고가 없어요.' : '앞으로 2주 안에 마감되는 공고가 없어요.',
+                    style: TextStyle(fontSize: 15, color: c.sub),
+                  ),
                 ),
               for (final e in upcoming)
                 _UpcomingRow(
@@ -305,7 +312,8 @@ class _Header extends StatelessWidget {
     final p = profile;
     final who = [
       if (p?.majorId case final m?) majors[m] ?? '',
-      if (p?.grade case final g?) '$g학년',
+      // 졸업이면 학년 대신 '졸업'
+      if (p?.enrollmentStatus == 'graduated') '졸업' else if (p?.grade case final g?) '$g학년',
     ].where((s) => s.isNotEmpty).join(' ');
     return Row(
       children: [
@@ -366,6 +374,8 @@ class _ProfilePrompt extends StatelessWidget {
 }
 
 /// 오늘의 귀띔: 숫자 요약만 보이고 공고 제목은 다시 쓰지 않는다 (2026-10-25 팀장 결정 Q3).
+/// 한 줄 제목과 작은 배지로 무슨 소식인지 바로 읽히게 하고, 0건인 배지는 보이지 않는다 (D-016 보완).
+/// 카드 전체를 누르면 브리핑이 열린다.
 class _BriefingCard extends StatelessWidget {
   const _BriefingCard({required this.briefing, required this.urgentCount, required this.onOpen});
 
@@ -378,83 +388,84 @@ class _BriefingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
-    final headline = TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: c.ink, height: 1.4);
+    final b = briefing;
+    final onlyChanged = urgentCount == 0 && b.savedSoon.isEmpty && b.fresh.isEmpty && b.career.isEmpty;
     return GwCard(
       bubble: true,
       onTap: onOpen,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '오늘의 귀띔',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.accent),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.accent),
           ),
-          const SizedBox(height: 6),
-          Text.rich(
-            TextSpan(
-              style: headline,
-              children: [
-                const TextSpan(text: '오늘 챙길 소식 '),
-                markSpan('${briefing.count}가지', headline),
-              ],
-            ),
+          const SizedBox(height: 4),
+          Text(
+            onlyChanged ? '마감이 바뀐 저장 공고가 있어요' : '오늘 확인할 공고가 있어요',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.ink, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (b.savedSoon.isNotEmpty)
+                _Badge(icon: Icons.bookmark_rounded, label: '저장 공고 곧 마감 ${b.savedSoon.length}건', urgent: true),
+              if (urgentCount > 0) _Badge(icon: Icons.schedule_rounded, label: '마감 임박 $urgentCount건', urgent: true),
+              if (b.fresh.isNotEmpty) _Badge(icon: Icons.fiber_new_rounded, label: '새 공고 ${b.fresh.length}건'),
+              if (b.career.isNotEmpty) _Badge(icon: Icons.explore_rounded, label: '진로 관련 ${b.career.length}건'),
+              if (b.changed.isNotEmpty) _Badge(icon: Icons.update_rounded, label: '마감 바뀐 저장 공고 ${b.changed.length}건'),
+            ],
           ),
           const SizedBox(height: 14),
-          IntrinsicHeight(
+          Divider(height: 1, thickness: 1, color: c.line),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: _Stat(count: urgentCount, label: '마감 임박', urgent: urgentCount > 0),
+                  child: Text(
+                    '브리핑 자세히 보기',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.sub),
+                  ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _Stat(count: briefing.related.length, label: '맞춤 공고'),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _Stat(count: briefing.changed.length, label: '마감 바뀐\n저장 공고'),
-                ),
+                Icon(Icons.arrow_forward_rounded, size: 18, color: c.muted),
               ],
             ),
           ),
-          const SizedBox(height: 14),
-          SoftButton(label: '브리핑 보기', onPressed: onOpen),
         ],
       ),
     );
   }
 }
 
-class _Stat extends StatelessWidget {
-  const _Stat({required this.count, required this.label, this.urgent = false});
+/// 오늘의 귀띔 배지. 마감 임박만 빨간색, 나머지는 칩 색.
+class _Badge extends StatelessWidget {
+  const _Badge({required this.icon, required this.label, this.urgent = false});
 
-  final int count;
+  final IconData icon;
   final String label;
   final bool urgent;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
-    return MergeSemantics(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-        decoration: BoxDecoration(color: c.neutral, borderRadius: BorderRadius.circular(14)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$count개',
-              style: TextStyle(
-                fontSize: 19,
-                fontWeight: FontWeight.w700,
-                color: count == 0 ? c.muted : (urgent ? c.urgent : c.ink),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(label, maxLines: 2, style: TextStyle(fontSize: 12, height: 1.35, color: c.sub)),
-          ],
-        ),
+    final fg = urgent ? c.urgent : c.onChip;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(color: urgent ? c.urgentSoft : c.chip, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg),
+          ),
+        ],
       ),
     );
   }

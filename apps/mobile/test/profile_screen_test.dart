@@ -74,6 +74,24 @@ void main() {
     expect(find.text('계정'), findsNothing); // 로그인 모드가 아니면 계정 칸이 없다
   });
 
+  testWidgets('졸업이면 학년 대신 졸업만 보인다 (요약 카드·홈 머리)', (tester) async {
+    final repo = SampleNoticeRepository(personalized: false);
+    await repo.updateProfile(
+      const UserProfile(
+        universityId: 'mjc',
+        majorId: 'mjc.computer_engineering',
+        grade: 2,
+        enrollmentStatus: 'graduated',
+      ),
+    );
+    await openProfile(tester, repository: repo);
+    expect(find.text('명지전문대학 컴퓨터공학과 · 졸업'), findsOneWidget);
+    expect(find.textContaining('2학년'), findsNothing);
+    await tester.tap(find.byTooltip('뒤로'));
+    await tester.pumpAndSettle();
+    expect(find.text('컴퓨터공학과 졸업'), findsOneWidget);
+  });
+
   testWidgets('세 단계로 고치고 마지막 단계에서 저장하면 요약 카드가 바뀐다', (tester) async {
     final repo = await openProfile(tester);
     await tester.tap(find.text('입력하기'));

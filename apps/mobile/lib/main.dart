@@ -8,6 +8,7 @@ import 'auth/auth_service.dart';
 import 'data/api_repository.dart';
 import 'data/repository.dart';
 import 'ui/briefing_data.dart';
+import 'ui/calendar_screen.dart';
 import 'ui/common.dart';
 import 'ui/components.dart';
 import 'ui/home_screen.dart';
@@ -165,6 +166,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMixin {
   final _homeKey = GlobalKey<HomeScreenState>();
   final _noticesKey = GlobalKey<NoticesScreenState>();
+  final _calendarKey = GlobalKey<CalendarScreenState>();
   final _savedKey = GlobalKey<SavedScreenState>();
   int _tab = 0;
 
@@ -179,7 +181,9 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     });
 
   void _select(int i) {
-    if (i == 2) _savedKey.currentState?.reload();
+    // 저장 상태가 다른 탭에서 바뀔 수 있어 다시 받는다.
+    if (i == 2) _calendarKey.currentState?.reload();
+    if (i == 3) _savedKey.currentState?.reload();
     if (i == _tab) return;
     final animate = MediaQuery.maybeDisableAnimationsOf(context) != true;
     setState(() {
@@ -207,6 +211,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
           onSaved: () {
             _homeKey.currentState?.reload();
             _noticesKey.currentState?.reload();
+            _calendarKey.currentState?.reload();
           },
           onSignOut: widget.onSignOut,
         ),
@@ -271,6 +276,15 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
               ),
               _page(
                 2,
+                CalendarScreen(
+                  key: _calendarKey,
+                  repository: widget.repository,
+                  openUrl: widget.openUrl,
+                  today: widget.today,
+                ),
+              ),
+              _page(
+                3,
                 SavedScreen(
                   key: _savedKey,
                   repository: widget.repository,
@@ -288,6 +302,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
           tabs: const [
             (glyph: GwGlyph.today, label: '오늘'),
             (glyph: GwGlyph.notices, label: '공고'),
+            (glyph: GwGlyph.calendar, label: '달력'),
             (glyph: GwGlyph.saved, label: '저장함'),
           ],
         ),
