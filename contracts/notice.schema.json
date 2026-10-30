@@ -34,7 +34,7 @@
     "schema_version": { "$ref": "common.schema.json#/$defs/schema_version" },
     "notice_id": { "type": "string", "minLength": 1 },
     "source_id": { "$ref": "common.schema.json#/$defs/code" },
-    "source_url": { "type": "string", "format": "uri" },
+    "source_url": { "type": ["string", "null"], "format": "uri", "description": "원문 링크. 웹 원문이 없는 출처(카카오톡 알림톡, D-016)는 null." },
     "title": { "type": "string", "minLength": 1 },
     "summary": { "type": ["string", "null"], "description": "검증된 요약. 없으면 null." },
     "category": { "$ref": "common.schema.json#/$defs/code" },

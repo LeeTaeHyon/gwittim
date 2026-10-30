@@ -57,7 +57,8 @@ class NoticeSummary {
   final int noticeVersion;
   final String title;
   final String category;
-  final String sourceUrl;
+  /// 원문 링크. 웹 원문이 없는 카카오톡 알림톡은 null (D-016).
+  final String? sourceUrl;
   final DateInfo? published;
   final DateInfo? applicationDeadline;
   final String? deadlineNote;
@@ -70,7 +71,7 @@ class NoticeSummary {
     noticeVersion: m['notice_version'] as int,
     title: m['title'] as String,
     category: m['category'] as String,
-    sourceUrl: m['source_url'] as String,
+    sourceUrl: m['source_url'] as String?,
     published: DateInfo.fromJson(m['published']),
     applicationDeadline: DateInfo.fromJson(m['application_deadline']),
     deadlineNote: m['deadline_note'] as String?,

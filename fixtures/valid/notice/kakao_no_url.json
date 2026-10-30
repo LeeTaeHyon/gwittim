@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "notice_id": "n_synthetic_kakao_0001",
+  "source_id": "mjc_kakao",
+  "source_url": null,
+  "title": "[합성 샘플] 겨울방학 영어 회화 프로그램 참가자 모집",
+  "summary": "재학생 대상 겨울방학 영어 회화 프로그램. 11월 13일까지 신청.",
+  "category": "global",
+  "interest_tags": [
+    "global_language"
+  ],
+  "related_majors": [],
+  "related_roles": [],
+  "published": {
+    "date": "2026-10-29",
+    "time": "14:05",
+    "timezone": "Asia/Seoul",
+    "precision": "minute",
+    "evidence": "카카오톡 수신 2026-10-29 14:05"
+  },
+  "application_start": {
+    "date": "2026-11-02",
+    "time": null,
+    "timezone": null,
+    "precision": "date",
+    "evidence": "신청기간: 2026.11.02.(월) ~"
+  },
+  "application_deadline": {
+    "date": "2026-11-13",
+    "time": null,
+    "timezone": null,
+    "precision": "date",
+    "evidence": "~ 2026.11.13.(금)"
+  },
+  "deadline_note": null,
+  "activity_period": null,
+  "eligibility": {
+    "conditions": [
+      {
+        "field": "enrollment_status",
+        "operator": "eq",
+        "value": "enrolled",
+        "evidence": "재학생",
+        "validation_status": "validated"
+      }
+    ],
+    "unresolved_conditions": [],
+    "extraction_complete": false,
+    "explicitly_unrestricted": false,
+    "unrestricted_evidence": null
+  },
+  "lifecycle_status": "open",
+  "publication_status": "published",
+  "notice_version": 1,
+  "analysis_version": "rule-0.6+kakao-0.1",
+  "last_collected_at": "2026-10-30T03:00:00Z",
+  "last_verified_at": "2026-10-30T03:00:00Z",
+  "changed_fields": []
+}
