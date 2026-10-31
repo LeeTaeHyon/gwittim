@@ -98,6 +98,19 @@ def test_recommendations_personalized_after_profile(client):
     assert "n_synthetic_0005" not in [i["notice"]["notice_id"] for i in out["items"]]  # review_pending
 
 
+def test_recommendations_search_and_category(client):
+    """공고 탭 검색·분류 칩 (D-026): 추천 후보 전체에서 거르고, 제외 규칙은 그대로다."""
+    ids = lambda r: [i["notice"]["notice_id"] for i in r.json()["items"]]
+    assert ids(client.get("/v1/recommendations?q=해외연수", headers=ALICE)) == ["n_synthetic_0002"]  # 띄어쓰기 무시
+    contest = client.get("/v1/recommendations?category=contest", headers=ALICE)
+    assert schema_errors("recommendation_list_response", contest.json()) == []
+    assert sorted(ids(contest)) == ["n_synthetic_0001", "n_synthetic_0003"]  # 0005는 검토 대기라 빠짐
+    assert ids(client.get("/v1/recommendations?category=contest&q=글쓰기", headers=ALICE)) == ["n_synthetic_0003"]
+    assert ids(client.get("/v1/recommendations?q=없는말", headers=ALICE)) == []
+    assert_error(client.get("/v1/recommendations?category=nope", headers=ALICE), 400, "invalid_argument")
+    assert_error(client.get("/v1/recommendations?q=" + "가" * 51, headers=ALICE), 400, "invalid_argument")
+
+
 def test_recommendations_limit_validated(client):
     assert_error(client.get("/v1/recommendations?limit=500", headers=ALICE), 400, "invalid_argument")
     assert len(client.get("/v1/recommendations?limit=1", headers=ALICE).json()["items"]) == 1

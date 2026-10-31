@@ -19,7 +19,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
 from backend.contracts import schema_errors
-from backend.dictionaries import unknown_profile_codes
+from backend.dictionaries import codes, unknown_profile_codes
 from backend.recommendation import recommend
 
 from .deps import Deps
@@ -112,10 +112,24 @@ def create_app(deps: Deps) -> FastAPI:
         return Response(status_code=204)
 
     @app.get("/v1/recommendations")
-    def list_recommendations(limit: int = Query(default=20, ge=1, le=50), uid: str = Depends(current_uid)):
+    def list_recommendations(
+        limit: int = Query(default=20, ge=1, le=50),
+        q: str | None = Query(default=None, max_length=50),
+        category: str | None = Query(default=None),
+        uid: str = Depends(current_uid),
+    ):
+        # 공고 탭 검색·분류 칩 (D-026). 모르는 분류 코드는 입력 오류
+        if category is not None and category not in codes("categories"):
+            raise ApiError("invalid_argument")
         profile = deps.profiles.get(uid) or _empty_profile()
         return recommend(
-            deps.notices.list_published(), profile, today=deps.today_kst(), generated_at=deps.now_iso(), limit=limit
+            deps.notices.list_published(),
+            profile,
+            today=deps.today_kst(),
+            generated_at=deps.now_iso(),
+            limit=limit,
+            query=q,
+            category=category,
         )
 
     @app.get("/v1/notices/{notice_id}")
