@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart' show StringCharacters;
+
 import '../data/models.dart';
 
 const _weekdays = ['월', '화', '수', '목', '금', '토', '일'];
@@ -102,3 +104,40 @@ const personalReasons = {
   'major_match': '전공',
   'major_prior_match': '학과 졸업생 진로', // D-020
 };
+
+const _wordJoiner = '\u2060'; // 보이지 않고, 이 자리에서는 줄을 바꾸지 않는다
+const _noBreakSpace = '\u00A0';
+final _sentenceEnd = RegExp(r'[.!?]$');
+
+/// 문장을 어절 단위로만 줄바꿈한다(CSS `word-break: keep-all`).
+/// Flutter는 한글 음절 사이에서도 줄을 바꿔 '주세\n요.'처럼 어절이 갈라진다.
+/// - 어절 안 글자 사이에 단어 연결자를 넣어 띄어쓰기에서만 줄이 바뀌게 한다.
+/// - 끝 문장이 짧으면(14자 이하) 통째로, 아니면 끝 두 어절을 묶어 다음 줄에 한 어절만 남지 않게 한다.
+String keepAll(String text) => text.split('\n').map(_keepAllLine).join('\n');
+
+String _keepAllLine(String line) {
+  final words = line.split(' ');
+  var bind = 2;
+  final end = words.lastIndexWhere(_sentenceEnd.hasMatch, words.length - 2);
+  if (end >= 0 && words.length - end - 1 > bind && words.skip(end + 1).join(' ').length <= 14) {
+    bind = words.length - end - 1;
+  }
+  final joined = words.map(_joinWord).toList();
+  final split = (words.length - bind).clamp(0, words.length);
+  return [...joined.take(split), joined.skip(split).join(_noBreakSpace)].join(' ');
+}
+
+/// 글자 사이에 단어 연결자를 넣는다. 글자는 화면 글자 단위(자모 조합·이모지가 갈라지지 않게)로 나눈다.
+/// 영문·숫자·기호끼리는 원래 규칙대로 둔다(URL은 '/', '?'에서 줄이 바뀌도록).
+String _joinWord(String word) {
+  final out = StringBuffer();
+  String? prev;
+  for (final c in word.characters) {
+    if (prev != null && !(_isAscii(prev) && _isAscii(c))) out.write(_wordJoiner);
+    out.write(c);
+    prev = c;
+  }
+  return out.toString();
+}
+
+bool _isAscii(String c) => c.codeUnits.every((u) => u < 0x80);

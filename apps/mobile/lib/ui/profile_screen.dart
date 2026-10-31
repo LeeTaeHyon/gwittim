@@ -5,6 +5,7 @@ import '../data/repository.dart';
 import 'app_info.dart';
 import 'common.dart';
 import 'components.dart';
+import 'format.dart';
 import 'logo.dart';
 import 'skeleton.dart';
 import 'theme.dart';
@@ -19,6 +20,7 @@ class ProfileScreen extends StatefulWidget {
     required this.themeController,
     required this.onSaved,
     this.onSignOut,
+    this.onDeleteAccount,
   });
 
   final NoticeRepository repository;
@@ -29,6 +31,9 @@ class ProfileScreen extends StatefulWidget {
 
   /// 로그인 모드일 때만 있다. 없으면 계정 칸을 보이지 않는다.
   final Future<void> Function()? onSignOut;
+
+  /// 탈퇴 (D-024). 계정 확인을 취소하면 false. 없으면 '준비 중'으로 안내한다.
+  final Future<bool> Function()? onDeleteAccount;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -97,11 +102,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ..showSnackBar(const SnackBar(content: Text('프로필이 저장되었습니다.')));
   }
 
-  /// 프로필·저장 데이터 삭제는 아직 서버 인터페이스가 없다 (D-010 한계). 화면 버튼만 둔다.
-  void _withdraw() {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('탈퇴 기능은 준비 중입니다.')));
+  bool _withdrawing = false;
+
+  /// 확인 창 → 계정 다시 확인 → 서버 데이터·계정 삭제 (D-024). 끝나면 로그인 화면으로 바뀐다.
+  Future<void> _withdraw() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final delete = widget.onDeleteAccount;
+    if (delete == null) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('탈퇴 기능은 준비 중입니다.')));
+      return;
+    }
+    if (_withdrawing || await _confirmWithdraw() != true || !mounted) return;
+    setState(() => _withdrawing = true);
+    try {
+      await delete();
+    } catch (_) {
+      // 상세 오류는 화면에 보여주지 않는다 (SPEC §10)
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('탈퇴하지 못했습니다. 잠시 후 다시 시도해 주세요.')));
+    } finally {
+      if (mounted) setState(() => _withdrawing = false);
+    }
+  }
+
+  Future<bool?> _confirmWithdraw() {
+    final c = context.gw;
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: c.card,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          '탈퇴하시겠습니까?',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.ink),
+        ),
+        content: Text(
+          '프로필과 저장한 공고가 삭제되고 되돌릴 수 없습니다. 공고 자체는 그대로 남습니다.\n\n'
+          '계속하면 Google 계정을 한 번 더 확인합니다.',
+          style: TextStyle(fontSize: 15, height: 1.5, color: c.body),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: c.urgent),
+            child: const Text('탈퇴'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Flutter 기본 라이선스 화면. 패키지 라이선스와 Pretendard(registerAppLicenses)가 나온다.
@@ -347,6 +400,38 @@ class _SummaryRow extends StatelessWidget {
   }
 }
 
+/// 프로필이 없는 사용자의 첫 입력 (첫 로그인 안내). 무엇을 왜 묻는지 안내한 뒤 고치기와 같은 세 단계로 넘어간다.
+/// 저장하면 저장한 프로필, 닫거나 선택지를 못 읽으면 null. 닫아도 홈의 '프로필 입력' 카드로 다시 열 수 있다.
+Future<UserProfile?> openProfileSetup(BuildContext context, NoticeRepository repository) async {
+  final List<DictionaryItem> universities, majors, interests, roles;
+  final Map<String, List<String>> majorInterests;
+  try {
+    universities = await repository.dictionary('universities');
+    majors = await repository.dictionary('majors');
+    interests = await repository.dictionary('interests');
+    roles = await repository.dictionary('roles');
+    majorInterests = await repository.majorInterests();
+  } catch (_) {
+    return null;
+  }
+  if (!context.mounted) return null;
+  return Navigator.of(context).push<UserProfile>(
+    gwRoute(
+      context,
+      (_) => ProfileEditScreen._(
+        repository: repository,
+        profile: null,
+        universities: universities,
+        majors: majors,
+        interests: interests,
+        roles: roles,
+        majorInterests: majorInterests,
+        intro: true,
+      ),
+    ),
+  );
+}
+
 /// 프로필 고치기: 학적 → 관심 분야 → 희망 직무. 위에 진행 점, 아래에 '다음'·'저장하기' 고정 버튼.
 /// 저장에 성공하면 저장한 프로필을 돌려주며 닫히고, 실패하면 알리고 입력은 남긴다.
 class ProfileEditScreen extends StatefulWidget {
@@ -358,10 +443,14 @@ class ProfileEditScreen extends StatefulWidget {
     required this.interests,
     required this.roles,
     required this.majorInterests,
+    this.intro = false,
   });
 
   final NoticeRepository repository;
   final UserProfile? profile;
+
+  /// 첫 입력이면 세 단계 앞에 안내 화면을 둔다 (D-024).
+  final bool intro;
   final List<DictionaryItem> universities;
   final List<DictionaryItem> majors;
   final List<DictionaryItem> interests;
@@ -381,7 +470,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   late String? _status = widget.profile?.enrollmentStatus;
   late Set<String> _interests = {...?widget.profile?.interestIds};
   late Set<String> _roles = {...?widget.profile?.targetRoleIds};
-  int _step = 0;
+
+  /// -1은 첫 입력 안내 화면
+  late int _step = widget.intro ? -1 : 0;
 
   /// 단계가 바뀐 방향 (다음이면 1)
   int _direction = 1;
@@ -446,23 +537,25 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     final c = context.gw;
     final still = MediaQuery.maybeDisableAnimationsOf(context) == true;
     final last = _step == _steps.length - 1;
-    // 뒤로 가기는 앞 단계로, 첫 단계에서는 저장하지 않고 닫는다.
+    final intro = _step < 0;
+    // 뒤로 가기는 앞 단계로, 첫 단계(첫 입력이면 안내 화면)에서는 저장하지 않고 닫는다.
     return PopScope(
-      canPop: _step == 0,
+      canPop: _step == (widget.intro ? -1 : 0),
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _go(_step - 1);
       },
       // 학년·재학 칸의 neutral 바탕이 보이도록 카드 바탕 위에 둔다.
       child: Scaffold(
         backgroundColor: c.card,
-        appBar: GwTopBar(title: _steps[_step]),
+        appBar: GwTopBar(title: intro ? '프로필 입력' : _steps[_step]),
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
-              child: _StepDots(step: _step, count: _steps.length),
-            ),
+            if (!intro)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+                child: _StepDots(step: _step, count: _steps.length),
+              ),
             Expanded(
               child: AnimatedSwitcher(
                 duration: still ? Duration.zero : const Duration(milliseconds: 320),
@@ -480,7 +573,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                     ),
                   );
                 },
-                child: KeyedSubtree(key: ValueKey(_step), child: _page(c)),
+                child: KeyedSubtree(key: ValueKey(_step), child: intro ? const _SetupIntro() : _page(c)),
               ),
             ),
           ],
@@ -488,10 +581,24 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         bottomNavigationBar: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-            child: FilledButton(
-              onPressed: _saving ? null : (last ? _save : () => _go(_step + 1)),
-              child: Text(last ? '저장하기' : '다음'),
-            ),
+            child: intro
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      FilledButton(onPressed: () => _go(0), child: const Text('시작하기')),
+                      const SizedBox(height: 4),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: TextButton.styleFrom(foregroundColor: c.sub),
+                        child: const Text('나중에 입력'),
+                      ),
+                    ],
+                  )
+                : FilledButton(
+                    onPressed: _saving ? null : (last ? _save : () => _go(_step + 1)),
+                    child: Text(last ? '저장하기' : '다음'),
+                  ),
           ),
         ),
       ),
@@ -510,7 +617,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     final (title, detail, body) = switch (_step) {
       0 => (
         '학적',
-        '미입력 항목은 지원 조건에 "확인 필요"로 표시됩니다. 선택한 칸을 다시 누르면 선택이 해제됩니다.',
+        '미입력 항목은 지원 조건에 "확인 필요"로 표시됩니다.\n선택한 칸을 다시 누르면 선택이 해제됩니다.',
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -590,7 +697,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           ],
         ),
         const SizedBox(height: 6),
-        Text(detail, style: caption),
+        Text(keepAll(detail), style: caption),
         const SizedBox(height: 16),
         body,
       ],
@@ -608,10 +715,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TipBubble(
-          title: '$majorName 졸업생이 많이 가는 분야',
-          detail: '커리어넷 학과정보의 졸업생 진로 통계(2020 조사) 기준입니다. 누른 분야만 저장됩니다.',
-        ),
+        TipBubble(title: '$majorName 졸업생이 많이 가는 분야', detail: '커리어넷 학과정보의 졸업생 진로 통계(2020 조사) 기준입니다. 누른 분야만 저장됩니다.'),
         const SizedBox(height: 12),
         _ChoiceChips(items: suggested, selected: _interests, onChanged: onChanged),
         const SizedBox(height: 28),
@@ -624,6 +728,87 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 }
 
 /// 단계 진행 표시. 지금 단계는 길쭉한 점으로 보인다.
+/// 첫 입력 앞 안내: 무엇을, 왜 묻는지와 나중에 고칠 수 있다는 것만 짧게 (D-024).
+class _SetupIntro extends StatelessWidget {
+  const _SetupIntro();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+      children: [
+        Semantics(
+          header: true,
+          child: Text(
+            '맞춤 공고를 위해\n몇 가지만 묻습니다',
+            style: TextStyle(fontSize: 24, height: 1.4, fontWeight: FontWeight.w700, letterSpacing: -0.6, color: c.ink),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          keepAll('입력한 정보로 나에게 맞는 공고를 먼저 보여 주고, 공고의 지원 조건을 내 정보와 비교합니다.'),
+          style: TextStyle(fontSize: 15, height: 1.6, color: c.sub),
+        ),
+        const SizedBox(height: 28),
+        const _IntroRow(
+          icon: Icons.format_list_numbered_rounded,
+          title: '학적 · 관심 분야 · 희망 직무',
+          detail: '세 단계입니다. 모르는 항목은 비워 둘 수 있습니다.',
+        ),
+        const _IntroRow(
+          icon: Icons.lock_outline_rounded,
+          title: '성적·학번은 묻지 않습니다',
+          detail: '입력한 정보는 추천과 지원 조건 비교에만 씁니다.',
+        ),
+        const _IntroRow(icon: Icons.edit_outlined, title: '언제든 고칠 수 있습니다', detail: '홈 오른쪽 위 내 정보에서 바꿉니다.'),
+      ],
+    );
+  }
+}
+
+class _IntroRow extends StatelessWidget {
+  const _IntroRow({required this.icon, required this.title, required this.detail});
+
+  final IconData icon;
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(color: c.chip, shape: BoxShape.circle),
+            child: Icon(icon, size: 20, color: c.onChip),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 2),
+                Text(
+                  title,
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.ink),
+                ),
+                const SizedBox(height: 3),
+                Text(keepAll(detail), style: TextStyle(fontSize: 14, height: 1.5, color: c.sub)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StepDots extends StatelessWidget {
   const _StepDots({required this.step, required this.count});
 

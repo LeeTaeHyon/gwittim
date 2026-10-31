@@ -13,6 +13,10 @@ abstract class AuthService {
   Future<bool> signInWithGoogle();
 
   Future<void> signOut();
+
+  /// 탈퇴 (D-024). 계정을 다시 확인한 뒤 [deleteData]로 서버 데이터를 지우고 로그인 계정을 지운다.
+  /// 다시 확인을 취소하면 아무것도 지우지 않고 false.
+  Future<bool> deleteAccount(Future<void> Function() deleteData);
 }
 
 /// Firebase Authentication + Google 로그인 (D-004). Android 설정은 android/app/google-services.json(커밋 금지).
@@ -45,6 +49,29 @@ class FirebaseAuthService implements AuthService {
       if (e.code == GoogleSignInExceptionCode.canceled) return false;
       rethrow;
     }
+  }
+
+  /// Firebase 계정 삭제는 최근 로그인을 요구해서, 지우기 전에 같은 Google 계정으로 다시 확인받는다.
+  /// 다른 계정을 고르면 Firebase가 거절해 아무것도 지우지 않는다.
+  @override
+  Future<bool> deleteAccount(Future<void> Function() deleteData) async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    final GoogleSignInAccount account;
+    try {
+      account = await _google.authenticate();
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) return false;
+      rethrow;
+    }
+    final idToken = account.authentication.idToken;
+    if (idToken == null) return false;
+    await user.reauthenticateWithCredential(GoogleAuthProvider.credential(idToken: idToken));
+    await deleteData();
+    // 여기서 실패하면 데이터만 지워진 채 로그인 상태로 남는다. 서버 삭제는 반복 요청 안전이라 다시 누르면 된다.
+    await user.delete();
+    await _google.signOut();
+    return true;
   }
 
   @override

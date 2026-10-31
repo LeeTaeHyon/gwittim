@@ -114,6 +114,11 @@ class ApiNoticeRepository implements NoticeRepository {
   }
 
   @override
+  Future<void> deleteAccountData() async {
+    await _send('DELETE', 'v1/profile');
+  }
+
+  @override
   Future<List<SavedEntry>> listSaved() async {
     final data = _json(await _send('GET', 'v1/saved'));
     return [

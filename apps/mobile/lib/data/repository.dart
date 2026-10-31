@@ -19,6 +19,9 @@ abstract class NoticeRepository {
   Future<UserProfile?> getProfile();
   Future<void> updateProfile(UserProfile profile);
 
+  /// 탈퇴: 서버의 프로필·저장을 지운다. 공개 공고는 남는다. 반복 요청 안전 (D-024)
+  Future<void> deleteAccountData();
+
   /// 프로필 입력 선택지: 'majors' / 'interests' / 'roles'
   Future<List<DictionaryItem>> dictionary(String name);
 
@@ -154,6 +157,12 @@ class SampleNoticeRepository implements NoticeRepository {
   @override
   Future<void> updateProfile(UserProfile profile) async {
     _profile = Future.value(profile);
+  }
+
+  @override
+  Future<void> deleteAccountData() async {
+    _profile = Future<UserProfile?>.value(null);
+    _saved.clear();
   }
 
   @override
