@@ -1,7 +1,10 @@
 """알림톡 수집(D-019)을 합성 카톡 내보내기 파일로 검증한다. 실제 대화는 쓰지 않는다."""
 from datetime import date
 
+import pytest
+
 from backend.analysis.kakao import KakaoAnalyzer
+from backend.analysis.kakao_match import apply_url
 from backend.batch import run_kakao
 from backend.collectors.common import InMemoryStore, notice_key
 from backend.collectors.mjc_kakao.adapter import to_raw_notices
@@ -165,3 +168,82 @@ def test_past_kakao_notices_are_not_published_until_then_closed(tmp_path):
     later = run_kakao(raws, store=store, sink=sink, notices=notices, today=date(2026, 11, 21), analyzer=KakaoAnalyzer())
     assert later.held_past == 2
     assert [n["lifecycle_status"] for n in sink.public.values()] == ["closed"]
+
+
+# ---------- 게시판 공고와 짝, 신청 사이트 (D-025) ----------
+
+def board(notice_id: str, title: str, published: str = "2026-10-21") -> dict:
+    return {
+        "notice_id": notice_id, "source_id": "mjc_www_notice", "title": title, "lifecycle_status": "open",
+        "published": {"date": published, "time": None, "timezone": None, "precision": "date", "evidence": published},
+    }
+
+
+def kakao(notices: dict, word: str) -> dict:
+    return next(n for n in notices.values() if n["source_id"] == "mjc_kakao" and word in n["title"])
+
+
+BOARD = {
+    "w1": board("n_crew1", "[혁신] 2026학년도 2학기 Learning C.R.E.W(대면 특강) 실시 안내(1회차_나의강점 발견)"),
+    "w2": board("n_crew2", "[혁신] 2026학년도 2학기 Learning C.R.E.W(대면 특강) 실시 안내(2회차_엑셀활용 with AI)"),
+    "w3": board("n_contest", "[혁신] 2026학년도 2학기 AI Study+ ★AI 활용 경진대회 참가 안내★"),
+    "w4": board("n_workshop", "[혁신] 2026학년도 2학기 AI Study+ 대면 워크숍 실시 안내"),
+    "w5": board("n_old", "[혁신] 2026학년도 2학기 AI Study+ 대면 워크숍 실시 안내", published="2026-08-01"),  # 날짜 창 밖
+    "w6": board("n_skill", "[혁신] 2026학년도 글로벌 스킬업 동아리 실시 안내"),
+}
+LINKED = (
+    HEADER
+    + day("2026년 10월 21일 수요일")
+    + msg("오전 9:00", "[합성 샘플] <나의 강점 발견부터 AI 활용 엑셀까지! Learning C.R.E.W 대면특강 안내>\n"
+          "1회차 나의 강점 발견 / 2회차 엑셀 활용\n신청: 스마트케어시스템(mpu.mjc.ac.kr)\n신청: 11월 20일(금)까지")
+    + msg("오전 10:00", "[합성 샘플] 중간고사 이후, 학습 노하우를 AI 카드뉴스로 만들어 보세요!\n"
+          "1. AI Study+ 대면 워크숍\n2. (AI Study+) AI 활용 경진대회 - 공모전\n신청: 11.20.(금)까지 (https://mpu.mjc.ac.kr)")
+    + msg("오전 11:00", "[합성 샘플] 글로벌 스킬업 동아리 교재 배부 안내\n배부: 11월 20일(금)까지")
+)
+
+
+def test_kakao_same_as_board_notice_is_not_published(tmp_path):
+    raws = to_raw_notices(export_dir(tmp_path, LINKED))
+    store, sink, notices = InMemoryStore(), InMemorySink(), dict(BOARD)
+    report = run_kakao(raws, store=store, sink=sink, notices=notices, today=date(2026, 10, 30), analyzer=KakaoAnalyzer())
+    assert report.duplicates == 1 and report.published == 2
+    crew = kakao(notices, "C.R.E.W")
+    assert crew["notice_id"] not in sink.public
+    assert {r["notice_id"] for r in crew["related_notices"]} == {"n_crew1", "n_crew2"}
+
+    # 여러 프로그램 묶음은 게시하고 관련 학교 공지를 붙인다. 알림톡에만 있는 말('카드뉴스')이 제목에 남아 있다
+    card = sink.public[kakao(notices, "카드뉴스")["notice_id"]]
+    assert [r["notice_id"] for r in card["related_notices"]] == ["n_contest", "n_workshop"]
+    assert card["apply_url"] == "https://mpu.mjc.ac.kr"
+    # '교재 배부'는 '동아리 실시 안내'와 다른 공지: 관련으로만 붙고 게시된다
+    books = sink.public[kakao(notices, "교재 배부")["notice_id"]]
+    assert [r["notice_id"] for r in books["related_notices"]] == ["n_skill"] and books["apply_url"] is None
+    for n in sink.public.values():
+        assert schema_errors("notice", n) == []
+
+
+def test_crew_kakao_published_earlier_is_taken_down(tmp_path):
+    raws = to_raw_notices(export_dir(tmp_path, LINKED))
+    store, sink, notices = InMemoryStore(), InMemorySink(), {}
+    run_kakao(raws, store=store, sink=sink, notices=notices, today=date(2026, 10, 30), analyzer=KakaoAnalyzer())
+    crew_id = kakao(notices, "C.R.E.W")["notice_id"]
+    assert crew_id in sink.public  # 게시판 공고를 아직 모를 때는 게시
+
+    notices.update(BOARD)  # 게시판 배치 뒤 다시 실행
+    report = run_kakao(raws, store=store, sink=sink, notices=notices, today=date(2026, 10, 30), analyzer=KakaoAnalyzer())
+    assert report.duplicates == 1 and crew_id not in sink.public
+    # 원문·분석이 그대로여도 관련 학교 공지가 생기면 다시 게시한다
+    assert sink.public[kakao(notices, "카드뉴스")["notice_id"]]["related_notices"]
+
+
+@pytest.mark.parametrize(
+    ("body", "url"),
+    [
+        ("- 신청방법 : 스마트케어 시스템(mpu.mjc.ac.kr)에서 신청", "https://mpu.mjc.ac.kr"),
+        ("자세한 내용은 교수학습센터(https://ctl.mjc.ac.kr/ctl/main/main_form.acl) 참고", "https://ctl.mjc.ac.kr/ctl/main/main_form.acl"),
+        ("Zoom 회의 참가 https://us06web.zoom.us/j/1234", None),  # 학교 사이트가 아니면 붙이지 않는다
+        ("문의는 교수학습센터로", None),
+    ],
+)
+def test_apply_url_is_first_school_site(body, url):
+    assert apply_url(body) == url

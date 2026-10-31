@@ -148,6 +148,8 @@ class Notice {
     required this.eligibility,
     required this.lastVerifiedAt,
     this.sourceId,
+    this.applyUrl,
+    this.relatedNotices = const [],
   });
 
   final NoticeSummary summary;
@@ -162,6 +164,12 @@ class Notice {
   final Eligibility eligibility;
   final DateTime? lastVerifiedAt;
 
+  /// 알림톡 본문에 적힌 학교 사이트(신청·안내). 게시판 공고는 null (D-025).
+  final String? applyUrl;
+
+  /// 알림톡과 같은 행사를 안내하는 게시판 공고 (D-025).
+  final List<({String noticeId, String title})> relatedNotices;
+
   factory Notice.fromJson(Map<String, dynamic> m) => Notice(
     summary: NoticeSummary.fromJson(m),
     description: m['summary'] as String?,
@@ -170,6 +178,11 @@ class Notice {
     eligibility: Eligibility.fromJson(m['eligibility'] as Map<String, dynamic>),
     lastVerifiedAt: m['last_verified_at'] == null ? null : DateTime.parse(m['last_verified_at'] as String),
     sourceId: m['source_id'] as String?,
+    applyUrl: m['apply_url'] as String?,
+    relatedNotices: [
+      for (final r in (m['related_notices'] as List?) ?? const [])
+        (noticeId: r['notice_id'] as String, title: r['title'] as String),
+    ],
   );
 }
 

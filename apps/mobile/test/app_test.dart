@@ -136,6 +136,18 @@ class OneNoticeRepository extends FailingRepository {
   Future<Notice?> getNotice(String noticeId) async => notice;
 }
 
+class _RecordingRepository extends OneNoticeRepository {
+  _RecordingRepository(super.notice);
+
+  final requested = <String>[];
+
+  @override
+  Future<Notice?> getNotice(String noticeId) async {
+    requested.add(noticeId);
+    return this.notice;
+  }
+}
+
 void main() {
   final today = DateTime(2026, 10, 17);
   final noBriefing = MemoryBriefingStore(alwaysShown: true);
@@ -580,6 +592,60 @@ void main() {
     expect(find.text('학교 공지에서 보기'), findsNothing);
     expect(find.textContaining('원문 확인 시각'), findsNothing); // 알림톡은 재확인 안내 없음
     expect(opened, isEmpty);
+  });
+
+  testWidgets('알림톡 공고: 본문의 신청 사이트 버튼, 관련 학교 공지로 이동 (D-025)', (tester) async {
+    final base = notice();
+    final kakao = Notice(
+      summary: NoticeSummary(
+        noticeId: 'n_kakao',
+        noticeVersion: 1,
+        title: '[합성 샘플] 중간고사 이후 AI 카드뉴스 만들기',
+        category: 'contest',
+        sourceUrl: null,
+        published: null,
+        applicationDeadline: null,
+        deadlineNote: null,
+        lifecycleStatus: 'unknown',
+      ),
+      description: null,
+      applicationStart: null,
+      activityPeriod: null,
+      eligibility: base.eligibility,
+      lastVerifiedAt: null,
+      sourceId: 'mjc_kakao',
+      applyUrl: 'https://mpu.mjc.ac.kr',
+      relatedNotices: const [(noticeId: 'n_board', title: '[합성 샘플] AI 활용 경진대회 참가 안내')],
+    );
+    final repo = _RecordingRepository(kakao);
+    final opened = <Uri>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: gwittimTheme(),
+        home: ReportScreen(
+          repository: repo,
+          noticeId: 'n_kakao',
+          openUrl: (u) async {
+            opened.add(u);
+            return true;
+          },
+          today: today,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('카카오톡 알림톡으로 받은 공지라 원문 링크가 없습니다.'), findsNothing);
+    await tester.tap(find.text('신청 사이트 열기'));
+    await tester.pumpAndSettle();
+    expect(opened.single.toString(), 'https://mpu.mjc.ac.kr');
+
+    await tester.scrollUntilVisible(find.text('[합성 샘플] AI 활용 경진대회 참가 안내'), 200);
+    expect(find.text('관련 학교 공지'), findsOneWidget);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -600)); // 아래 버튼에 가리지 않게 끝까지
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('[합성 샘플] AI 활용 경진대회 참가 안내'));
+    await tester.pumpAndSettle();
+    expect(repo.requested.last, 'n_board');
   });
 
   testWidgets('선착순 공고: 마감 칩 없이 원문 설명, 리포트는 직접 확인과 첨부 안내', (tester) async {
