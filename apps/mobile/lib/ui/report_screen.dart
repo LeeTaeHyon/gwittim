@@ -250,6 +250,18 @@ class _ReportScreenState extends State<ReportScreen> {
     }
   }
 
+  Future<void> _openRelated(String noticeId) => Navigator.of(context).push(
+    gwRoute(
+      context,
+      (_) => ReportScreen(
+        repository: widget.repository,
+        noticeId: noticeId,
+        openUrl: widget.openUrl,
+        today: widget.today,
+      ),
+    ),
+  );
+
   Future<void> _open(String url) async {
     final ok = await widget.openUrl(Uri.parse(url));
     if (!ok && mounted) {
@@ -359,6 +371,7 @@ class _ReportScreenState extends State<ReportScreen> {
               ),
               if (rec != null) _Reasons(recommendation: rec),
               _Schedule(notice: notice, today: today),
+              if (notice.relatedNotices.isNotEmpty) _Related(notices: notice.relatedNotices, onOpen: _openRelated),
             ],
           ),
         ),
@@ -388,6 +401,13 @@ class _ReportScreenState extends State<ReportScreen> {
                       iconAlignment: IconAlignment.end,
                       icon: const Icon(Icons.open_in_new_rounded, size: 18),
                       label: Text(rec?.eligibilityStatus == 'needs_check' ? '학교 공지에서 확인하기' : '학교 공지에서 보기'),
+                    ),
+                    // D-025: 알림톡 본문에 적힌 학교 사이트(스마트케어 등). 사이트는 수집하지 않고 열기만 한다
+                    null when notice.applyUrl != null => FilledButton.icon(
+                      onPressed: () => _open(notice.applyUrl!),
+                      iconAlignment: IconAlignment.end,
+                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                      label: const Text('신청 사이트 열기'),
                     ),
                     // D-019: 알림톡은 열 수 있는 웹 원문이 없다. 받은 카톡 메시지가 원문이다
                     null => Text(
@@ -817,6 +837,49 @@ class _Reasons extends StatelessWidget {
             ].join('\n')),
             style: TextStyle(fontSize: 12.5, height: 1.6, color: context.gw.muted),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 알림톡과 같은 행사의 학교 공지 (D-025). 누르면 그 공고 리포트로 간다.
+class _Related extends StatelessWidget {
+  const _Related({required this.notices, required this.onOpen});
+
+  final List<({String noticeId, String title})> notices;
+  final void Function(String noticeId) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 36, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(padding: EdgeInsets.symmetric(horizontal: 4), child: SectionTitle('관련 학교 공지')),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text('같은 행사를 학교 홈페이지에도 올렸습니다.', style: captionStyle(context)),
+          ),
+          const SizedBox(height: 12),
+          for (final r in notices) ...[
+            GwCard(
+              padding: const EdgeInsets.fromLTRB(18, 14, 12, 14),
+              onTap: () => onOpen(r.noticeId),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(r.title, style: TextStyle(fontSize: 15, height: 1.45, color: c.body)),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: c.muted),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
         ],
       ),
     );
