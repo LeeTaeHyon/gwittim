@@ -36,6 +36,18 @@
     "source_id": { "$ref": "common.schema.json#/$defs/code" },
     "source_url": { "type": ["string", "null"], "format": "uri", "description": "원문 링크. 웹 원문이 없는 출처(카카오톡 알림톡, D-019)는 null." },
     "title": { "type": "string", "minLength": 1 },
+    "apply_url": { "type": ["string", "null"], "format": "uri", "description": "알림톡 본문에 적힌 학교 사이트(신청·안내). 게시판 공고에는 없음. D-025." },
+    "related_notices": {
+      "description": "알림톡과 같은 행사를 안내하는 게시판 공고(최대 3개). 게시판 공고에는 없음. D-025.",
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["notice_id", "title"],
+        "properties": { "notice_id": { "type": "string", "minLength": 1 }, "title": { "type": "string", "minLength": 1 } }
+      }
+    },
     "summary": { "type": ["string", "null"], "description": "검증된 요약. 없으면 null." },
     "category": { "$ref": "common.schema.json#/$defs/code" },
     "interest_tags": { "$ref": "common.schema.json#/$defs/code_list" },
