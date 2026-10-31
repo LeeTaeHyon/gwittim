@@ -41,6 +41,9 @@ SavedEntry saved(
 
 /// 저장 목록만 쓰는 가짜 Repository
 class SavedRepository implements NoticeRepository {
+  @override
+  Future<RecommendationList> searchNotices({String query = '', String? category}) => listRecommendations();
+
   SavedRepository(this.entries);
 
   final List<SavedEntry> entries;

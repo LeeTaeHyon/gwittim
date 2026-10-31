@@ -13,6 +13,9 @@ import 'package:gwittim/ui/theme.dart';
 import 'finders.dart';
 
 class FailingRepository implements NoticeRepository {
+  @override
+  Future<RecommendationList> searchNotices({String query = '', String? category}) => listRecommendations();
+
   int calls = 0;
 
   @override
