@@ -262,7 +262,7 @@ class HomeScreenState extends State<HomeScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   child: Text(
-                    list.personalized ? '맞춤 공고 중 앞으로 2주 안에 마감되는 공고가 없습니다.' : '앞으로 2주 안에 마감되는 공고가 없습니다.',
+                    keepAll(list.personalized ? '맞춤 공고 중 앞으로 2주 안에 마감되는 공고가 없습니다.' : '앞으로 2주 안에 마감되는 공고가 없습니다.'),
                     style: TextStyle(fontSize: 15, color: c.sub),
                   ),
                 ),
@@ -287,7 +287,7 @@ class HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          '마감일이 정해지지 않은 공고 $undated개(선착순 등)는 제외했습니다.',
+                          keepAll('마감일이 정해지지 않은 공고 $undated개(선착순 등)는 제외했습니다.'),
                           style: TextStyle(fontSize: 13, height: 1.5, color: c.muted),
                         ),
                       ),
@@ -415,7 +415,7 @@ class _ProfilePrompt extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '프로필을 입력하면 맞춤 추천을 받을 수 있습니다',
+            keepAll('프로필을 입력하면 맞춤 추천을 받을 수 있습니다'),
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: c.ink),
           ),
           const SizedBox(height: 4),
@@ -584,7 +584,7 @@ class _UpcomingRow extends StatelessWidget {
                 children: [
                   if (majorPick) ...[const MajorPickLabel(), const SizedBox(height: 4)],
                   Text(
-                    n.title,
+                    keepAll(n.title),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body, height: 1.4),
@@ -649,7 +649,7 @@ class _ChangedCard extends StatelessWidget {
                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body),
                     ),
                     Text(
-                      '${entry.notice.title}${now == null ? '' : ' · 이제 ${shortDate(now)}까지'}',
+                      keepAll('${entry.notice.title}${now == null ? '' : ' · 이제 ${shortDate(now)}까지'}'),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: 13, color: c.sub),

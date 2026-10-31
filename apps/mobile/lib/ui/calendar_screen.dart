@@ -235,7 +235,7 @@ class CalendarScreenState extends State<CalendarScreen> {
                   if (day.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      child: Text('이 날 마감되는 공고가 없습니다.', style: TextStyle(fontSize: 15, color: c.sub)),
+                      child: Text(keepAll('이 날 마감되는 공고가 없습니다.'), style: TextStyle(fontSize: 15, color: c.sub)),
                     ),
                   for (final item in day)
                     _DayRow(
@@ -252,7 +252,7 @@ class CalendarScreenState extends State<CalendarScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
               child: Text(
-                '마감일이 정해지지 않은 공고 $_undated개(선착순 등)는 달력에 넣지 않았습니다.',
+                keepAll('마감일이 정해지지 않은 공고 $_undated개(선착순 등)는 달력에 넣지 않았습니다.'),
                 style: TextStyle(fontSize: 13, height: 1.5, color: c.muted),
               ),
             ),
@@ -535,7 +535,7 @@ class _DayRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    n.title,
+                    keepAll(n.title),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body, height: 1.4),

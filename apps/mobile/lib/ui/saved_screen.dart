@@ -265,7 +265,7 @@ class SavedScreenState extends State<SavedScreen> {
                         ),
                     ],
                     const SizedBox(height: 20),
-                    Text('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 갱신됩니다.', style: captionStyle(context)),
+                    Text(keepAll('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 갱신됩니다.'), style: captionStyle(context)),
                   ],
                 ),
               ),
@@ -334,7 +334,7 @@ class _SavedRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    n.title,
+                    keepAll(n.title),
                     style: TextStyle(
                       fontSize: 16,
                       height: 1.45,
