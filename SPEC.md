@@ -217,6 +217,7 @@ notice_id, saved_at, saved_notice_version, saved_deadline_snapshot(저장 당시
 | save_notice | 인증 사용자, notice_id | SavedNotice |
 | delete_saved_notice | 인증 사용자, notice_id | 삭제 결과. 반복 요청 안전 |
 | list_saved_notices | 인증 사용자, cursor | SavedNotice + 최신 공고 상태 |
+| delete_account_data | 인증 사용자 | 삭제 결과. 프로필·저장을 지우고 공개 공고는 유지. 반복 요청 안전 (D-024) |
 
 인증 실패·권한 없음·입력 오류·미존재·일시 장애를 구분한다. 오류 응답은 `{error: {code, message}}`이고 code는 unauthenticated / permission_denied / invalid_argument / not_found / unavailable이다. 목록 응답은 items, next_cursor(불투명 문자열 또는 null), generated_at을 가지며 limit은 최대 50이다. 앱에 스택 추적·비밀키를 반환하지 않는다. 추천 페이지 이동 중 중복·누락을 줄이도록 초기에는 소량 결과를 한 번에 받아 표시해도 된다.
 

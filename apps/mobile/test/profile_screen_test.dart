@@ -295,7 +295,8 @@ void main() {
 
   testWidgets('계정: 로그아웃은 동작하고, 탈퇴는 아직 화면만 있다', (tester) async {
     var signedOut = 0;
-    await openProfile(tester, onSignOut: () async => signedOut++);
+    // 프로필이 없으면 로그인 모드에서 입력 단계가 먼저 뜬다. 계정 칸만 보므로 프로필이 있는 상태로 시작한다.
+    await openProfile(tester, repository: SampleNoticeRepository(), onSignOut: () async => signedOut++);
     await tapIn(tester, profileList(), find.text('탈퇴하기'));
     expect(find.text('탈퇴 기능은 준비 중입니다.'), findsOneWidget);
     expect(find.text('탈퇴하면 프로필과 저장한 공고가 삭제됩니다. 공고 자체는 그대로 남습니다.'), findsOneWidget);
