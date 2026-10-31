@@ -158,6 +158,8 @@ def build_notice(
         "last_verified_at": raw["collected_at"],
         "changed_fields": [],
     }
+    if "apply_url" in fields:  # 알림톡만 (D-025)
+        notice["apply_url"] = fields["apply_url"]
     notice["lifecycle_status"] = "removed" if record.removed else _lifecycle(notice, today)
     if previous:
         notice["changed_fields"] = [

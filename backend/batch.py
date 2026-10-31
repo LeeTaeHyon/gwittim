@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from backend.analysis import build_notice
+from backend.analysis.kakao_match import match_board
 from backend.analysis.rules import Analyzer
 from backend.collectors.common import Outcome, PipelineStore, ingest, record_probe
 from backend.collectors.mjc_www.adapter import Board, collect, http_fetch, probe, view_url
@@ -29,6 +30,7 @@ class BatchReport:
     removed: int = 0
     fetch_errors: list[str] = field(default_factory=list)
     held_past: int = 0  # 알림톡: 이미 끝난 공고라 게시하지 않음
+    duplicates: int = 0  # 알림톡: 게시판 공고와 같은 공고라 게시하지 않음 (D-025)
 
 
 def _publish(notice: dict, issues: list[str], sink: NoticeSink, report: BatchReport) -> None:
@@ -119,6 +121,9 @@ def run_kakao(
 
     대화 내보내기에는 몇 달 치 지난 알림톡이 함께 들어 있다. 끝난 공고(closed, 마감 미상으로 오래된 공고)는
     처음부터 게시하지 않는다. 한 번 게시한 공고는 끝나도 상태를 갱신해 게시한다 (앱에서 마감으로 보이게).
+
+    게시판 공고와 짝을 찾는다 (D-025). notices에 있는 게시판 공고 기준이라 게시판 배치 뒤에 실행한다.
+    같은 공고면 게시하지 않고(이미 게시했으면 내린다), 관련 게시판 공고는 related_notices로 붙인다.
     """
     report = BatchReport()
     for raw in raws:
@@ -129,9 +134,15 @@ def run_kakao(
             continue
         previous = notices.get(result.key)
         notice, issues = build_notice(store.get(result.key), today=today, previous=previous, analyzer=analyzer)
+        related, same = match_board(notice, store.get(result.key).raw["body_text"], notices)
+        notice["related_notices"] = related
         notices[result.key] = notice
         if _past(notice, today) and (previous is None or _past(previous, today)):
             report.held_past += 1
+            continue
+        if same:
+            report.duplicates += 1
+            sink.delete_public(notice["notice_id"])
             continue
         _publish(notice, issues, sink, report)
     return report
