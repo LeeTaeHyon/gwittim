@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gwittim/auth/auth_gate.dart';
 import 'package:gwittim/auth/auth_service.dart';
 import 'package:gwittim/auth/google_sign_in_button.dart';
+import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/ui/briefing_data.dart';
 import 'package:gwittim/ui/profile_screen.dart';
@@ -45,6 +46,22 @@ class FakeAuth implements AuthService {
   Future<void> signOut() async {
     _signedIn = false;
     _state.add(false);
+  }
+
+  /// 탈퇴 때 계정 다시 확인에 응하는지
+  bool reauthenticates = true;
+  Object? deleteFailsWith;
+  int deleteCalls = 0;
+
+  @override
+  Future<bool> deleteAccount(Future<void> Function() deleteData) async {
+    deleteCalls++;
+    if (!reauthenticates) return false;
+    await deleteData();
+    if (deleteFailsWith != null) throw deleteFailsWith!;
+    _signedIn = false;
+    _state.add(false);
+    return true;
   }
 }
 
@@ -99,6 +116,144 @@ void main() {
     await tester.tap(find.text('로그아웃'));
     await settle(tester);
     expect(find.text('Google 계정으로 시작하기'), findsOneWidget);
+  });
+
+  Future<FakeAuth> signIn(WidgetTester tester, NoticeRepository repo, {FakeAuth? auth, BriefingStore? store}) async {
+    auth ??= FakeAuth();
+    await tester.pumpWidget(
+      AuthGate(
+        auth: auth,
+        repositoryFor: (_) => repo,
+        openUrl: (_) async => true,
+        briefingStore: store ?? MemoryBriefingStore(alwaysShown: true),
+      ),
+    );
+    auth.start();
+    await settle(tester);
+    await tester.tap(find.text('Google 계정으로 시작하기'));
+    await settle(tester);
+    return auth;
+  }
+
+  testWidgets('첫 로그인(프로필 없음)이면 안내 화면 → 세 단계 입력, 저장하면 홈으로', (tester) async {
+    final repo = SampleNoticeRepository(personalized: false);
+    await tester.runAsync(repo.preload);
+    await signIn(tester, repo);
+
+    expect(find.byType(ProfileEditScreen), findsOneWidget);
+    expect(find.text('맞춤 공고를 위해\n몇 가지만 묻습니다'), findsOneWidget);
+    expect(findText('성적·학번은 묻지 않습니다'), findsOneWidget);
+    await tester.tap(find.text('시작하기'));
+    await settle(tester);
+    expect(find.text('학적'), findsWidgets);
+    expect(findText('미입력 항목은 지원 조건에 "확인 필요"로 표시됩니다.\n선택한 칸을 다시 누르면 선택이 해제됩니다.'), findsOneWidget);
+
+    // 첫 단계에서 뒤로 가면 안내 화면으로 돌아간다
+    await tester.binding.handlePopRoute();
+    await settle(tester);
+    expect(find.text('시작하기'), findsOneWidget);
+    await tester.tap(find.text('시작하기'));
+    await settle(tester);
+
+    await tester.tap(find.text('다음'));
+    await settle(tester);
+    await tester.tap(find.text('다음'));
+    await settle(tester);
+    await tester.tap(find.text('저장하기'));
+    await settle(tester);
+
+    expect(find.byType(ProfileEditScreen), findsNothing);
+    expect(find.text('프로필이 저장되었습니다.'), findsOneWidget);
+    expect(await repo.getProfile(), isNotNull);
+  });
+
+  testWidgets('안내 화면에서 나중에 입력(또는 뒤로 가기)이면 홈에 남고 다시 띄우지 않는다', (tester) async {
+    final repo = SampleNoticeRepository(personalized: false);
+    await tester.runAsync(repo.preload);
+    await signIn(tester, repo);
+    await tester.tap(find.text('나중에 입력'));
+    await settle(tester);
+    expect(find.byType(ProfileEditScreen), findsNothing);
+    expect(find.text('프로필 입력'), findsOneWidget); // 홈 카드로 다시 열 수 있다
+    expect(await repo.getProfile(), isNull);
+
+    final other = SampleNoticeRepository(personalized: false);
+    await tester.runAsync(other.preload);
+    await signIn(tester, other);
+    await tester.binding.handlePopRoute(); // 안내 화면에서 뒤로 가기 = 저장하지 않고 닫기
+    await settle(tester);
+    expect(find.byType(ProfileEditScreen), findsNothing);
+  });
+
+  testWidgets('프로필이 있거나 읽지 못하면 자동으로 띄우지 않는다', (tester) async {
+    final withProfile = await loaded(tester);
+    await signIn(tester, withProfile);
+    expect(find.byType(ProfileEditScreen), findsNothing);
+
+    final failing = _ProfileFailingRepository();
+    await tester.runAsync(failing.preload);
+    await signIn(tester, failing);
+    expect(find.byType(ProfileEditScreen), findsNothing);
+  });
+
+  Future<void> tapWithdraw(WidgetTester tester) async {
+    await tester.tap(find.byTooltip('내 정보'));
+    await settle(tester);
+    await tester.scrollUntilVisible(
+      find.text('탈퇴하기'),
+      300,
+      scrollable: find.descendant(of: find.byType(ProfileScreen), matching: find.byType(Scrollable)).first,
+    );
+    await settle(tester);
+    await tester.tap(find.text('탈퇴하기'));
+    await settle(tester);
+  }
+
+  testWidgets('탈퇴: 확인 창에서 취소하면 그대로, 탈퇴하면 데이터·기기 답을 지우고 로그인 화면으로 (D-024)', (tester) async {
+    final repo = await loaded(tester);
+    await tester.runAsync(() => repo.saveNotice('n_synthetic_0004'));
+    final store = MemoryBriefingStore(alwaysShown: true);
+    await store.saveMajorPicks(const MajorPickState(decided: {'n_synthetic_0001': false}, declineStreak: 1));
+    final auth = await signIn(tester, repo, store: store);
+
+    await tapWithdraw(tester);
+    expect(find.text('탈퇴하시겠습니까?'), findsOneWidget);
+    await tester.tap(find.text('취소'));
+    await settle(tester);
+    expect(auth.deleteCalls, 0);
+    expect(await repo.getProfile(), isNotNull);
+
+    await tester.tap(find.text('탈퇴하기'));
+    await settle(tester);
+    await tester.tap(find.text('탈퇴'));
+    await settle(tester);
+    expect(auth.deleteCalls, 1);
+    expect(await repo.getProfile(), isNull);
+    expect(await repo.listSaved(), isEmpty);
+    expect((await store.majorPicks()).decided, isEmpty);
+    expect(find.text('Google 계정으로 시작하기'), findsOneWidget);
+  });
+
+  testWidgets('탈퇴: 계정 다시 확인을 취소하면 아무것도 지우지 않는다', (tester) async {
+    final repo = await loaded(tester);
+    final auth = await signIn(tester, repo, auth: FakeAuth()..reauthenticates = false);
+    await tapWithdraw(tester);
+    await tester.tap(find.text('탈퇴'));
+    await settle(tester);
+    expect(auth.deleteCalls, 1);
+    expect(await repo.getProfile(), isNotNull);
+    expect(find.byType(ProfileScreen), findsOneWidget);
+  });
+
+  testWidgets('탈퇴 실패는 상세 없이 안내하고 로그인 상태로 남는다', (tester) async {
+    final repo = await loaded(tester);
+    await signIn(tester, repo, auth: FakeAuth()..deleteFailsWith = Exception('requires-recent-login'));
+    await tapWithdraw(tester);
+    await tester.tap(find.text('탈퇴'));
+    await settle(tester);
+    expect(find.text('탈퇴하지 못했습니다. 잠시 후 다시 시도해 주세요.'), findsOneWidget);
+    expect(find.textContaining('requires-recent-login'), findsNothing);
+    expect(find.byType(ProfileScreen), findsOneWidget);
   });
 
   testWidgets('로그인 화면: 공식 Google 버튼, 성적·학번 안내, 약관 문구, 알림 약속 없음', (tester) async {
@@ -344,4 +499,12 @@ void main() {
       });
     }
   });
+}
+
+/// 프로필 읽기만 실패하는 저장소. 프로필이 없는지 알 수 없으므로 안내하지 않아야 한다.
+class _ProfileFailingRepository extends SampleNoticeRepository {
+  _ProfileFailingRepository() : super(personalized: false);
+
+  @override
+  Future<UserProfile?> getProfile() async => throw const RepositoryException(RepositoryErrorKind.unavailable);
 }

@@ -44,6 +44,7 @@ class HomeScreen extends StatefulWidget {
     required this.briefingStore,
     this.today,
     this.onOpenProfile,
+    this.onSetupProfile,
     this.onShowAll,
   });
 
@@ -54,6 +55,9 @@ class HomeScreen extends StatefulWidget {
   /// 테스트용. 기본은 기기 날짜.
   final DateTime? today;
   final VoidCallback? onOpenProfile;
+
+  /// 서버에 프로필이 없을 때 처음 한 번 부른다 (로그인 모드의 첫 안내). 끝나면 홈을 다시 받는다.
+  final Future<void> Function()? onSetupProfile;
 
   /// '나에게 맞는 공고' 전체 보기 (공고 탭)
   final VoidCallback? onShowAll;
@@ -66,6 +70,10 @@ class HomeScreenState extends State<HomeScreen> {
   HomeData? _data;
   Object? _error;
   bool _briefingChecked = false;
+
+  /// 프로필을 읽었고 없다고 확인된 경우만 true (읽지 못하면 미상으로 보고 안내하지 않는다)
+  bool _profileMissing = false;
+  bool _setupChecked = false;
 
   DateTime get _today => widget.today ?? DateTime.now();
 
@@ -87,8 +95,10 @@ class HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       // 저장 목록을 못 읽어도 추천은 보여준다.
     }
+    _profileMissing = false;
     try {
       profile = await repo.getProfile();
+      _profileMissing = profile == null;
       majors = {for (final m in await repo.dictionary('majors')) m.id: m.name};
     } catch (_) {
       // 프로필 줄만 빠진다.
@@ -111,6 +121,7 @@ class HomeScreenState extends State<HomeScreen> {
         _data = data;
         _error = null;
       });
+      if (_maybeSetupProfile()) return;
       _maybeShowBriefing(data);
     } catch (e) {
       if (!mounted) return;
@@ -157,6 +168,18 @@ class HomeScreenState extends State<HomeScreen> {
       );
     }
     return !next.allows(majorId, _today);
+  }
+
+  /// 프로필이 없으면 브리핑보다 먼저 프로필 입력을 띄운다. 띄웠으면 true.
+  /// 브리핑은 입력을 마치거나 닫은 뒤 다시 받을 때 확인한다.
+  bool _maybeSetupProfile() {
+    final setup = widget.onSetupProfile;
+    if (_setupChecked || !_profileMissing || setup == null) return false;
+    _setupChecked = true;
+    setup().whenComplete(() {
+      if (mounted) reload();
+    });
+    return true;
   }
 
   Future<void> _maybeShowBriefing(HomeData data) async {
