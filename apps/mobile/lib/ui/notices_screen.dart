@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/cached_repository.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 import 'briefing_data.dart';
@@ -34,6 +35,12 @@ class NoticesScreenState extends State<NoticesScreen> {
   void initState() {
     super.initState();
     reload();
+  }
+
+  /// 당겨서 새로 고침: 탭끼리 나눠 쓰는 응답도 버리고 서버에서 다시 받는다.
+  Future<void> refresh() {
+    forgetCached(widget.repository);
+    return reload();
   }
 
   /// 프로필을 저장하거나 당겨서 새로고침할 때. 받는 동안 보이는 목록은 그대로 둔다.
@@ -94,7 +101,7 @@ class NoticesScreenState extends State<NoticesScreen> {
       return const ListSkeleton(header: true);
     }
     return RefreshIndicator(
-      onRefresh: reload,
+      onRefresh: refresh,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [

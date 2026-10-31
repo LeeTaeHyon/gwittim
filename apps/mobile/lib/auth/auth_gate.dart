@@ -42,6 +42,9 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   ThemeController? _ownTheme;
 
+  /// 로그인 한 번에 저장소 하나. 다시 그릴 때마다 새로 만들면 받아 둔 응답(CachedNoticeRepository)을 잃는다.
+  NoticeRepository? _repository;
+
   ThemeController get _theme => widget.themeController ?? (_ownTheme ??= ThemeController());
 
   @override
@@ -62,8 +65,9 @@ class _AuthGateState extends State<AuthGate> {
             home: const Scaffold(body: Center(child: GwLoadingLogo())),
           );
         }
+        if (!snapshot.data!) _repository = null;
         if (snapshot.data!) {
-          final repository = widget.repositoryFor(widget.auth.idToken);
+          final repository = _repository ??= widget.repositoryFor(widget.auth.idToken);
           return GwittimApp(
             repository: repository,
             openUrl: widget.openUrl,
