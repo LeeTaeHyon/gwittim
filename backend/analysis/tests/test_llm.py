@@ -211,3 +211,20 @@ def test_llm_excluded_status_is_not_condition(ollama):
     elig = analyzer(ollama).analyze(raw(body="근로 대상\n" + line), MJC)["eligibility"]
     assert elig["conditions"] == []
     assert [u["evidence"] for u in elig["unresolved_conditions"]] == [line.lstrip("- ")]
+
+def test_counts_llm_use_and_unloads(ollama):
+    ollama.reply = {"summary": None, "deadline": None, "conditions": [], "unresolved": []}
+    a = analyzer(ollama)
+    a.analyze(raw(), MJC)
+    a.analyze(raw(), MJC)
+    assert (a.llm_analyzed, a.llm_failed) == (2, 0)
+    ollama.reply = "error"
+    a.analyze(raw(), MJC)
+    assert a.llm_failed == 1
+    ollama.reply = {}
+    assert a.unload() is True
+    assert ollama.requests[-1] == {"model": "test-model", "keep_alive": 0}
+
+
+def test_unload_ignores_unreachable_server():
+    assert OllamaAnalyzer("m", host="http://127.0.0.1:9", timeout=1).unload() is False

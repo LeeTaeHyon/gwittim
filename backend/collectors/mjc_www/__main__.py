@@ -46,6 +46,8 @@ def main() -> None:
     else:
         sink = InMemorySink()
 
+    started = datetime.now(KST)
+    analyzer = None if args.no_llm else OllamaAnalyzer(args.ollama_model)  # Ollama가 없으면 규칙 분석으로 자동 폴백
     report = run_batch(
         (b for b in BOARDS.values() if b.active),
         store=store,
@@ -54,11 +56,26 @@ def main() -> None:
         today=datetime.now(KST).date(),
         pages=args.pages,
         max_items=args.max_items,
-        analyzer=None if args.no_llm else OllamaAnalyzer(args.ollama_model),  # Ollama가 없으면 규칙 분석으로 자동 폴백
+        analyzer=analyzer,
         delay=args.delay,
     )
     notices_path.write_text(json.dumps(notices, ensure_ascii=False, indent=1), encoding="utf-8")
-    summary = asdict(report)
+    used_llm = bool(analyzer and (analyzer.llm_analyzed or analyzer.llm_failed))
+    unloaded = analyzer.unload() if used_llm else False  # GPU를 바로 비운다
+    finished = datetime.now(KST)
+    summary = {
+        "started_at": started.isoformat(timespec="seconds"),
+        "finished_at": finished.isoformat(timespec="seconds"),
+        "seconds": round((finished - started).total_seconds()),
+        "llm": {
+            "model": None if analyzer is None else analyzer.model,
+            "used": used_llm,
+            "analyzed": 0 if analyzer is None else analyzer.llm_analyzed,
+            "fallback_rule_only": 0 if analyzer is None else analyzer.llm_failed,
+            "unloaded": unloaded,
+        },
+    }
+    summary |= asdict(report)
     summary["fetch_errors"] = len(report.fetch_errors)
     summary["sink"] = f"firestore:{project}" if project else "local"
     print(json.dumps(summary, ensure_ascii=False))
