@@ -198,7 +198,7 @@
 
 ### 실기기 확인 목록
 
-실행 방법: 홈·브리핑·리포트·프로필은 샘플 모드(`flutter run`)로 볼 수 있습니다. 로그인 화면은 dev 서버 모드(`GWITTIM_API_BASE`와 `google-services.json` 필요, `apps/mobile/README.md`)에서만 나옵니다. 브리핑은 하루 첫 실행에만 뜨므로 이미 봤다면 앱 데이터를 지우고 다시 엽니다.
+실행 방법: 홈·브리핑·리포트·프로필은 샘플 모드(`flutter run`)로 볼 수 있습니다. 샘플 모드는 화면 왼쪽 위 '샘플 자료' 띠로 구분합니다(공고도 `[합성 샘플]`). 로그인 화면은 dev 서버 모드(`GWITTIM_API_BASE`와 `google-services.json` 필요, `apps/mobile/README.md`)에서만 나옵니다. 브리핑은 하루 첫 실행에만 뜨므로 이미 봤다면 앱 데이터를 지우고 다시 엽니다.
 
 런처 아이콘
 
