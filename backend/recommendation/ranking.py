@@ -1,6 +1,7 @@
 """추천 목록 생성 (SPEC §6 추천, §7 list_recommendations). 서버 실행 환경과 무관한 순수 함수."""
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from .config import (
@@ -42,12 +43,34 @@ def has_personal_input(profile: dict) -> bool:
     return bool(profile.get("interest_ids") or profile.get("target_role_ids") or profile.get("major_id"))
 
 
-def recommend(notices: list[dict], profile: dict, *, today: date, generated_at: str, limit: int = 20) -> dict:
+def _compact(text: str | None) -> str:
+    return re.sub(r"\s+", "", text or "").lower()
+
+
+def matches(notice: dict, query: str | None = None, category: str | None = None) -> bool:
+    """공고 탭 검색 (D-026): 분류 코드가 같고, 검색어가 제목·요약에 들어 있다. 띄어쓰기·대소문자는 보지 않는다."""
+    if category and notice["category"] != category:
+        return False
+    q = _compact(query)
+    return not q or q in _compact(notice["title"]) or q in _compact(notice["summary"])
+
+
+def recommend(
+    notices: list[dict],
+    profile: dict,
+    *,
+    today: date,
+    generated_at: str,
+    limit: int = 20,
+    query: str | None = None,
+    category: str | None = None,
+) -> dict:
     """list_recommendations 응답을 만든다.
 
     - review_pending, closed, removed, not_met, 행정 공지(admin_notice), 오래된 마감 미상 공고는 기본 추천에서 제외
     - 프로필에 관심사·직무·전공이 없으면 mode=latest: 점수 없이 게시일 내림차순
     - 정렬: 점수 내림차순(점수 없음은 뒤) → 게시일 내림차순(미상은 뒤) → notice_id
+    - query·category가 있으면 그 공고만 (D-026). 제외 규칙과 순서는 같다
     - 초기에는 소량 결과를 한 번에 돌려준다 (next_cursor=None, SPEC §7)
     """
     limit = max(1, min(limit, MAX_LIMIT))
@@ -60,6 +83,7 @@ def recommend(notices: list[dict], profile: dict, *, today: date, generated_at: 
             or notice["publication_status"] in EXCLUDED_PUBLICATION
             or notice["category"] in EXCLUDED_CATEGORIES
             or is_stale(notice, today)
+            or not matches(notice, query, category)
         ):
             continue
         status, condition_results = evaluate(notice["eligibility"], profile)
