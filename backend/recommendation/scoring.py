@@ -17,16 +17,17 @@ def _overlap(profile_codes, notice_codes) -> float | None:
 
 
 def timing_factor(notice: dict, today: date) -> float | None:
-    """마감까지 남은 날짜(날짜 단위 비교). 마감일이 없거나 지났으면 평가 불가.
+    """마감까지 남은 날짜(날짜 단위 비교). 마감일이 없거나 지났으면 0.
 
+    평가 불가로 두면 분모에서 빠져, 마감이 멀리 확인된 공고(0.3·0.6)보다 점수가 높아진다 (D-024).
     today는 호출자가 Asia/Seoul 기준 날짜로 넘긴다. 시각·시간대가 미상이어도 날짜만으로 평가한다.
     """
     deadline = notice["application_deadline"]
     if deadline is None:
-        return None
+        return 0.0
     days = (date.fromisoformat(deadline["date"]) - today).days
     if days < 0:
-        return None
+        return 0.0  # 배치가 끝난 공고로 바꾸기 전 사이에도 위로 오지 않게
     for upper, value in TIMING_BANDS:
         if upper is None or days <= upper:
             return value
