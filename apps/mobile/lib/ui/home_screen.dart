@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/cached_repository.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 import 'briefing_data.dart';
@@ -100,6 +101,12 @@ class HomeScreenState extends State<HomeScreen> {
       // 기기 저장소를 못 쓰면 답하지 않은 상태로 본다.
     }
     return HomeData(list: list, categories: categories, saved: saved, profile: profile, majors: majors, picks: picks);
+  }
+
+  /// 당겨서 새로 고침: 탭끼리 나눠 쓰는 응답도 버리고 서버에서 다시 받는다.
+  Future<void> refresh() {
+    forgetCached(widget.repository);
+    return reload();
   }
 
   /// 프로필 저장·공고 저장 후 다시 받는다. 이미 보이는 내용은 받는 동안 그대로 둔다.
@@ -218,7 +225,7 @@ class HomeScreenState extends State<HomeScreen> {
       }
       return const HomeSkeleton();
     }
-    return RefreshIndicator(onRefresh: reload, child: _body(data));
+    return RefreshIndicator(onRefresh: refresh, child: _body(data));
   }
 
   Widget _body(HomeData data) {
