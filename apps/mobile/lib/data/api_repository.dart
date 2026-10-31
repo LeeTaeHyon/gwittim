@@ -86,9 +86,24 @@ class ApiNoticeRepository implements NoticeRepository {
     }
   }
 
+  /// 서버 최대인 50건을 받는다. 공고 탭·달력·브리핑이 함께 쓴다 (D-026).
+  static const recommendationLimit = 50;
+
   @override
-  Future<RecommendationList> listRecommendations() async =>
-      RecommendationList.fromJson(_json(await _send('GET', 'v1/recommendations')));
+  Future<RecommendationList> listRecommendations() => searchNotices();
+
+  @override
+  Future<RecommendationList> searchNotices({String query = '', String? category}) async {
+    final path = Uri(
+      path: 'v1/recommendations',
+      queryParameters: {
+        'limit': '$recommendationLimit',
+        if (query.trim().isNotEmpty) 'q': query.trim(),
+        'category': ?category,
+      },
+    );
+    return RecommendationList.fromJson(_json(await _send('GET', path.toString())));
+  }
 
   @override
   Future<Notice?> getNotice(String noticeId) => _orNullIfNotFound(

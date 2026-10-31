@@ -39,6 +39,13 @@ class CachedNoticeRepository implements NoticeRepository {
   @override
   Future<RecommendationList> listRecommendations() => _cached('recommendations', _inner.listRecommendations);
 
+  /// 검색은 입력할 때마다 달라서 남기지 않는다. 조건이 없으면 추천 목록과 같다.
+  @override
+  Future<RecommendationList> searchNotices({String query = '', String? category}) =>
+      query.trim().isEmpty && category == null
+      ? listRecommendations()
+      : _inner.searchNotices(query: query, category: category);
+
   @override
   Future<Notice?> getNotice(String noticeId) => _cached('notice:$noticeId', () => _inner.getNotice(noticeId));
 
