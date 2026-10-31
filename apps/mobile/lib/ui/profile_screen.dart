@@ -5,6 +5,7 @@ import '../data/repository.dart';
 import 'app_info.dart';
 import 'common.dart';
 import 'components.dart';
+import 'format.dart';
 import 'logo.dart';
 import 'skeleton.dart';
 import 'theme.dart';
@@ -180,7 +181,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text('시스템 설정을 선택하면 기기 화면 모드를 따릅니다.', style: caption),
+                Text(keepAll('시스템 설정을 선택하면 기기 화면 모드를 따릅니다.'), style: caption),
                 if (widget.onSignOut case final signOut?) ...[
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 20),
@@ -234,7 +235,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Text('탈퇴하면 프로필과 저장한 공고가 삭제됩니다. 공고 자체는 그대로 남습니다.', style: caption),
+                  Text(keepAll('탈퇴하면 프로필과 저장한 공고가 삭제됩니다. 공고 자체는 그대로 남습니다.'), style: caption),
                 ],
                 Padding(
                   padding: const EdgeInsets.only(top: 20, bottom: 4),
@@ -288,7 +289,7 @@ class _SummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            empty ? '학적과 관심 분야를 입력하면 맞춤 추천을 받을 수 있습니다.' : '추천과 지원 조건 비교에 쓰는 정보입니다.',
+            keepAll(empty ? '학적과 관심 분야를 입력하면 맞춤 추천을 받을 수 있습니다.' : '추천과 지원 조건 비교에 쓰는 정보입니다.'),
             style: TextStyle(fontSize: 14, height: 1.5, color: c.sub),
           ),
           if (!empty) ...[
@@ -590,7 +591,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           ],
         ),
         const SizedBox(height: 6),
-        Text(detail, style: caption),
+        Text(keepAll(detail), style: caption),
         const SizedBox(height: 16),
         body,
       ],

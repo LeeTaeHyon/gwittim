@@ -86,7 +86,7 @@ class BriefingScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
               child: Text(
-                '추천 순서는 관심사·희망 직무·전공·학과 통계·마감 시기로 정합니다. 합격 가능성과는 관계없습니다.',
+                keepAll('추천 순서는 관심사·희망 직무·전공·학과 통계·마감 시기로 정합니다. 합격 가능성과는 관계없습니다.'),
                 style: TextStyle(fontSize: 12.5, height: 1.6, color: c.muted),
               ),
             ),
@@ -181,7 +181,7 @@ class _UrgentBubble extends StatelessWidget {
         children: [
           Text('마감 임박', style: _kicker(c).copyWith(color: c.urgent)),
           const SizedBox(height: 6),
-          Text(n.title, style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(keepAll(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
           Text(
             '${due.month}월 ${due.day}일 마감 · ${left == 0 ? '오늘' : 'D-$left'}',
             style: _title(c).copyWith(color: c.urgent),
@@ -253,7 +253,7 @@ class _UrgentBubble extends StatelessWidget {
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.body),
                       ),
                       for (final r in checkReasons(entry.recommendation))
-                        Text(r, style: TextStyle(fontSize: 13.5, height: 1.5, color: c.sub)),
+                        Text(keepAll(r), style: TextStyle(fontSize: 13.5, height: 1.5, color: c.sub)),
                     ],
                   ),
                 ),
@@ -319,14 +319,14 @@ class _MajorPickBubbleState extends State<_MajorPickBubble> {
         children: [
           const MajorPickLabel(),
           const SizedBox(height: 10),
-          Text(n.title, style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(keepAll(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
           Text(
             '${due.month}월 ${due.day}일 마감 · ${left == 0 ? '오늘' : 'D-$left'}',
             style: _title(c).copyWith(color: c.urgent),
           ),
           const SizedBox(height: 6),
           Text(
-            '직접 고른 분야는 아니지만, 같은 학과 졸업생이 많이 가는 분야의 공고입니다.',
+            keepAll('직접 고른 분야는 아니지만, 같은 학과 졸업생이 많이 가는 분야의 공고입니다.'),
             style: TextStyle(fontSize: 14, height: 1.5, color: c.sub),
           ),
           const SizedBox(height: 4),
@@ -338,7 +338,7 @@ class _MajorPickBubbleState extends State<_MajorPickBubble> {
             Divider(height: 1, thickness: 1, color: c.line),
             const SizedBox(height: 14),
             if (_answered case final text?)
-              Text(text, style: TextStyle(fontSize: 14, height: 1.5, color: c.sub))
+              Text(keepAll(text), style: TextStyle(fontSize: 14, height: 1.5, color: c.sub))
             else ...[
               Text(
                 '이런 추천을 계속 받으시겠습니까?',
@@ -464,7 +464,7 @@ class _SavedSoonBubble extends StatelessWidget {
         children: [
           Text('저장한 공고', style: _kicker(c)),
           const SizedBox(height: 6),
-          Text(n.title, style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(keepAll(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
           Text(left == 0 ? '오늘 신청 마감' : '신청 마감 D-$left', style: _title(c).copyWith(color: c.urgent)),
           const SizedBox(height: 6),
           Text(
@@ -585,7 +585,7 @@ class _ChangedBubble extends StatelessWidget {
         children: [
           Text('저장한 공고', style: _kicker(c)),
           const SizedBox(height: 6),
-          Text('${entry.notice.title}\n${deadlineChangeText(entry)}', style: _title(c)),
+          Text(keepAll('${entry.notice.title}\n${deadlineChangeText(entry)}'), style: _title(c)),
           const SizedBox(height: 16),
           Wrap(
             spacing: 8,
