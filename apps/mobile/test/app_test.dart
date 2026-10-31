@@ -167,6 +167,13 @@ void main() {
     });
   });
 
+  testWidgets('샘플 자료로 도는 실행은 왼쪽 위 띠로 표시한다', (tester) async {
+    await tester.pumpWidget(const DataSourceBanner(label: '샘플 자료', child: SizedBox()));
+    final banner = tester.widget<Banner>(find.byType(Banner).first);
+    expect(banner.message, '샘플 자료');
+    expect(banner.location, BannerLocation.topStart);
+  });
+
   group('브리핑 내용', () {
     RecommendationList list(List<RecommendationEntry> items, {bool personalized = true}) =>
         RecommendationList(mode: personalized ? 'personalized' : 'latest', items: items, generatedAt: today);
