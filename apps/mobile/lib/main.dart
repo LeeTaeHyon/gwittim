@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'auth/auth_gate.dart';
 import 'auth/auth_service.dart';
 import 'data/api_repository.dart';
+import 'data/cached_repository.dart';
 import 'data/repository.dart';
 import 'ui/app_info.dart';
 import 'ui/briefing_data.dart';
@@ -43,7 +44,7 @@ Future<void> main() async {
   if (_devToken.isNotEmpty) {
     _run(
       GwittimApp(
-        repository: ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: () async => _devToken),
+        repository: CachedNoticeRepository(ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: () async => _devToken)),
         openUrl: _openExternal,
         themeController: theme,
       ),
@@ -56,7 +57,8 @@ Future<void> main() async {
   _run(
     AuthGate(
       auth: FirebaseAuthService(),
-      repositoryFor: (tokenProvider) => ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: tokenProvider),
+      repositoryFor: (tokenProvider) =>
+          CachedNoticeRepository(ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: tokenProvider)),
       openUrl: _openExternal,
       themeController: theme,
     ),
