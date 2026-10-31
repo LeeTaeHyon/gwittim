@@ -7,7 +7,7 @@ import 'package:gwittim/ui/theme.dart';
 
 import 'finders.dart';
 
-/// 샘플 공고를 [copies]배로 늘린다 (목록이 화면보다 길 때 검색 칸이 숨는지 보려고).
+/// 샘플 공고를 [copies]배로 늘린다 (목록이 화면보다 길 때도 같은지 보려고).
 class LongRepository extends SampleNoticeRepository {
   LongRepository(this.copies);
 
@@ -54,32 +54,39 @@ Future<void> pumpNotices(WidgetTester tester, SampleNoticeRepository repo) async
   await tester.pumpAndSettle();
 }
 
-/// 숨은 검색 칸·칩을 끌어내려 보이게 한다 (새로 고침까지는 당기지 않음).
-Future<void> reveal(WidgetTester tester) async {
-  await tester.drag(findText('나에게 맞는 공고'), const Offset(0, 150));
+/// 머리를 끌어내렸다 놓아 칩으로 바꾼다 (새로 고침까지는 당기지 않음).
+Future<void> pullToChips(WidgetTester tester) async {
+  await tester.drag(findText('나에게 맞는 공고'), const Offset(0, 60));
   await tester.pumpAndSettle();
 }
 
+Finder chip(String label) => find.ancestor(of: findText(label), matching: find.byType(InkWell)).first;
+
 void main() {
-  testWidgets('공고 탭 분류 칩과 검색 (D-026)', (tester) async {
+  testWidgets('끌어내리면 제목 자리에 칩이 나오고, 칩·검색으로 거른다 (D-026)', (tester) async {
     await pumpNotices(tester, SampleNoticeRepository());
     expect(findText('추천순'), findsOneWidget);
     expect(findTextContaining('발표회'), findsOneWidget);
+    expect(chip('전체').hitTestable(), findsNothing); // 처음에는 숨어 있다
 
-    await reveal(tester);
-    await tester.tap(
-      find.ancestor(of: findText('공모전·경진대회'), matching: find.byType(InkWell)).first,
-    ); // 칩 (카드에도 같은 분류 글자가 있음)
+    await pullToChips(tester);
+    expect(chip('전체').hitTestable(), findsOneWidget);
+    expect(findText('나에게 맞는 공고').hitTestable(), findsNothing); // 제목은 사라짐
+
+    // 칩 자리 첫 칸이 칩 (카드에도 같은 분류 글자가 있어 첫 것)
+    await tester.tap(chip('공모전·경진대회'));
     await tester.pumpAndSettle();
-    expect(findText('2건'), findsOneWidget);
+    expect(findText('2건 · 추천순'), findsOneWidget);
     expect(findTextContaining('발표회'), findsNothing);
     expect(findTextContaining('글쓰기 공모전'), findsOneWidget);
 
-    // 분류 + 검색어 (띄어쓰기 무시)
+    // 검색 칩 → 검색 칸 (띄어쓰기 무시)
+    await tester.tap(chip('검색'));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '아이디어경진');
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
-    expect(findText('1건'), findsOneWidget);
+    expect(findText('1건 · 추천순'), findsOneWidget);
     expect(findTextContaining('아이디어 경진대회'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), '없는말');
@@ -87,22 +94,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(findText('찾는 공고가 없습니다'), findsOneWidget);
 
-    // 검색어를 지우고 '전체'를 고르면 처음 목록
-    await tester.tap(find.byTooltip('검색어 지우기'));
-    await tester.tap(findText('전체'));
-    await tester.pump(const Duration(milliseconds: 400));
+    // 검색 닫기 → 칩 줄, '전체' → 처음 목록
+    await tester.tap(find.text('닫기'));
     await tester.pumpAndSettle();
-    expect(findText('추천순'), findsOneWidget);
+    await tester.tap(chip('전체'));
+    await tester.pumpAndSettle();
     expect(findTextContaining('발표회'), findsOneWidget);
+    expect(findTextContaining('건 · 추천순'), findsNothing);
   });
 
-  testWidgets('목록이 길면 검색 칸이 처음엔 숨어 있고, 끌어내리면 나온다', (tester) async {
+  testWidgets('조금만 당겼다 놓으면 제목 그대로, 목록이 길어도 같다', (tester) async {
     await pumpNotices(tester, LongRepository(6));
-    expect(find.byType(TextField).hitTestable(), findsNothing); // 화면 위로 밀려 있음
-    expect(findText('나에게 맞는 공고'), findsOneWidget);
+    expect(chip('전체').hitTestable(), findsNothing);
 
-    await reveal(tester);
-    expect(find.byType(TextField).hitTestable(), findsOneWidget);
-    expect(find.ancestor(of: findText('전체'), matching: find.byType(InkWell)).first.hitTestable(), findsOneWidget);
+    await tester.drag(findText('나에게 맞는 공고'), const Offset(0, 15));
+    await tester.pumpAndSettle();
+    expect(findText('나에게 맞는 공고').hitTestable(), findsOneWidget);
+    expect(chip('전체').hitTestable(), findsNothing);
+
+    await pullToChips(tester);
+    expect(chip('전체').hitTestable(), findsOneWidget);
   });
 }

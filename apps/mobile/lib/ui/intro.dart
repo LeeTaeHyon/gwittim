@@ -48,8 +48,13 @@ class _IntroState extends State<Intro> with SingleTickerProviderStateMixin {
       _done = true;
       return;
     }
-    _controller.forward().whenComplete(() {
-      if (mounted) setState(() => _done = true);
+    // 첫 화면을 다 그린 뒤 시작한다. 뒤의 앱이 첫 화면을 만드는 동안(디버그 빌드는 몇 초) 시계가 먼저 흐르면
+    // 그려지는 프레임 없이 인트로가 끝나 버린다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _controller.forward().whenComplete(() {
+        if (mounted) setState(() => _done = true);
+      });
     });
   }
 

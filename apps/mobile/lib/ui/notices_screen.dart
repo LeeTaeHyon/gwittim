@@ -15,8 +15,8 @@ import 'theme.dart';
 
 /// 공고 탭: 홈의 '나에게 맞는 공고' 전체 목록 (2026-10-25 팀장 결정 Q1 B). 순서는 서버가 정한 추천순 그대로다.
 ///
-/// 맨 위에 검색 칸과 분류 칩을 숨겨 둔다 (D-026). 목록을 조금 끌어내리면 나오고, 더 끌어내리면 새로 고침이다.
-/// 검색어·분류를 고르면 서버가 추천 후보 전체에서 찾는다 (받아 둔 50건 안이 아니라).
+/// 목록을 조금 끌어내리면 머리의 '나에게 맞는 공고' 글자가 사라지며 같은 자리에 검색·분류 칩이 나온다 (D-026).
+/// 더 끌어내리면 새로 고침이다. 검색어·분류를 고르면 서버가 추천 후보 전체에서 찾는다 (받아 둔 50건 안이 아니라).
 class NoticesScreen extends StatefulWidget {
   const NoticesScreen({super.key, required this.repository, required this.openUrl, this.today});
 
@@ -29,6 +29,9 @@ class NoticesScreen extends StatefulWidget {
 }
 
 class NoticesScreenState extends State<NoticesScreen> {
+  /// 머리 위에 숨겨 둔 당김 여유. 이만큼 끌어내리면 칩으로 바뀐다.
+  static const _pull = 56.0;
+
   RecommendationList? _list;
   Map<String, String> _categories = const {};
   Object? _error;
@@ -41,9 +44,12 @@ class NoticesScreenState extends State<NoticesScreen> {
   int _searchSeq = 0;
   Timer? _debounce;
   final _queryField = TextEditingController();
-  final _scroll = ScrollController();
-  final _panelKey = GlobalKey();
-  bool _panelHidden = false;
+  final _queryFocus = FocusNode();
+  late final _scroll = ScrollController(initialScrollOffset: _pull);
+
+  /// 머리가 칩으로 바뀐 상태 / 그중 검색 칸을 연 상태
+  bool _chips = false;
+  bool _typing = false;
 
   DateTime get _today => widget.today ?? DateTime.now();
   bool get _filtering => _query.trim().isNotEmpty || _category != null;
@@ -58,6 +64,7 @@ class NoticesScreenState extends State<NoticesScreen> {
   void dispose() {
     _debounce?.cancel();
     _queryField.dispose();
+    _queryFocus.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -84,7 +91,6 @@ class NoticesScreenState extends State<NoticesScreen> {
         _categories = categories;
         _error = null;
       });
-      _hidePanelOnce();
       if (_filtering) await _search();
     } catch (e) {
       if (!mounted) return;
@@ -96,15 +102,22 @@ class NoticesScreenState extends State<NoticesScreen> {
     }
   }
 
-  /// 처음 목록을 그린 뒤 검색 칸·칩만큼 내려 둔다. 목록이 짧아 내릴 수 없으면 그대로 보인다.
-  void _hidePanelOnce() {
-    if (_panelHidden) return;
-    _panelHidden = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final panel = _panelKey.currentContext?.size?.height;
-      if (panel == null || !_scroll.hasClients || _filtering) return;
-      if (_scroll.position.maxScrollExtent >= panel) _scroll.jumpTo(panel);
-    });
+  /// 끌어내렸다 놓으면: 반 넘게 당겼으면 칩으로 바꾸고, 어느 쪽이든 당김 여유는 다시 숨긴다.
+  /// 칩 상태에서 검색·분류 없이 목록을 한참 내려가면 다시 제목으로 돌려 둔다.
+  bool _onScroll(ScrollNotification n) {
+    if (n.depth != 0 || !_scroll.hasClients) return false;
+    final offset = _scroll.offset;
+    if (n is ScrollEndNotification && offset < _pull) {
+      if (offset < _pull / 2 && !_chips) setState(() => _chips = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients && _scroll.offset < _pull) {
+          _scroll.animateTo(_pull, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+        }
+      });
+    } else if (n is ScrollUpdateNotification && _chips && !_filtering && !_typing && offset > _pull + 400) {
+      setState(() => _chips = false);
+    }
+    return false;
   }
 
   void _onQueryChanged(String value) {
@@ -112,6 +125,21 @@ class NoticesScreenState extends State<NoticesScreen> {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), _search);
     setState(() {});
+  }
+
+  void _openSearch() {
+    setState(() => _typing = true);
+    _queryFocus.requestFocus();
+  }
+
+  void _closeSearch() {
+    _queryField.clear();
+    _queryFocus.unfocus();
+    setState(() {
+      _typing = false;
+      _query = '';
+    });
+    _search();
   }
 
   void _onCategory(String? code) {
@@ -178,152 +206,123 @@ class NoticesScreenState extends State<NoticesScreen> {
     }
     // 검색 결과를 받기 전에는 예전 목록을 그대로 두지 않고 비운다 (다른 조건의 공고가 섞여 보이지 않게).
     final items = !_filtering ? list.items : (_results?.items ?? const <RecommendationEntry>[]);
-    return RefreshIndicator(
-      onRefresh: refresh,
-      child: CustomScrollView(
-        controller: _scroll,
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverToBoxAdapter(
-            child: _SearchPanel(
-              key: _panelKey,
-              controller: _queryField,
-              onChanged: _onQueryChanged,
-              onSubmitted: (_) => _search(),
-              onClear: () {
-                _queryField.clear();
-                _onQueryChanged('');
-              },
-              // 행정 공지는 추천에 나오지 않는다
-              categories: {
-                for (final MapEntry(:key, :value) in _categories.entries)
-                  if (key != 'admin_notice') key: value,
-              },
-              selected: _category,
-              onSelect: _onCategory,
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: ScreenHeader(
-              list.personalized ? '나에게 맞는 공고' : '최신 공고',
-              trailing: !_filtering ? (list.personalized ? '추천순' : '최신순') : (_searching ? '찾는 중' : '${items.length}건'),
-            ),
-          ),
-          if (items.isEmpty && !_searching)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: _filtering
-                  ? const MessageView(title: '찾는 공고가 없습니다', detail: '다른 검색어나 분류로 찾아 보세요.')
-                  : const MessageView(title: '표시할 공고가 없습니다', detail: '학교 공지를 다시 확인하면 여기에 표시됩니다.'),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-              sliver: SliverList.separated(
-                itemCount: items.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
-                itemBuilder: (context, i) {
-                  final e = items[i];
-                  return NoticeCard(
-                    entry: e,
-                    category: _categories[e.notice.category] ?? e.notice.category,
-                    today: _today,
-                    onTap: () => _open(e),
+    final title = list.personalized ? '나에게 맞는 공고' : '최신 공고';
+    return NotificationListener<ScrollNotification>(
+      onNotification: _onScroll,
+      child: RefreshIndicator(
+        onRefresh: refresh,
+        child: CustomScrollView(
+          controller: _scroll,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            const SliverToBoxAdapter(child: SizedBox(height: _pull)),
+            SliverToBoxAdapter(
+              child: AnimatedBuilder(
+                animation: _scroll,
+                builder: (context, _) {
+                  // 당긴 만큼 제목이 흐려지고 칩이 나온다. 칩 상태면 끝까지 칩
+                  final pulled = _scroll.hasClients ? ((_pull - _scroll.offset) / _pull).clamp(0.0, 1.0) : 0.0;
+                  final t = _chips ? 1.0 : pulled;
+                  return SizedBox(
+                    height: 64,
+                    child: Stack(
+                      children: [
+                        IgnorePointer(
+                          ignoring: t > 0.5,
+                          child: Opacity(
+                            opacity: 1 - t,
+                            child: ScreenHeader(title, trailing: list.personalized ? '추천순' : '최신순'),
+                          ),
+                        ),
+                        IgnorePointer(
+                          ignoring: t <= 0.5,
+                          child: Opacity(
+                            opacity: t,
+                            child: _typing
+                                ? _SearchRow(
+                                    controller: _queryField,
+                                    focus: _queryFocus,
+                                    onChanged: _onQueryChanged,
+                                    onSubmitted: (_) => _search(),
+                                    onClose: _closeSearch,
+                                  )
+                                : _ChipRow(
+                                    // 행정 공지는 추천에 나오지 않는다
+                                    categories: {
+                                      for (final MapEntry(:key, :value) in _categories.entries)
+                                        if (key != 'admin_notice') key: value,
+                                    },
+                                    selected: _category,
+                                    query: _query,
+                                    onSearch: _openSearch,
+                                    onSelect: _onCategory,
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
                   );
                 },
               ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 숨겨 둔 검색 칸과 분류 칩 (D-026). 칩은 하나만 고르고, '전체'를 누르면 분류 없이 본다.
-class _SearchPanel extends StatelessWidget {
-  const _SearchPanel({
-    super.key,
-    required this.controller,
-    required this.onChanged,
-    required this.onSubmitted,
-    required this.onClear,
-    required this.categories,
-    required this.selected,
-    required this.onSelect,
-  });
-
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-  final ValueChanged<String> onSubmitted;
-  final VoidCallback onClear;
-  final Map<String, String> categories;
-  final String? selected;
-  final ValueChanged<String?> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gw;
-    return Padding(
-      padding: const EdgeInsets.only(top: 12, bottom: 4),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              controller: controller,
-              onChanged: onChanged,
-              onSubmitted: onSubmitted,
-              textInputAction: TextInputAction.search,
-              style: TextStyle(fontSize: 15, color: c.ink),
-              decoration: InputDecoration(
-                hintText: '공고 제목·내용 검색',
-                hintStyle: TextStyle(fontSize: 15, color: c.muted),
-                prefixIcon: Icon(Icons.search_rounded, color: c.muted),
-                suffixIcon: controller.text.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: '검색어 지우기',
-                        icon: Icon(Icons.close_rounded, color: c.muted),
-                        onPressed: onClear,
-                      ),
-                filled: true,
-                fillColor: c.card, // 탭 바탕이 neutral이라 카드 색으로 띄운다
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+            if (_filtering)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
+                  child: Text(_searching ? '찾는 중' : '${items.length}건 · 추천순', style: captionStyle(context)),
+                ),
               ),
+            if (items.isEmpty && !_searching)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: _filtering
+                    ? const MessageView(title: '찾는 공고가 없습니다', detail: '다른 검색어나 분류로 찾아 보세요.')
+                    : const MessageView(title: '표시할 공고가 없습니다', detail: '학교 공지를 다시 확인하면 여기에 표시됩니다.'),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                sliver: SliverList.separated(
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (context, i) {
+                    final e = items[i];
+                    return NoticeCard(
+                      entry: e,
+                      category: _categories[e.notice.category] ?? e.notice.category,
+                      today: _today,
+                      onTap: () => _open(e),
+                    );
+                  },
+                ),
+              ),
+            // 목록이 짧아도 당김 여유를 숨길 수 있게 화면 높이만큼은 늘 내려갈 수 있다.
+            SliverLayoutBuilder(
+              builder: (context, constraints) {
+                final rest = constraints.viewportMainAxisExtent + _pull - constraints.precedingScrollExtent;
+                return SliverToBoxAdapter(child: SizedBox(height: rest > 0 ? rest : 0));
+              },
             ),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                _CategoryChip(label: '전체', on: selected == null, onTap: () => onSelect(null)),
-                for (final MapEntry(:key, :value) in categories.entries)
-                  _CategoryChip(label: value, on: selected == key, onTap: () => onSelect(key)),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-/// 하나 고르는 칩: 고르면 `cta` 면 + `onCta` 글자 (ui-style §5 세그먼트와 같은 표시)
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({required this.label, required this.on, required this.onTap});
+/// 카드 모양 칩 (D-026): 공고 카드처럼 `card` 바탕의 둥근 사각형. 고르면 `cta` 면 + `onCta` 글자
+class _CardChip extends StatelessWidget {
+  const _CardChip({required this.label, required this.on, required this.onTap, this.icon});
 
   final String label;
   final bool on;
   final VoidCallback onTap;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
+    final color = on ? c.onCta : c.body;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: Semantics(
@@ -331,22 +330,114 @@ class _CategoryChip extends StatelessWidget {
         selected: on,
         child: Material(
           color: on ? c.cta : c.card,
-          shape: StadiumBorder(side: BorderSide(color: on ? c.cta : c.line, width: 1.5)),
+          borderRadius: BorderRadius.circular(12),
           child: InkWell(
-            customBorder: const StadiumBorder(),
+            borderRadius: BorderRadius.circular(12),
             onTap: onTap,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Center(
-                widthFactor: 1,
-                child: Text(
-                  label,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: on ? c.onCta : c.body),
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[Icon(icon, size: 18, color: color), const SizedBox(width: 6)],
+                  Text(
+                    label,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color),
+                  ),
+                ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 머리 자리의 칩 줄: 검색 + 전체 + 분류. 옆으로 넘긴다.
+class _ChipRow extends StatelessWidget {
+  const _ChipRow({
+    required this.categories,
+    required this.selected,
+    required this.query,
+    required this.onSearch,
+    required this.onSelect,
+  });
+
+  final Map<String, String> categories;
+  final String? selected;
+  final String query;
+  final VoidCallback onSearch;
+  final ValueChanged<String?> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          _CardChip(
+            label: query.trim().isEmpty ? '검색' : query.trim(),
+            icon: Icons.search_rounded,
+            on: query.trim().isNotEmpty,
+            onTap: onSearch,
+          ),
+          _CardChip(label: '전체', on: selected == null, onTap: () => onSelect(null)),
+          for (final MapEntry(:key, :value) in categories.entries)
+            _CardChip(label: value, on: selected == key, onTap: () => onSelect(key)),
+        ],
+      ),
+    );
+  }
+}
+
+/// 검색 칩을 누르면 칩 줄 자리에 뜨는 검색 칸. 닫으면 검색어를 지우고 칩 줄로 돌아간다.
+class _SearchRow extends StatelessWidget {
+  const _SearchRow({
+    required this.controller,
+    required this.focus,
+    required this.onChanged,
+    required this.onSubmitted,
+    required this.onClose,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focus;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<String> onSubmitted;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              focusNode: focus,
+              onChanged: onChanged,
+              onSubmitted: onSubmitted,
+              textInputAction: TextInputAction.search,
+              style: TextStyle(fontSize: 15, color: c.ink),
+              decoration: InputDecoration(
+                hintText: '공고 제목·내용 검색',
+                hintStyle: TextStyle(fontSize: 15, color: c.muted),
+                prefixIcon: Icon(Icons.search_rounded, size: 20, color: c.muted),
+                filled: true,
+                fillColor: c.card,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+          TextButton(onPressed: onClose, child: const Text('닫기')),
+        ],
       ),
     );
   }
