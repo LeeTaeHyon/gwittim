@@ -123,6 +123,7 @@ class GwittimApp extends StatefulWidget {
     required this.openUrl,
     this.today,
     this.onSignOut,
+    this.onDeleteAccount,
     this.briefingStore,
     this.themeController,
   });
@@ -133,6 +134,9 @@ class GwittimApp extends StatefulWidget {
 
   /// 로그인 모드일 때만 있다.
   final Future<void> Function()? onSignOut;
+
+  /// 탈퇴 (D-024). 로그인 모드일 때만 있다. 계정 확인을 취소하면 false.
+  final Future<bool> Function()? onDeleteAccount;
 
   /// 하루 첫 실행 기록. 기본은 기기 저장소 (D-009).
   final BriefingStore? briefingStore;
@@ -165,6 +169,7 @@ class _GwittimAppState extends State<GwittimApp> {
         openUrl: widget.openUrl,
         today: widget.today,
         onSignOut: widget.onSignOut,
+        onDeleteAccount: widget.onDeleteAccount,
         briefingStore: _briefingStore,
         themeController: _theme,
       ),
@@ -181,9 +186,11 @@ class HomeShell extends StatefulWidget {
     required this.themeController,
     this.today,
     this.onSignOut,
+    this.onDeleteAccount,
   });
 
   final Future<void> Function()? onSignOut;
+  final Future<bool> Function()? onDeleteAccount;
   final NoticeRepository repository;
   final OpenUrl openUrl;
   final BriefingStore briefingStore;
@@ -245,9 +252,35 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
             _calendarKey.currentState?.reload();
           },
           onSignOut: widget.onSignOut,
+          onDeleteAccount: widget.onDeleteAccount == null ? null : _deleteAccount,
         ),
       ),
     );
+  }
+
+  /// 탈퇴하면 기기에 남은 학과 통계 추천 답(D-021)도 지운다.
+  Future<bool> _deleteAccount() async {
+    final store = widget.briefingStore;
+    final done = await widget.onDeleteAccount!();
+    if (done) {
+      try {
+        await store.saveMajorPicks(const MajorPickState());
+      } catch (_) {
+        // 기기 저장소를 못 쓰면 남는다. 서버 데이터·계정 삭제는 이미 끝났다.
+      }
+    }
+    return done;
+  }
+
+  /// 첫 로그인 등으로 프로필이 없으면 홈이 한 번 부른다. 홈은 끝난 뒤 스스로 다시 받는다.
+  Future<void> _setupProfile() async {
+    final saved = await openProfileSetup(context, widget.repository);
+    if (saved == null || !mounted) return;
+    _noticesKey.currentState?.reload();
+    _calendarKey.currentState?.reload();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('프로필이 저장되었습니다.')));
   }
 
   /// 탭 화면 하나. 위젯 구조는 늘 같게 두어 화면 상태가 유지된다.
@@ -293,6 +326,8 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                   briefingStore: widget.briefingStore,
                   today: widget.today,
                   onOpenProfile: _openProfile,
+                  // 샘플·개발 토큰 모드에서는 자동으로 띄우지 않는다.
+                  onSetupProfile: widget.onSignOut == null ? null : _setupProfile,
                   onShowAll: () => _select(1),
                 ),
               ),

@@ -63,10 +63,12 @@ class _AuthGateState extends State<AuthGate> {
           );
         }
         if (snapshot.data!) {
+          final repository = widget.repositoryFor(widget.auth.idToken);
           return GwittimApp(
-            repository: widget.repositoryFor(widget.auth.idToken),
+            repository: repository,
             openUrl: widget.openUrl,
             onSignOut: widget.auth.signOut,
+            onDeleteAccount: () => widget.auth.deleteAccount(repository.deleteAccountData),
             briefingStore: widget.briefingStore,
             themeController: _theme,
           );

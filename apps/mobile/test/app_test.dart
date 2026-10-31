@@ -34,6 +34,9 @@ class FailingRepository implements NoticeRepository {
   Future<void> updateProfile(UserProfile profile) async {}
 
   @override
+  Future<void> deleteAccountData() async {}
+
+  @override
   Future<List<DictionaryItem>> dictionary(String name) async => [];
 
   @override
