@@ -219,6 +219,9 @@ class NoticesScreenState extends State<NoticesScreen> {
       onNotification: _onScroll,
       child: RefreshIndicator(
         onRefresh: refresh,
+        // 쉬는 위치가 당김 여유(_pull)만큼 내려가 있어 맨 위에서 시작하는 당김이 없다.
+        // 기본(onEdge)은 맨 위에서 시작한 당김만 받으므로, 당기다 맨 위를 넘으면 받게 한다.
+        triggerMode: RefreshIndicatorTriggerMode.anywhere,
         child: CustomScrollView(
           controller: _scroll,
           physics: const AlwaysScrollableScrollPhysics(),

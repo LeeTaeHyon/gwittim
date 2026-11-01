@@ -7,6 +7,17 @@ import 'package:gwittim/ui/theme.dart';
 
 import 'finders.dart';
 
+/// 추천 목록 요청 횟수를 센다 (새로 고침이 실제로 다시 받는지).
+class CountingRepository extends SampleNoticeRepository {
+  int lists = 0;
+
+  @override
+  Future<RecommendationList> listRecommendations() {
+    lists++;
+    return super.listRecommendations();
+  }
+}
+
 /// 샘플 공고를 [copies]배로 늘린다 (목록이 화면보다 길 때도 같은지 보려고).
 class LongRepository extends SampleNoticeRepository {
   LongRepository(this.copies);
@@ -103,10 +114,13 @@ void main() {
     expect(findTextContaining('건 · 추천순'), findsNothing);
   });
 
-  testWidgets('새로 고침까지 당기면 칩이 남지 않는다, 거르는 중이면 남는다', (tester) async {
-    await pumpNotices(tester, SampleNoticeRepository());
+  testWidgets('쉬는 위치에서 한 번 당겨도 새로 고침되고, 칩은 남지 않는다. 거르는 중이면 남는다', (tester) async {
+    final repo = CountingRepository();
+    await pumpNotices(tester, repo);
+    final before = repo.lists;
     await tester.fling(findText('나에게 맞는 공고'), const Offset(0, 400), 1000); // 새로 고침
     await tester.pumpAndSettle();
+    expect(repo.lists, before + 1);
     expect(findText('나에게 맞는 공고').hitTestable(), findsOneWidget);
     expect(chip('전체').hitTestable(), findsNothing);
 
