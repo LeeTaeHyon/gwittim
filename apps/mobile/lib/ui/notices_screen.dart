@@ -400,11 +400,11 @@ class NoticeCard extends StatelessWidget {
     final left = daysLeft(n, today);
     final soon = left != null && left <= urgentDays;
     final status = r.eligibilityStatus;
-    // 리포트 체크리스트 배지와 같은 색: 충족 `point`(라이트 네이비·다크 라임), 확인 필요 주황, 미충족 빨강 (2026-11-01 팀장 요청)
+    // 리포트 체크리스트 배지와 같은 연한 칩: 충족 네이비, 확인 필요 주황, 미충족 빨강 (2026-11-01 팀장 요청)
     final chip = soon
         ? ddayPill(n, today)
         : switch (status) {
-            'met' => const Pill('조건 충족', tone: PillTone.point),
+            'met' => const Pill('조건 충족'),
             'not_met' => const Pill('조건 미충족', tone: PillTone.urgent),
             _ => const Pill('확인 필요', tone: PillTone.check),
           };
