@@ -450,7 +450,7 @@ class NoticeCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            n.title,
+            keepAll(n.title),
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: c.ink, height: 1.45),
           ),
           if (reason.isNotEmpty || (soon && status != 'met')) ...[

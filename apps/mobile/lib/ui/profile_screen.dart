@@ -122,7 +122,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // 상세 오류는 화면에 보여주지 않는다 (SPEC §10)
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('탈퇴하지 못했습니다. 잠시 후 다시 시도해 주세요.')));
+        ..showSnackBar(SnackBar(content: Text(keepAll('탈퇴하지 못했습니다. 잠시 후 다시 시도해 주세요.'))));
     } finally {
       if (mounted) setState(() => _withdrawing = false);
     }
@@ -141,8 +141,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.ink),
         ),
         content: Text(
-          '프로필과 저장한 공고가 삭제되고 되돌릴 수 없습니다. 공고 자체는 그대로 남습니다.\n\n'
-          '계속하면 Google 계정을 한 번 더 확인합니다.',
+          keepAll(
+            '프로필과 저장한 공고가 삭제되고 되돌릴 수 없습니다. 공고 자체는 그대로 남습니다.\n\n'
+            '계속하면 Google 계정을 한 번 더 확인합니다.',
+          ),
           style: TextStyle(fontSize: 15, height: 1.5, color: c.body),
         ),
         actions: [
