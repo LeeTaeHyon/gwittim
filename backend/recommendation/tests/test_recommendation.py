@@ -78,7 +78,7 @@ def test_unresolved_condition_keeps_needs_check_even_if_all_met(notices, profile
 
 @pytest.mark.parametrize(
     ("deadline", "expected"),
-    [("2026-10-17", 1.0), ("2026-10-31", 1.0), ("2026-11-01", 0.6), ("2026-11-16", 0.6), ("2026-11-17", 0.3), ("2026-10-16", None)],
+    [("2026-10-17", 1.0), ("2026-10-31", 1.0), ("2026-11-01", 0.6), ("2026-11-16", 0.6), ("2026-11-17", 0.3), ("2026-10-16", 0.0)],
 )
 def test_timing_bands(notices, deadline, expected):
     n = copy.deepcopy(notices[0])
@@ -86,8 +86,19 @@ def test_timing_bands(notices, deadline, expected):
     assert timing_factor(n, TODAY) == expected
 
 
-def test_no_deadline_is_not_evaluable(notices):
-    assert timing_factor(notices[1], TODAY) is None  # 선착순, deadline_note만 있음
+def test_no_deadline_scores_zero(notices):
+    assert timing_factor(notices[1], TODAY) == 0.0  # 선착순, deadline_note만 있음
+
+
+def test_dated_notice_ranks_above_same_undated_notice(notices, profile):
+    """관심도가 같으면 마감이 멀어도(시기 0.3) 마감일 없는 공고보다 앞선다 (D-027)."""
+    far = copy.deepcopy(notices[3])
+    far["notice_id"], far["application_deadline"]["date"] = "n_far", "2026-12-31"
+    undated = copy.deepcopy(notices[3])
+    undated["notice_id"], undated["application_deadline"], undated["lifecycle_status"] = "n_undated", None, "unknown"
+    undated["published"] = {**undated["published"], "date": "2026-10-16"}  # 더 최근 게시여도
+    out = recommend([undated, far], profile, today=TODAY, generated_at=NOW)
+    assert [i["recommendation"]["notice_id"] for i in out["items"]] == ["n_far", "n_undated"]
 
 
 def test_unevaluable_factors_leave_denominator(notices, profile):

@@ -8,6 +8,8 @@ import 'package:gwittim/ui/calendar_screen.dart';
 import 'package:gwittim/ui/icons.dart';
 import 'package:gwittim/ui/report_screen.dart';
 
+import 'finders.dart';
+
 final today = DateTime(2026, 10, 17);
 const projectTitle = '[합성 샘플] 컴퓨터공학과 프로젝트 발표회 참가자 모집';
 
@@ -115,13 +117,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('day-10-30')));
     await tester.pumpAndSettle();
     expect(find.text('10월 30일(금) 마감'), findsOneWidget);
-    expect(find.text(projectTitle), findsOneWidget);
+    expect(findText(projectTitle), findsOneWidget);
     expect(find.text('D-13 · 17:00 마감 · 행사'), findsOneWidget);
 
     await tester.tap(find.byTooltip('다음 달'));
     await tester.pumpAndSettle();
     expect(find.text('2026년 11월'), findsOneWidget);
-    expect(find.text(projectTitle), findsNothing);
+    expect(findText(projectTitle), findsNothing);
     expect(todayShown(), isTrue);
     await tester.tap(todayButton);
     await tester.pumpAndSettle();
@@ -131,7 +133,7 @@ void main() {
     // 공고를 누르면 리포트, 판정을 함께 넘긴다
     await tester.tap(find.byKey(const ValueKey('day-10-30')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(projectTitle));
+    await tester.tap(findText(projectTitle));
     await tester.pumpAndSettle();
     expect(find.byType(ReportScreen), findsOneWidget);
     expect(find.text('조건 충족'), findsOneWidget);

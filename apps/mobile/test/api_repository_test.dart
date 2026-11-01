@@ -147,6 +147,21 @@ void main() {
     expect(sent.containsKey('updated_at'), isFalse); // 서버가 정함
   });
 
+  test('탈퇴는 DELETE /v1/profile, 본문 없이 토큰만 보낸다 (D-024)', () async {
+    final sent = <http.Request>[];
+    final r = repo(
+      client: MockClient((req) async {
+        sent.add(req);
+        return http.Response('', 204);
+      }),
+    );
+    await r.deleteAccountData();
+    expect(sent.single.method, 'DELETE');
+    expect(sent.single.url.path, '/v1/profile');
+    expect(sent.single.headers['Authorization'], 'Bearer good');
+    expect(sent.single.body, isEmpty);
+  });
+
   test('저장 목록·저장·취소', () async {
     final r = repo();
     final saved = await r.listSaved();

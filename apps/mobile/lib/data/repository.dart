@@ -9,6 +9,9 @@ import 'models.dart';
 abstract class NoticeRepository {
   Future<RecommendationList> listRecommendations();
 
+  /// 공고 탭 검색·분류 칩 (D-026). 추천 후보 전체에서 제목·요약에 [query]가 든 공고, [category] 분류만. 순서는 추천순
+  Future<RecommendationList> searchNotices({String query = '', String? category});
+
   /// 공개된 공고가 없으면 null (not_found)
   Future<Notice?> getNotice(String noticeId);
 
@@ -18,6 +21,9 @@ abstract class NoticeRepository {
   /// 프로필이 아직 없으면 null
   Future<UserProfile?> getProfile();
   Future<void> updateProfile(UserProfile profile);
+
+  /// 탈퇴: 서버의 프로필·저장을 지운다. 공개 공고는 남는다. 반복 요청 안전 (D-024)
+  Future<void> deleteAccountData();
 
   /// 프로필 입력 선택지: 'majors' / 'interests' / 'roles'
   Future<List<DictionaryItem>> dictionary(String name);
@@ -157,11 +163,34 @@ class SampleNoticeRepository implements NoticeRepository {
   }
 
   @override
+  Future<void> deleteAccountData() async {
+    _profile = Future<UserProfile?>.value(null);
+    _saved.clear();
+  }
+
+  @override
   Future<RecommendationList> listRecommendations() async {
     final profile = await getProfile();
     final usePersonal = profile != null && profile.hasPersonalInput;
     return RecommendationList.fromJson(
       await _json(usePersonal ? 'recommendations_personalized.json' : 'recommendations_latest.json'),
+    );
+  }
+
+  /// 샘플은 미리 계산한 추천 목록에서 제목과 분류로만 거른다.
+  @override
+  Future<RecommendationList> searchNotices({String query = '', String? category}) async {
+    final list = await listRecommendations();
+    final q = query.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    return RecommendationList(
+      mode: list.mode,
+      generatedAt: list.generatedAt,
+      items: [
+        for (final e in list.items)
+          if ((category == null || e.notice.category == category) &&
+              (q.isEmpty || e.notice.title.replaceAll(RegExp(r'\s+'), '').toLowerCase().contains(q)))
+            e,
+      ],
     );
   }
 

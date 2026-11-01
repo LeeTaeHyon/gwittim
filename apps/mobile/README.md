@@ -25,7 +25,7 @@ flutter run --dart-define=GWITTIM_API_BASE=http://10.0.2.2:8765/ --dart-define=G
 GWITTIM_LIVE_API=http://127.0.0.1:8765/ flutter test test/api_live_test.dart
 ```
 
-`GWITTIM_API_BASE`를 비우면 합성 샘플로 동작합니다. 실제 로그인(Firebase Auth ID 토큰)은 Firebase 프로젝트 생성 후 `tokenProvider`만 바꿉니다.
+`GWITTIM_API_BASE`를 비우면 합성 샘플로 동작합니다. 이때 화면 왼쪽 위에 '샘플 자료' 띠가, 개발용 토큰으로 로컬 API를 부를 때는 '로컬 서버' 띠가 붙습니다. dev 서버로 도는 빌드에는 띠가 없습니다. 실제 로그인(Firebase Auth ID 토큰)은 Firebase 프로젝트 생성 후 `tokenProvider`만 바꿉니다.
 
 ## dev 서버 + Google 로그인으로 실행 (gwittim-dev)
 

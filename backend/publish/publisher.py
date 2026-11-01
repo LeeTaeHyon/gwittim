@@ -81,4 +81,5 @@ def publish(notice: dict, issues: list[str], sink: NoticeSink) -> PublishOutcome
 
 def _same(a: dict, b: dict) -> bool:
     keys = ("notice_version", "analysis_version", "lifecycle_status")
-    return all(a[k] == b[k] for k in keys)
+    # 알림톡의 관련 학교 공지는 원문·분석이 그대로여도 게시판 공고가 늘면 바뀐다 (D-025)
+    return all(a[k] == b[k] for k in keys) and a.get("related_notices") == b.get("related_notices")

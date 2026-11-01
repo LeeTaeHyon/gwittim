@@ -196,7 +196,7 @@ class TipBubble extends StatelessWidget {
                     ),
                     if (detail != null) ...[
                       const SizedBox(height: 6),
-                      Text(detail!, style: TextStyle(fontSize: 13, height: 1.55, color: c.sub)),
+                      Text(keepAll(detail!), style: TextStyle(fontSize: 13, height: 1.55, color: c.sub)),
                     ],
                   ],
                 ),

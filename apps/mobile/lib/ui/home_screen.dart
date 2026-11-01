@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/cached_repository.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 import 'briefing_data.dart';
@@ -44,6 +45,7 @@ class HomeScreen extends StatefulWidget {
     required this.briefingStore,
     this.today,
     this.onOpenProfile,
+    this.onSetupProfile,
     this.onShowAll,
   });
 
@@ -54,6 +56,9 @@ class HomeScreen extends StatefulWidget {
   /// 테스트용. 기본은 기기 날짜.
   final DateTime? today;
   final VoidCallback? onOpenProfile;
+
+  /// 서버에 프로필이 없을 때 처음 한 번 부른다 (로그인 모드의 첫 안내). 끝나면 홈을 다시 받는다.
+  final Future<void> Function()? onSetupProfile;
 
   /// '나에게 맞는 공고' 전체 보기 (공고 탭)
   final VoidCallback? onShowAll;
@@ -66,6 +71,10 @@ class HomeScreenState extends State<HomeScreen> {
   HomeData? _data;
   Object? _error;
   bool _briefingChecked = false;
+
+  /// 프로필을 읽었고 없다고 확인된 경우만 true (읽지 못하면 미상으로 보고 안내하지 않는다)
+  bool _profileMissing = false;
+  bool _setupChecked = false;
 
   DateTime get _today => widget.today ?? DateTime.now();
 
@@ -87,8 +96,10 @@ class HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       // 저장 목록을 못 읽어도 추천은 보여준다.
     }
+    _profileMissing = false;
     try {
       profile = await repo.getProfile();
+      _profileMissing = profile == null;
       majors = {for (final m in await repo.dictionary('majors')) m.id: m.name};
     } catch (_) {
       // 프로필 줄만 빠진다.
@@ -102,6 +113,12 @@ class HomeScreenState extends State<HomeScreen> {
     return HomeData(list: list, categories: categories, saved: saved, profile: profile, majors: majors, picks: picks);
   }
 
+  /// 당겨서 새로 고침: 탭끼리 나눠 쓰는 응답도 버리고 서버에서 다시 받는다.
+  Future<void> refresh() {
+    forgetCached(widget.repository);
+    return reload();
+  }
+
   /// 프로필 저장·공고 저장 후 다시 받는다. 이미 보이는 내용은 받는 동안 그대로 둔다.
   Future<void> reload() async {
     try {
@@ -111,6 +128,7 @@ class HomeScreenState extends State<HomeScreen> {
         _data = data;
         _error = null;
       });
+      if (_maybeSetupProfile()) return;
       _maybeShowBriefing(data);
     } catch (e) {
       if (!mounted) return;
@@ -157,6 +175,18 @@ class HomeScreenState extends State<HomeScreen> {
       );
     }
     return !next.allows(majorId, _today);
+  }
+
+  /// 프로필이 없으면 브리핑보다 먼저 프로필 입력을 띄운다. 띄웠으면 true.
+  /// 브리핑은 입력을 마치거나 닫은 뒤 다시 받을 때 확인한다.
+  bool _maybeSetupProfile() {
+    final setup = widget.onSetupProfile;
+    if (_setupChecked || !_profileMissing || setup == null) return false;
+    _setupChecked = true;
+    setup().whenComplete(() {
+      if (mounted) reload();
+    });
+    return true;
   }
 
   Future<void> _maybeShowBriefing(HomeData data) async {
@@ -218,7 +248,7 @@ class HomeScreenState extends State<HomeScreen> {
       }
       return const HomeSkeleton();
     }
-    return RefreshIndicator(onRefresh: reload, child: _body(data));
+    return RefreshIndicator(onRefresh: refresh, child: _body(data));
   }
 
   Widget _body(HomeData data) {
@@ -262,7 +292,7 @@ class HomeScreenState extends State<HomeScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   child: Text(
-                    list.personalized ? '맞춤 공고 중 앞으로 2주 안에 마감되는 공고가 없습니다.' : '앞으로 2주 안에 마감되는 공고가 없습니다.',
+                    keepAll(list.personalized ? '맞춤 공고 중 앞으로 2주 안에 마감되는 공고가 없습니다.' : '앞으로 2주 안에 마감되는 공고가 없습니다.'),
                     style: TextStyle(fontSize: 15, color: c.sub),
                   ),
                 ),
@@ -287,7 +317,7 @@ class HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          '마감일이 정해지지 않은 공고 $undated개(선착순 등)는 제외했습니다.',
+                          keepAll('마감일이 정해지지 않은 공고 $undated개(선착순 등)는 제외했습니다.'),
                           style: TextStyle(fontSize: 13, height: 1.5, color: c.muted),
                         ),
                       ),
@@ -415,7 +445,7 @@ class _ProfilePrompt extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '프로필을 입력하면 맞춤 추천을 받을 수 있습니다',
+            keepAll('프로필을 입력하면 맞춤 추천을 받을 수 있습니다'),
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: c.ink),
           ),
           const SizedBox(height: 4),
@@ -584,7 +614,7 @@ class _UpcomingRow extends StatelessWidget {
                 children: [
                   if (majorPick) ...[const MajorPickLabel(), const SizedBox(height: 4)],
                   Text(
-                    n.title,
+                    keepAll(n.title),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body, height: 1.4),
@@ -649,7 +679,7 @@ class _ChangedCard extends StatelessWidget {
                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body),
                     ),
                     Text(
-                      '${entry.notice.title}${now == null ? '' : ' · 이제 ${shortDate(now)}까지'}',
+                      keepAll('${entry.notice.title}${now == null ? '' : ' · 이제 ${shortDate(now)}까지'}'),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: 13, color: c.sub),

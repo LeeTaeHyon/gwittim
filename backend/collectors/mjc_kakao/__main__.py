@@ -4,6 +4,8 @@ uv run python -m backend.collectors.mjc_kakao --export-dir <내보내기 txt 폴
 uv run python -m backend.collectors.mjc_kakao --export-dir <폴더> --no-llm                   # Ollama 없이 (모델만)
 GWITTIM_FIREBASE_PROJECT_ID=<id> uv run python -m backend.collectors.mjc_kakao --export-dir <폴더>  # Firestore에 게시
 
+게시판 공고와 짝을 찾으므로(D-025) 게시판 배치(backend.collectors.mjc_www)가 끝난 뒤 실행한다.
+
 게시판 배치(backend.collectors.mjc_www)와 같은 data/local 기록을 쓰므로 두 배치를 동시에 돌리지 않는다.
 """
 from __future__ import annotations
