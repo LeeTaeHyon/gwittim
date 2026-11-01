@@ -103,6 +103,22 @@ void main() {
     expect(findTextContaining('건 · 추천순'), findsNothing);
   });
 
+  testWidgets('새로 고침까지 당기면 칩이 남지 않는다, 거르는 중이면 남는다', (tester) async {
+    await pumpNotices(tester, SampleNoticeRepository());
+    await tester.fling(findText('나에게 맞는 공고'), const Offset(0, 400), 1000); // 새로 고침
+    await tester.pumpAndSettle();
+    expect(findText('나에게 맞는 공고').hitTestable(), findsOneWidget);
+    expect(chip('전체').hitTestable(), findsNothing);
+
+    await pullToChips(tester);
+    await tester.tap(chip('공모전·경진대회'));
+    await tester.pumpAndSettle();
+    await tester.fling(findText('2건 · 추천순'), const Offset(0, 400), 1000);
+    await tester.pumpAndSettle();
+    expect(chip('전체').hitTestable(), findsOneWidget);
+    expect(findText('2건 · 추천순'), findsOneWidget);
+  });
+
   testWidgets('조금만 당겼다 놓으면 제목 그대로, 목록이 길어도 같다', (tester) async {
     await pumpNotices(tester, LongRepository(6));
     expect(chip('전체').hitTestable(), findsNothing);

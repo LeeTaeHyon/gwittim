@@ -51,6 +51,9 @@ class NoticesScreenState extends State<NoticesScreen> {
   bool _chips = false;
   bool _typing = false;
 
+  /// 이번 당김이 맨 위를 넘어 더 당긴 거리. 새로 고침 쪽까지 간 당김(48 이상)은 칩으로 바꾸지 않는다.
+  double _overscroll = 0;
+
   DateTime get _today => widget.today ?? DateTime.now();
   bool get _filtering => _query.trim().isNotEmpty || _category != null;
 
@@ -107,8 +110,13 @@ class NoticesScreenState extends State<NoticesScreen> {
   bool _onScroll(ScrollNotification n) {
     if (n.depth != 0 || !_scroll.hasClients) return false;
     final offset = _scroll.offset;
+    if (n is ScrollStartNotification) _overscroll = 0;
+    if (n is OverscrollNotification && n.overscroll < 0) _overscroll -= n.overscroll;
+    final refreshing = _overscroll >= 48;
     if (n is ScrollEndNotification && offset < _pull) {
-      if (offset < _pull / 2 && !_chips) setState(() => _chips = true);
+      // 새로 고침까지 당겼으면 칩을 띄우지 않고, 거르는 중이 아니면 이미 뜬 칩도 접는다
+      final chips = refreshing ? _chips && (_filtering || _typing) : _chips || offset < _pull / 2;
+      if (chips != _chips) setState(() => _chips = chips);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scroll.hasClients && _scroll.offset < _pull) {
           _scroll.animateTo(_pull, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
