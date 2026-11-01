@@ -568,7 +568,8 @@ class _Checklist extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final badge = switch (status) {
-      'met' => const Pill('조건 충족', tone: PillTone.point),
+      // 세 상태 모두 연한 바탕 + 진한 글자로 같은 톤 (2026-11-01 팀장 요청, 목록 카드와 같음)
+      'met' => const Pill('조건 충족'),
       'needs_check' => const Pill('확인 필요', tone: PillTone.check),
       'not_met' => const Pill('조건 미충족', tone: PillTone.urgent),
       _ => null,
