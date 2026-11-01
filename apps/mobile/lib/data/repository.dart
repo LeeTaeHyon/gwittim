@@ -113,7 +113,7 @@ class AssetDictionaries {
 /// 추천 결과는 서버(추천 함수)가 미리 계산한 두 가지 샘플 중 하나를 고른다. 앱은 점수를 계산하지 않는다.
 /// 프로필·저장은 메모리에만 둔다 (앱을 다시 켜면 초기화).
 class SampleNoticeRepository implements NoticeRepository {
-  SampleNoticeRepository({AssetBundle? bundle, this.personalized = true})
+  SampleNoticeRepository({AssetBundle? bundle, this.personalized = true, this.today})
     : _bundle = bundle ?? rootBundle,
       _dictionaries = AssetDictionaries(bundle: bundle);
 
@@ -122,6 +122,13 @@ class SampleNoticeRepository implements NoticeRepository {
 
   /// true면 합성 프로필이 입력된 상태로 시작한다.
   final bool personalized;
+
+  /// 있으면 샘플의 기준일([sampleBaseDay])이 이 날이 되도록 모든 날짜를 같은 날 수만큼 옮긴다.
+  /// 언제 켜도 오늘 마감·새 공고·D-day가 같은 모습으로 보인다. 테스트는 비워 두고 원래 날짜를 쓴다.
+  final DateTime? today;
+
+  /// 샘플 자료가 '오늘'로 보이게 만든 날: 발표회가 오늘 마감, 경진대회 D-3, 알림톡 공고는 어제 게시.
+  static final sampleBaseDay = DateTime.utc(2026, 10, 30);
 
   static const _files = [
     'recommendations_personalized.json',
@@ -146,7 +153,11 @@ class SampleNoticeRepository implements NoticeRepository {
     final cached = _cache[name];
     if (cached != null) return cached;
     try {
-      return _cache[name] = jsonDecode(await _bundle.loadString('assets/sample/$name')) as Map<String, dynamic>;
+      final data = jsonDecode(await _bundle.loadString('assets/sample/$name')) as Map<String, dynamic>;
+      final t = today;
+      if (t == null) return _cache[name] = data;
+      final days = DateTime.utc(t.year, t.month, t.day).difference(sampleBaseDay).inDays;
+      return _cache[name] = shiftSampleDates(data, days) as Map<String, dynamic>;
     } on FlutterError {
       throw const RepositoryException(RepositoryErrorKind.unavailable);
     }
@@ -249,4 +260,34 @@ class SampleNoticeRepository implements NoticeRepository {
   Future<void> deleteSaved(String noticeId) async {
     _saved.remove(noticeId);
   }
+}
+
+final _isoDay = RegExp(r'^(\d{4})-(\d{2})-(\d{2})');
+final _koreanDay = RegExp(r'(\d{1,2})월 (\d{1,2})일');
+
+/// 샘플 JSON의 날짜를 [days]일 옮긴다. 'YYYY-MM-DD…' 값은 앞의 날짜만 바꾸고(시각은 그대로),
+/// 요약 글 속 'M월 D일'은 기준일의 해로 읽어 같이 옮긴다.
+@visibleForTesting
+Object? shiftSampleDates(Object? value, int days) {
+  if (days == 0) return value;
+  return switch (value) {
+    Map<String, dynamic> m => <String, dynamic>{for (final e in m.entries) e.key: shiftSampleDates(e.value, days)},
+    List<dynamic> l => <dynamic>[for (final v in l) shiftSampleDates(v, days)],
+    String s => _shiftText(s, days),
+    _ => value,
+  };
+}
+
+String _shiftText(String s, int days) {
+  final iso = _isoDay.firstMatch(s);
+  if (iso != null) {
+    final d = DateTime.utc(int.parse(iso[1]!), int.parse(iso[2]!), int.parse(iso[3]!)).add(Duration(days: days));
+    final head = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    return head + s.substring(iso.end);
+  }
+  return s.replaceAllMapped(_koreanDay, (m) {
+    final base = SampleNoticeRepository.sampleBaseDay.year;
+    final d = DateTime.utc(base, int.parse(m[1]!), int.parse(m[2]!)).add(Duration(days: days));
+    return '${d.month}월 ${d.day}일';
+  });
 }

@@ -35,7 +35,11 @@ Future<void> main() async {
   final theme = await ThemeController.load(PrefsThemeStore());
   if (_apiBase.isEmpty) {
     _run(
-      GwittimApp(repository: SampleNoticeRepository(), openUrl: _openExternal, themeController: theme),
+      GwittimApp(
+        repository: SampleNoticeRepository(today: DateTime.now()),
+        openUrl: _openExternal,
+        themeController: theme,
+      ),
       source: '샘플 자료',
     );
     return;
