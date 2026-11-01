@@ -382,7 +382,7 @@ class _SearchRow extends StatelessWidget {
 
 /// 추천 공고 카드 (2026-11-01 단순화). 자세한 내용은 눌러서 리포트로 본다.
 /// - 첫 줄: 분류 · 마감(날짜와 D-day). 마감일이 없으면 '마감일 없음' 또는 원문 설명(선착순 등)
-/// - 오른쪽 칩은 하나: 7일 안 마감이면 D-day, 아니면 조건 상태('조건 충족' / '확인 필요' 회색)
+/// - 오른쪽 칩은 하나: 7일 안 마감이면 D-day, 아니면 조건 상태(리포트와 같은 색)
 /// - 마지막 줄: 추천 이유만. 조건 상태는 칩에만 둔다(체크 표시를 이유 앞에 두면 관련도로 읽힌다)
 class NoticeCard extends StatelessWidget {
   const NoticeCard({super.key, required this.entry, required this.category, required this.today, required this.onTap});
@@ -400,13 +400,13 @@ class NoticeCard extends StatelessWidget {
     final left = daysLeft(n, today);
     final soon = left != null && left <= urgentDays;
     final status = r.eligibilityStatus;
-    // 확인 필요는 목록에서 회색으로 차분하게 보인다 (D-009).
+    // 리포트 체크리스트 배지와 같은 색: 충족 `point`(라이트 네이비·다크 라임), 확인 필요 주황, 미충족 빨강 (2026-11-01 팀장 요청)
     final chip = soon
         ? ddayPill(n, today)
         : switch (status) {
-            'met' => const Pill('조건 충족'),
-            'not_met' => const Pill('조건 미충족', tone: PillTone.neutral),
-            _ => const Pill('확인 필요', tone: PillTone.neutral),
+            'met' => const Pill('조건 충족', tone: PillTone.point),
+            'not_met' => const Pill('조건 미충족', tone: PillTone.urgent),
+            _ => const Pill('확인 필요', tone: PillTone.check),
           };
     final reason = r.reasonCodes.any(personalReasons.containsKey)
         ? r.reasonCodes.map(reasonText).firstWhere((t) => t.isNotEmpty, orElse: () => '')
