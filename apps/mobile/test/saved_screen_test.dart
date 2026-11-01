@@ -5,6 +5,8 @@ import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/ui/saved_screen.dart';
 import 'package:gwittim/ui/theme.dart';
 
+import 'finders.dart';
+
 DateInfo day(String d) => DateInfo(date: d, time: null, timezone: null, precision: 'date', evidence: 'e');
 
 SavedEntry saved(
@@ -39,6 +41,9 @@ SavedEntry saved(
 
 /// 저장 목록만 쓰는 가짜 Repository
 class SavedRepository implements NoticeRepository {
+  @override
+  Future<RecommendationList> searchNotices({String query = '', String? category}) => listRecommendations();
+
   SavedRepository(this.entries);
 
   final List<SavedEntry> entries;
@@ -71,6 +76,9 @@ class SavedRepository implements NoticeRepository {
 
   @override
   Future<void> updateProfile(UserProfile profile) async {}
+
+  @override
+  Future<void> deleteAccountData() async {}
 
   @override
   Future<List<DictionaryItem>> dictionary(String name) async => [];
@@ -166,13 +174,13 @@ void main() {
       expect(find.text('다음 주 마감'), findsNothing); // 빈 묶음은 보이지 않는다
 
       expect(find.text('마감일이 바뀐 공고 1개'), findsOneWidget);
-      expect(find.text('공고 soon · 10월 21일(수) → 10월 23일(금)'), findsOneWidget);
+      expect(findText('공고 soon · 10월 21일(수) → 10월 23일(금)'), findsOneWidget);
       expect(find.text('D-3 · 공모전'), findsOneWidget); // 날짜만 확인된 마감은 시각 없이, 남은 날이 앞
       expect(find.text('선착순 마감 (정원 도달 시 조기 종료) · 공모전'), findsOneWidget);
       expect(find.text('모집 마감 · 공모전'), findsOneWidget);
       expect(find.text('학교 공지에서 삭제됨'), findsOneWidget);
       expect(find.text('목록에서 지우기'), findsOneWidget);
-      expect(find.text('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 갱신됩니다.'), findsOneWidget);
+      expect(findText('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 갱신됩니다.'), findsOneWidget);
 
       // 삭제된 공고에는 북마크 대신 지우기 버튼만 있다
       expect(find.byTooltip('저장 취소'), findsNWidgets(3));
@@ -199,7 +207,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.deleted, ['first']);
       expect(find.text('저장이 취소되었습니다.'), findsOneWidget);
-      expect(find.text('공고 first'), findsOneWidget); // 바로 지우지 않고 다시 켤 수 있게 둔다
+      expect(findText('공고 first'), findsOneWidget); // 바로 지우지 않고 다시 켤 수 있게 둔다
       expect(find.byTooltip('저장'), findsOneWidget);
       expect(find.text('3개'), findsOneWidget);
 

@@ -43,6 +43,9 @@ void main() {
     expect(scale(), lessThan(1));
     expect(find.text('앱 본체'), findsOneWidget); // 앱은 뒤에서 먼저 뜬다
 
+    // 첫 화면을 그린 다음 프레임부터 시작한다 (첫 화면이 오래 걸려도 등장을 건너뛰지 않게)
+    await tester.pump(const Duration(seconds: 3));
+    expect(opacity(), 0);
     await tester.pump(Intro.duration ~/ 2);
     expect(opacity(), 1);
     expect(scale(), 1);

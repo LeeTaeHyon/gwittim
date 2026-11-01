@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'auth/auth_gate.dart';
 import 'auth/auth_service.dart';
 import 'data/api_repository.dart';
+import 'data/cached_repository.dart';
 import 'data/repository.dart';
 import 'ui/app_info.dart';
 import 'ui/briefing_data.dart';
@@ -33,17 +34,21 @@ Future<void> main() async {
   // 화면 설정을 먼저 읽어서 첫 화면부터 고른 테마로 그린다 (D-010).
   final theme = await ThemeController.load(PrefsThemeStore());
   if (_apiBase.isEmpty) {
-    _run(GwittimApp(repository: SampleNoticeRepository(), openUrl: _openExternal, themeController: theme));
+    _run(
+      GwittimApp(repository: SampleNoticeRepository(), openUrl: _openExternal, themeController: theme),
+      source: '샘플 자료',
+    );
     return;
   }
   final baseUrl = Uri.parse(_apiBase.endsWith('/') ? _apiBase : '$_apiBase/');
   if (_devToken.isNotEmpty) {
     _run(
       GwittimApp(
-        repository: ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: () async => _devToken),
+        repository: CachedNoticeRepository(ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: () async => _devToken)),
         openUrl: _openExternal,
         themeController: theme,
       ),
+      source: '로컬 서버',
     );
     return;
   }
@@ -52,7 +57,8 @@ Future<void> main() async {
   _run(
     AuthGate(
       auth: FirebaseAuthService(),
-      repositoryFor: (tokenProvider) => ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: tokenProvider),
+      repositoryFor: (tokenProvider) =>
+          CachedNoticeRepository(ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: tokenProvider)),
       openUrl: _openExternal,
       themeController: theme,
     ),
@@ -60,7 +66,32 @@ Future<void> main() async {
 }
 
 /// 시작 인트로를 씌워 실행한다 (D-011).
-void _run(Widget app) => runApp(Intro(child: app));
+/// [source]가 있으면 dev 서버가 아닌 자료로 도는 실행이라 왼쪽 위에 띠로 표시한다.
+void _run(Widget app, {String? source}) {
+  final child = Intro(child: app);
+  runApp(source == null ? child : DataSourceBanner(label: source, child: child));
+}
+
+/// 합성 샘플·로컬 서버로 도는 실행을 dev 서버 실행과 헷갈리지 않게 왼쪽 위 모서리에 띠를 붙인다.
+/// DEBUG 띠(오른쪽 위)와 겹치지 않고, 서버 주소를 넣은 빌드에는 붙지 않는다.
+class DataSourceBanner extends StatelessWidget {
+  const DataSourceBanner({super.key, required this.label, required this.child});
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Banner(
+      message: label,
+      location: BannerLocation.topStart,
+      textDirection: TextDirection.ltr,
+      layoutDirection: TextDirection.ltr,
+      color: const Color(0xE03446A8),
+      child: child,
+    );
+  }
+}
 
 Future<bool> _openExternal(Uri url) => launchUrl(url, mode: LaunchMode.externalApplication);
 
@@ -94,6 +125,7 @@ class GwittimApp extends StatefulWidget {
     required this.openUrl,
     this.today,
     this.onSignOut,
+    this.onDeleteAccount,
     this.briefingStore,
     this.themeController,
   });
@@ -104,6 +136,9 @@ class GwittimApp extends StatefulWidget {
 
   /// 로그인 모드일 때만 있다.
   final Future<void> Function()? onSignOut;
+
+  /// 탈퇴 (D-024). 로그인 모드일 때만 있다. 계정 확인을 취소하면 false.
+  final Future<bool> Function()? onDeleteAccount;
 
   /// 하루 첫 실행 기록. 기본은 기기 저장소 (D-009).
   final BriefingStore? briefingStore;
@@ -136,6 +171,7 @@ class _GwittimAppState extends State<GwittimApp> {
         openUrl: widget.openUrl,
         today: widget.today,
         onSignOut: widget.onSignOut,
+        onDeleteAccount: widget.onDeleteAccount,
         briefingStore: _briefingStore,
         themeController: _theme,
       ),
@@ -152,9 +188,11 @@ class HomeShell extends StatefulWidget {
     required this.themeController,
     this.today,
     this.onSignOut,
+    this.onDeleteAccount,
   });
 
   final Future<void> Function()? onSignOut;
+  final Future<bool> Function()? onDeleteAccount;
   final NoticeRepository repository;
   final OpenUrl openUrl;
   final BriefingStore briefingStore;
@@ -216,9 +254,35 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
             _calendarKey.currentState?.reload();
           },
           onSignOut: widget.onSignOut,
+          onDeleteAccount: widget.onDeleteAccount == null ? null : _deleteAccount,
         ),
       ),
     );
+  }
+
+  /// 탈퇴하면 기기에 남은 학과 통계 추천 답(D-021)도 지운다.
+  Future<bool> _deleteAccount() async {
+    final store = widget.briefingStore;
+    final done = await widget.onDeleteAccount!();
+    if (done) {
+      try {
+        await store.saveMajorPicks(const MajorPickState());
+      } catch (_) {
+        // 기기 저장소를 못 쓰면 남는다. 서버 데이터·계정 삭제는 이미 끝났다.
+      }
+    }
+    return done;
+  }
+
+  /// 첫 로그인 등으로 프로필이 없으면 홈이 한 번 부른다. 홈은 끝난 뒤 스스로 다시 받는다.
+  Future<void> _setupProfile() async {
+    final saved = await openProfileSetup(context, widget.repository);
+    if (saved == null || !mounted) return;
+    _noticesKey.currentState?.reload();
+    _calendarKey.currentState?.reload();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('프로필이 저장되었습니다.')));
   }
 
   /// 탭 화면 하나. 위젯 구조는 늘 같게 두어 화면 상태가 유지된다.
@@ -264,6 +328,8 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                   briefingStore: widget.briefingStore,
                   today: widget.today,
                   onOpenProfile: _openProfile,
+                  // 샘플·개발 토큰 모드에서는 자동으로 띄우지 않는다.
+                  onSetupProfile: widget.onSignOut == null ? null : _setupProfile,
                   onShowAll: () => _select(1),
                 ),
               ),

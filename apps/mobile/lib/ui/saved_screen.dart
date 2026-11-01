@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/cached_repository.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 import 'briefing_data.dart';
@@ -98,6 +99,12 @@ class SavedScreenState extends State<SavedScreen> {
   void initState() {
     super.initState();
     reload();
+  }
+
+  /// 당겨서 새로 고침: 탭끼리 나눠 쓰는 응답도 버리고 서버에서 다시 받는다.
+  Future<void> refresh() {
+    forgetCached(widget.repository);
+    return reload();
   }
 
   /// 탭을 다시 열거나 당겨서 새로고침할 때. 받는 동안 보이는 목록은 그대로 둔다.
@@ -202,7 +209,7 @@ class SavedScreenState extends State<SavedScreen> {
     final changed = deadlineChangedEntries(entries);
     final count = entries.where((e) => !_unsaved.contains(e.notice.noticeId)).length;
     return RefreshIndicator(
-      onRefresh: reload,
+      onRefresh: refresh,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
@@ -265,7 +272,7 @@ class SavedScreenState extends State<SavedScreen> {
                         ),
                     ],
                     const SizedBox(height: 20),
-                    Text('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 갱신됩니다.', style: captionStyle(context)),
+                    Text(keepAll('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 갱신됩니다.'), style: captionStyle(context)),
                   ],
                 ),
               ),
@@ -334,7 +341,7 @@ class _SavedRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    n.title,
+                    keepAll(n.title),
                     style: TextStyle(
                       fontSize: 16,
                       height: 1.45,

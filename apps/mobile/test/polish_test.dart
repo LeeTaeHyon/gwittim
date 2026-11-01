@@ -15,6 +15,8 @@ import 'package:gwittim/ui/report_screen.dart';
 import 'package:gwittim/ui/skeleton.dart';
 import 'package:gwittim/ui/theme.dart';
 
+import 'finders.dart';
+
 /// 목록 응답을 직접 풀어 줄 때까지 기다리게 한다.
 class SlowRepository extends SampleNoticeRepository {
   final gate = Completer<void>();
@@ -65,7 +67,7 @@ void main() {
       );
       expect(find.byType(GwBubbleMark), findsOneWidget);
       expect(find.text('불러오기 실패'), findsOneWidget);
-      expect(find.text('잠시 후 다시 시도해 주세요.'), findsOneWidget);
+      expect(findText('잠시 후 다시 시도해 주세요.'), findsOneWidget);
       expect(find.byType(FilledButton), findsNothing);
       expect(find.byType(Icon), findsNothing); // 구름 아이콘 없음
       await tester.tap(find.widgetWithText(SoftButton, '다시 시도'));
@@ -223,7 +225,7 @@ void main() {
       final list = find.descendant(of: find.byType(BriefingScreen), matching: find.byType(Scrollable)).first;
       await tester.fling(list, const Offset(0, -3000), 3000);
       await tester.pumpAndSettle();
-      final caption = find.textContaining('합격 가능성과는 관계없습니다');
+      final caption = findTextContaining('합격 가능성과는 관계없습니다');
       final button = find.widgetWithText(FilledButton, '확인');
       expect(tester.getBottomLeft(caption).dy, lessThanOrEqualTo(tester.getTopLeft(button).dy - 24));
 

@@ -19,7 +19,7 @@ from backend.dictionaries import codes
 from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
-from .rules import RuleBasedAnalyzer, is_activity_line, tidy_unresolved
+from .rules import EXCLUDES, RuleBasedAnalyzer, is_activity_line, is_llm_condition, tidy_unresolved
 
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _PHONE = re.compile(r"(?:\+?82[-\s]?)?0\d{1,2}[-\s.)]?\d{3,4}[-\s.]?\d{4}")
@@ -87,6 +87,8 @@ class OllamaAnalyzer:
         self.base = base or RuleBasedAnalyzer()
         self.version = f"{self.base.version}+ollama:{model}"
         self.rejected: list[str] = []  # 마지막 분석에서 버린 LLM 출력과 사유 (평가·디버깅용)
+        self.llm_analyzed = 0  # LLM 응답을 받은 공고 수
+        self.llm_failed = 0  # LLM 호출 실패로 규칙 분석만 쓴 공고 수
 
     # ---------- Ollama 호출 ----------
 
@@ -104,7 +106,8 @@ class OllamaAnalyzer:
                     "content": (
                         "다음 공지에서 신청 마감 문구(deadline.evidence), 지원 자격 조건(conditions: "
                         "field는 university_id/major_id/grade/enrollment_status 중 하나, operator는 eq 또는 in), "
-                        "자동 비교가 어려운 조건 원문(unresolved), 두 문장 이내 요약(summary)을 JSON으로 답하라.\n\n"
+                        "신청자 본인이 갖춰야 하는 그 밖의 자격 조건과 우대 조건 원문(unresolved: 성적·소득·나이·거주지·국적·어학 점수·자격증·경험 등. "
+                        "일정, 혜택, 제출 방법, 팀 구성, 주제, 대상 설명은 넣지 마라), 두 문장 이내 요약(summary)을 JSON으로 답하라.\n\n"
                         f"제목: {title}\n본문:\n{body}"
                     ),
                 },
@@ -119,6 +122,19 @@ class OllamaAnalyzer:
             message = json.loads(resp.read())["message"]["content"]
         return json.loads(message)
 
+    def unload(self) -> bool:
+        """배치가 끝나면 모델을 GPU에서 바로 내린다 (Ollama 기본은 마지막 사용 5분 뒤). 실패해도 무시."""
+        req = urllib.request.Request(
+            f"{self.host}/api/generate",
+            data=json.dumps({"model": self.model, "keep_alive": 0}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30):
+                return True
+        except Exception:
+            return False
+
     # ---------- 분석 ----------
 
     def analyze(self, raw: dict, source: SourceConfig) -> dict:
@@ -127,7 +143,9 @@ class OllamaAnalyzer:
         title, body = raw["title"], redact(raw["body_text"])
         try:
             out = self._chat(title, body)
+            self.llm_analyzed += 1
         except Exception as e:  # 네트워크·모델·JSON 실패: 규칙 분석만으로 돌려준다
+            self.llm_failed += 1
             self.rejected.append(f"llm_unavailable: {type(e).__name__}")
             return {**fields, "_analysis_version": self.base.version}
 
@@ -160,6 +178,9 @@ class OllamaAnalyzer:
                 continue
             if c.get("operator") not in ("eq", "in") or not grounded(c.get("evidence")):
                 continue
+            if EXCLUDES.search(c["evidence"]):
+                self.rejected.append(f"빼는 조건을 허용으로 답함: {c['evidence'][:40]}")
+                continue
             if not self._valid_value(c["field"], c["operator"], c.get("value")):
                 self.rejected.append(f"값 검증 실패: {c['field']}={c.get('value')!r}")
                 continue
@@ -170,9 +191,16 @@ class OllamaAnalyzer:
         if elig["conditions"]:
             elig["explicitly_unrestricted"], elig["unrestricted_evidence"] = False, None
 
-        extra = [{"evidence": t, "note": "LLM 추출"} for t in out.get("unresolved") or [] if grounded(t)]
+        extra, lines = [], raw["body_text"].splitlines()
+        for t in out.get("unresolved") or []:
+            if not grounded(t):
+                continue
+            if is_llm_condition(t, elig["conditions"], elig["unresolved_conditions"], lines):
+                extra.append({"evidence": t, "note": "LLM 추출"})
+            else:
+                self.rejected.append(f"자격 조건 아님·중복: {t[:40]}")
         # 규칙 결과와 합쳐 다시 정리: 같은 조건이 규칙·LLM에서 두 번 나오지 않게, 우대 사항 표시도 함께 (D-015)
-        elig["unresolved_conditions"], _ = tidy_unresolved(elig["unresolved_conditions"] + extra, raw["body_text"].splitlines())
+        elig["unresolved_conditions"], _ = tidy_unresolved(elig["unresolved_conditions"] + extra, lines)
         if elig["unresolved_conditions"]:
             elig["extraction_complete"] = False  # LLM은 완전성을 올리지 않고 내리기만 한다
 

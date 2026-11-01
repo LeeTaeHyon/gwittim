@@ -97,7 +97,7 @@ def test_grounded_llm_output_is_merged(ollama):
     assert conds["major_id"] == "mjc.computer_engineering"
     assert fields["eligibility"]["extraction_complete"] is False  # 우대 조건 → 미완성
     assert fields["summary"].startswith("컴퓨터공학과")
-    assert "_analysis_version" not in fields and a.version == "rule-0.6+ollama:test-model"
+    assert "_analysis_version" not in fields and a.version == "rule-0.7+ollama:test-model"
 
 
 def test_hallucinations_are_rejected(ollama):
@@ -150,7 +150,7 @@ def test_ollama_failure_falls_back_to_rule_version(ollama):
     store = InMemoryStore()
     result = ingest(raw(), store)
     notice, issues = build_notice(store.records[result.key], today=date(2026, 10, 17), analyzer=analyzer(ollama))
-    assert notice["analysis_version"] == "rule-0.6"
+    assert notice["analysis_version"] == "rule-0.7"
     assert issues == [] and schema_errors("notice", notice) == []
 
 
@@ -165,7 +165,7 @@ def test_llm_notice_passes_validation(ollama):
     result = ingest(raw(), store)
     notice, issues = build_notice(store.records[result.key], today=date(2026, 10, 17), analyzer=analyzer(ollama))
     assert issues == []
-    assert notice["analysis_version"] == "rule-0.6+ollama:test-model"
+    assert notice["analysis_version"] == "rule-0.7+ollama:test-model"
 
 
 def test_summary_with_wrong_weekday_or_unknown_date_is_rejected(ollama):
@@ -182,3 +182,49 @@ def test_summary_with_wrong_weekday_or_unknown_date_is_rejected(ollama):
     assert a.analyze(raw(body=body2), MJC)["summary"] == "모집은 11월 30일까지다."
     ollama.reply = {"summary": "2026 년 12 월 말까지 모집합니다.", "deadline": None, "conditions": [], "unresolved": []}
     assert a.analyze(raw(body=body2), MJC)["summary"] is None  # 원문에 없는 '12월 말'
+
+
+def test_llm_non_eligibility_lines_are_not_checklist_items(ollama):
+    """팀 구성·주제·이미 판정한 줄의 일부는 '직접 확인'으로 내지 않는다 (D-023)."""
+    body = "2. 공모대상 : 재학생(전공심화과정 포함) / 개인 또는 팀(2명 이하)\n3. 공모 주제 : 지정주제 중 택 1\n"
+    ollama.reply = {
+        "summary": None,
+        "deadline": None,
+        "conditions": [],
+        "unresolved": ["개인 또는 팀(2명 이하)", "지정주제 중 택 1", "전공심화과정 포함"],
+    }
+    a = analyzer(ollama)
+    elig = a.analyze(raw(body=body), MJC)["eligibility"]
+    assert [(c["field"], c["value"]) for c in elig["conditions"]] == [("enrollment_status", "enrolled")]
+    assert elig["unresolved_conditions"] == []
+    assert sum(r.startswith("자격 조건 아님·중복") for r in a.rejected) == 3
+
+
+def test_llm_excluded_status_is_not_condition(ollama):
+    line = "- 휴학생 및 정규학기를 초과한 학기의 재학생은 추천 불가"
+    ollama.reply = {
+        "summary": None,
+        "deadline": None,
+        "conditions": [{"field": "enrollment_status", "operator": "in", "value": ["enrolled", "on_leave"], "evidence": line}],
+        "unresolved": [],
+    }
+    elig = analyzer(ollama).analyze(raw(body="근로 대상\n" + line), MJC)["eligibility"]
+    assert elig["conditions"] == []
+    assert [u["evidence"] for u in elig["unresolved_conditions"]] == [line.lstrip("- ")]
+
+def test_counts_llm_use_and_unloads(ollama):
+    ollama.reply = {"summary": None, "deadline": None, "conditions": [], "unresolved": []}
+    a = analyzer(ollama)
+    a.analyze(raw(), MJC)
+    a.analyze(raw(), MJC)
+    assert (a.llm_analyzed, a.llm_failed) == (2, 0)
+    ollama.reply = "error"
+    a.analyze(raw(), MJC)
+    assert a.llm_failed == 1
+    ollama.reply = {}
+    assert a.unload() is True
+    assert ollama.requests[-1] == {"model": "test-model", "keep_alive": 0}
+
+
+def test_unload_ignores_unreachable_server():
+    assert OllamaAnalyzer("m", host="http://127.0.0.1:9", timeout=1).unload() is False

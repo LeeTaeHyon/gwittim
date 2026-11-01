@@ -7,6 +7,8 @@ import 'package:gwittim/ui/notices_screen.dart';
 import 'package:gwittim/ui/profile_screen.dart';
 import 'package:gwittim/ui/saved_screen.dart';
 
+import 'finders.dart';
+
 Future<SampleNoticeRepository> loaded(WidgetTester tester, {bool personalized = true}) async {
   final repo = SampleNoticeRepository(personalized: personalized);
   await tester.runAsync(repo.preload);
@@ -57,7 +59,7 @@ void main() {
       GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: noBriefing),
     );
     await tester.pumpAndSettle();
-    expect(find.text('프로필을 입력하면 맞춤 추천을 받을 수 있습니다'), findsOneWidget);
+    expect(findText('프로필을 입력하면 맞춤 추천을 받을 수 있습니다'), findsOneWidget);
 
     await tester.tap(find.byTooltip('내 정보'));
     await tester.pumpAndSettle();
@@ -91,9 +93,9 @@ void main() {
     await tester.pumpAndSettle();
 
     const title = '[합성 샘플] 컴퓨터공학과 프로젝트 발표회 참가자 모집';
-    await tester.ensureVisible(find.text(title).last);
+    await tester.ensureVisible(findText(title).last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text(title).last);
+    await tester.tap(findText(title).last);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('저장'));
     await tester.pumpAndSettle();
@@ -113,12 +115,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('저장함'));
     await tester.pumpAndSettle();
-    expect(find.text(title), findsOneWidget);
+    expect(findText(title), findsOneWidget);
     expect(find.text('1개'), findsOneWidget);
     expect(find.text('그 이후'), findsOneWidget); // 10/17(토) 기준 10/30은 다다음 주
     expect(find.text('D-13 · 17:00 마감 · 행사'), findsOneWidget);
     expect(find.text('마감일이 바뀐 공고 1개'), findsOneWidget);
-    expect(find.text('$title · 10월 28일(수) 17:00 → 10월 30일(금) 17:00'), findsOneWidget);
+    expect(findText('$title · 10월 28일(수) 17:00 → 10월 30일(금) 17:00'), findsOneWidget);
     expect(find.text('마감일 바뀜'), findsOneWidget);
     expect(find.text('저장 당시 10월 28일(수) 17:00'), findsOneWidget);
 

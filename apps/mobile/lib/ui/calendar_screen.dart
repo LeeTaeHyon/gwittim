@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/cached_repository.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 import 'briefing_data.dart';
@@ -88,6 +89,12 @@ class CalendarScreenState extends State<CalendarScreen> {
     reload();
   }
 
+  /// 당겨서 새로 고침: 탭끼리 나눠 쓰는 응답도 버리고 서버에서 다시 받는다.
+  Future<void> refresh() {
+    forgetCached(widget.repository);
+    return reload();
+  }
+
   /// 탭을 다시 열거나 당겨서 새로고침할 때. 받는 동안 보이는 달력은 그대로 둔다.
   Future<void> reload() async {
     try {
@@ -174,7 +181,7 @@ class CalendarScreenState extends State<CalendarScreen> {
         .fold(0, (n, e) => n + e.value.length);
     final day = items[_selected] ?? const <CalendarItem>[];
     return RefreshIndicator(
-      onRefresh: reload,
+      onRefresh: refresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 32),
@@ -235,7 +242,7 @@ class CalendarScreenState extends State<CalendarScreen> {
                   if (day.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      child: Text('이 날 마감되는 공고가 없습니다.', style: TextStyle(fontSize: 15, color: c.sub)),
+                      child: Text(keepAll('이 날 마감되는 공고가 없습니다.'), style: TextStyle(fontSize: 15, color: c.sub)),
                     ),
                   for (final item in day)
                     _DayRow(
@@ -252,7 +259,7 @@ class CalendarScreenState extends State<CalendarScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
               child: Text(
-                '마감일이 정해지지 않은 공고 $_undated개(선착순 등)는 달력에 넣지 않았습니다.',
+                keepAll('마감일이 정해지지 않은 공고 $_undated개(선착순 등)는 달력에 넣지 않았습니다.'),
                 style: TextStyle(fontSize: 13, height: 1.5, color: c.muted),
               ),
             ),
@@ -535,7 +542,7 @@ class _DayRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    n.title,
+                    keepAll(n.title),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body, height: 1.4),
