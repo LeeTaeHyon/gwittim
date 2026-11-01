@@ -65,29 +65,20 @@ Future<void> pumpNotices(WidgetTester tester, SampleNoticeRepository repo) async
   await tester.pumpAndSettle();
 }
 
-/// 머리를 끌어내렸다 놓아 칩으로 바꾼다 (새로 고침까지는 당기지 않음).
-Future<void> pullToChips(WidgetTester tester) async {
-  await tester.drag(findText('나에게 맞는 공고'), const Offset(0, 60));
-  await tester.pumpAndSettle();
-}
-
 Finder chip(String label) => find.ancestor(of: findText(label), matching: find.byType(InkWell)).first;
 
 void main() {
-  testWidgets('끌어내리면 제목 자리에 칩이 나오고, 칩·검색으로 거른다 (D-026)', (tester) async {
+  testWidgets('제목 아래 칩 줄이 늘 있고, 칩·검색으로 거른다 (D-026)', (tester) async {
     await pumpNotices(tester, SampleNoticeRepository());
+    expect(findText('나에게 맞는 공고'), findsOneWidget);
     expect(findText('추천순'), findsOneWidget);
+    expect(chip('전체').hitTestable(), findsOneWidget); // 당기지 않아도 보인다
     expect(findTextContaining('발표회'), findsOneWidget);
-    expect(chip('전체').hitTestable(), findsNothing); // 처음에는 숨어 있다
 
-    await pullToChips(tester);
-    expect(chip('전체').hitTestable(), findsOneWidget);
-    expect(findText('나에게 맞는 공고').hitTestable(), findsNothing); // 제목은 사라짐
-
-    // 칩 자리 첫 칸이 칩 (카드에도 같은 분류 글자가 있어 첫 것)
+    // 칩이 먼저 나온다 (카드 첫 줄에도 같은 분류 글자가 있음)
     await tester.tap(chip('공모전·경진대회'));
     await tester.pumpAndSettle();
-    expect(findText('2건 · 추천순'), findsOneWidget);
+    expect(findText('2건'), findsOneWidget);
     expect(findTextContaining('발표회'), findsNothing);
     expect(findTextContaining('글쓰기 공모전'), findsOneWidget);
 
@@ -97,7 +88,7 @@ void main() {
     await tester.enterText(find.byType(TextField), '아이디어경진');
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
-    expect(findText('1건 · 추천순'), findsOneWidget);
+    expect(findText('1건'), findsOneWidget);
     expect(findTextContaining('아이디어 경진대회'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), '없는말');
@@ -110,39 +101,26 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(chip('전체'));
     await tester.pumpAndSettle();
+    expect(findText('추천순'), findsOneWidget);
     expect(findTextContaining('발표회'), findsOneWidget);
-    expect(findTextContaining('건 · 추천순'), findsNothing);
   });
 
-  testWidgets('쉬는 위치에서 한 번 당겨도 새로 고침되고, 칩은 남지 않는다. 거르는 중이면 남는다', (tester) async {
+  testWidgets('당기면 새로 고침만 한다', (tester) async {
     final repo = CountingRepository();
     await pumpNotices(tester, repo);
     final before = repo.lists;
-    await tester.fling(findText('나에게 맞는 공고'), const Offset(0, 400), 1000); // 새로 고침
+    await tester.fling(findText('나에게 맞는 공고'), const Offset(0, 400), 1000);
     await tester.pumpAndSettle();
     expect(repo.lists, before + 1);
-    expect(findText('나에게 맞는 공고').hitTestable(), findsOneWidget);
-    expect(chip('전체').hitTestable(), findsNothing);
-
-    await pullToChips(tester);
-    await tester.tap(chip('공모전·경진대회'));
-    await tester.pumpAndSettle();
-    await tester.fling(findText('2건 · 추천순'), const Offset(0, 400), 1000);
-    await tester.pumpAndSettle();
+    expect(findText('나에게 맞는 공고'), findsOneWidget);
     expect(chip('전체').hitTestable(), findsOneWidget);
-    expect(findText('2건 · 추천순'), findsOneWidget);
   });
 
-  testWidgets('조금만 당겼다 놓으면 제목 그대로, 목록이 길어도 같다', (tester) async {
-    await pumpNotices(tester, LongRepository(6));
-    expect(chip('전체').hitTestable(), findsNothing);
-
-    await tester.drag(findText('나에게 맞는 공고'), const Offset(0, 15));
-    await tester.pumpAndSettle();
-    expect(findText('나에게 맞는 공고').hitTestable(), findsOneWidget);
-    expect(chip('전체').hitTestable(), findsNothing);
-
-    await pullToChips(tester);
-    expect(chip('전체').hitTestable(), findsOneWidget);
+  testWidgets('카드 첫 줄에 분류와 마감, 조건 상태는 오른쪽 칩에만 (체크 없음)', (tester) async {
+    await pumpNotices(tester, LongRepository(1));
+    expect(findTextContaining('공모전·경진대회 · '), findsWidgets);
+    expect(findTextContaining('마감'), findsWidgets);
+    expect(find.byIcon(Icons.check_rounded), findsNothing);
+    expect(findText('공고에 마감일 없음'), findsNothing);
   });
 }

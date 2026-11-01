@@ -526,7 +526,7 @@ void main() {
     expect(find.textContaining('합격 가능성'), findsNothing); // 홈 끝 문구는 뺐다 (브리핑·리포트에만)
     expect(findText(projectTitle), findsNWidgets(2)); // 다가오는 마감 + 나에게 맞는 공고
     expect(find.text('D-13 · 17:00 마감 · 행사'), findsOneWidget); // 다가오는 마감: 남은 날·시각이 앞
-    expect(find.text('10월 30일(금) 17:00 마감 · D-13'), findsOneWidget); // 카드: 7일 넘게 남으면 칩 없이 날짜 줄에
+    expect(findText('행사 · 10월 30일 17:00 마감 · D-13'), findsOneWidget); // 카드 첫 줄: 분류 옆 마감, 7일 넘게 남으면 칩 없이
     expect(find.text('D-13'), findsNothing);
     expect(find.text('오늘 확인할 공고'), findsOneWidget); // 소식 종류 수는 세지 않는다
     expect(find.text('브리핑 자세히 보기'), findsOneWidget);
@@ -673,7 +673,7 @@ void main() {
     await tester.pumpAndSettle();
     final notices = find.descendant(of: find.byType(NoticesScreen), matching: find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(findText(firstComeTitle), 200, scrollable: notices);
-    expect(find.text('선착순 마감 (정원 도달 시 조기 종료)'), findsOneWidget);
+    expect(findTextContaining('선착순 마감 (정원 도달 시 조기 종료)'), findsOneWidget); // 카드 첫 줄 분류 옆
     await tapVisible(tester, findText(firstComeTitle));
 
     expect(find.text('확인 필요'), findsOneWidget);
