@@ -251,7 +251,7 @@ void main() {
     await tapWithdraw(tester);
     await tester.tap(find.text('탈퇴'));
     await settle(tester);
-    expect(find.text('탈퇴하지 못했습니다. 잠시 후 다시 시도해 주세요.'), findsOneWidget);
+    expect(findText('탈퇴하지 못했습니다. 잠시 후 다시 시도해 주세요.'), findsOneWidget);
     expect(find.textContaining('requires-recent-login'), findsNothing);
     expect(find.byType(ProfileScreen), findsOneWidget);
   });
