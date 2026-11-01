@@ -15,8 +15,8 @@ import 'theme.dart';
 
 /// 공고 탭: 홈의 '나에게 맞는 공고' 전체 목록 (2026-10-25 팀장 결정 Q1 B). 순서는 서버가 정한 추천순 그대로다.
 ///
-/// 목록을 조금 끌어내리면 머리의 '나에게 맞는 공고' 글자가 사라지며 같은 자리에 검색·분류 칩이 나온다 (D-026).
-/// 더 끌어내리면 새로 고침이다. 검색어·분류를 고르면 서버가 추천 후보 전체에서 찾는다 (받아 둔 50건 안이 아니라).
+/// 제목 아래에 검색·분류 칩 줄을 늘 둔다 (D-026). 끌어내리면 새로 고침만 한다.
+/// 검색어·분류를 고르면 서버가 추천 후보 전체에서 찾는다 (받아 둔 50건 안이 아니라).
 class NoticesScreen extends StatefulWidget {
   const NoticesScreen({super.key, required this.repository, required this.openUrl, this.today});
 
@@ -29,9 +29,6 @@ class NoticesScreen extends StatefulWidget {
 }
 
 class NoticesScreenState extends State<NoticesScreen> {
-  /// 머리 위에 숨겨 둔 당김 여유. 이만큼 끌어내리면 칩으로 바뀐다.
-  static const _pull = 56.0;
-
   RecommendationList? _list;
   Map<String, String> _categories = const {};
   Object? _error;
@@ -45,14 +42,9 @@ class NoticesScreenState extends State<NoticesScreen> {
   Timer? _debounce;
   final _queryField = TextEditingController();
   final _queryFocus = FocusNode();
-  late final _scroll = ScrollController(initialScrollOffset: _pull);
 
-  /// 머리가 칩으로 바뀐 상태 / 그중 검색 칸을 연 상태
-  bool _chips = false;
+  /// 칩 줄 자리에 검색 칸을 연 상태
   bool _typing = false;
-
-  /// 이번 당김이 맨 위를 넘어 더 당긴 거리. 새로 고침 쪽까지 간 당김(48 이상)은 칩으로 바꾸지 않는다.
-  double _overscroll = 0;
 
   DateTime get _today => widget.today ?? DateTime.now();
   bool get _filtering => _query.trim().isNotEmpty || _category != null;
@@ -68,7 +60,6 @@ class NoticesScreenState extends State<NoticesScreen> {
     _debounce?.cancel();
     _queryField.dispose();
     _queryFocus.dispose();
-    _scroll.dispose();
     super.dispose();
   }
 
@@ -103,29 +94,6 @@ class NoticesScreenState extends State<NoticesScreen> {
         setState(() => _error = e);
       }
     }
-  }
-
-  /// 끌어내렸다 놓으면: 반 넘게 당겼으면 칩으로 바꾸고, 어느 쪽이든 당김 여유는 다시 숨긴다.
-  /// 칩 상태에서 검색·분류 없이 목록을 한참 내려가면 다시 제목으로 돌려 둔다.
-  bool _onScroll(ScrollNotification n) {
-    if (n.depth != 0 || !_scroll.hasClients) return false;
-    final offset = _scroll.offset;
-    if (n is ScrollStartNotification) _overscroll = 0;
-    if (n is OverscrollNotification && n.overscroll < 0) _overscroll -= n.overscroll;
-    final refreshing = _overscroll >= 48;
-    if (n is ScrollEndNotification && offset < _pull) {
-      // 새로 고침까지 당겼으면 칩을 띄우지 않고, 거르는 중이 아니면 이미 뜬 칩도 접는다
-      final chips = refreshing ? _chips && (_filtering || _typing) : _chips || offset < _pull / 2;
-      if (chips != _chips) setState(() => _chips = chips);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scroll.hasClients && _scroll.offset < _pull) {
-          _scroll.animateTo(_pull, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
-        }
-      });
-    } else if (n is ScrollUpdateNotification && _chips && !_filtering && !_typing && offset > _pull + 400) {
-      setState(() => _chips = false);
-    }
-    return false;
   }
 
   void _onQueryChanged(String value) {
@@ -214,108 +182,66 @@ class NoticesScreenState extends State<NoticesScreen> {
     }
     // 검색 결과를 받기 전에는 예전 목록을 그대로 두지 않고 비운다 (다른 조건의 공고가 섞여 보이지 않게).
     final items = !_filtering ? list.items : (_results?.items ?? const <RecommendationEntry>[]);
-    final title = list.personalized ? '나에게 맞는 공고' : '최신 공고';
-    return NotificationListener<ScrollNotification>(
-      onNotification: _onScroll,
-      child: RefreshIndicator(
-        onRefresh: refresh,
-        // 쉬는 위치가 당김 여유(_pull)만큼 내려가 있어 맨 위에서 시작하는 당김이 없다.
-        // 기본(onEdge)은 맨 위에서 시작한 당김만 받으므로, 당기다 맨 위를 넘으면 받게 한다.
-        triggerMode: RefreshIndicatorTriggerMode.anywhere,
-        child: CustomScrollView(
-          controller: _scroll,
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            const SliverToBoxAdapter(child: SizedBox(height: _pull)),
-            SliverToBoxAdapter(
-              child: AnimatedBuilder(
-                animation: _scroll,
-                builder: (context, _) {
-                  // 당긴 만큼 제목이 흐려지고 칩이 나온다. 칩 상태면 끝까지 칩
-                  final pulled = _scroll.hasClients ? ((_pull - _scroll.offset) / _pull).clamp(0.0, 1.0) : 0.0;
-                  final t = _chips ? 1.0 : pulled;
-                  return SizedBox(
-                    height: 64,
-                    child: Stack(
-                      children: [
-                        IgnorePointer(
-                          ignoring: t > 0.5,
-                          child: Opacity(
-                            opacity: 1 - t,
-                            child: ScreenHeader(title, trailing: list.personalized ? '추천순' : '최신순'),
-                          ),
-                        ),
-                        IgnorePointer(
-                          ignoring: t <= 0.5,
-                          child: Opacity(
-                            opacity: t,
-                            child: _typing
-                                ? _SearchRow(
-                                    controller: _queryField,
-                                    focus: _queryFocus,
-                                    onChanged: _onQueryChanged,
-                                    onSubmitted: (_) => _search(),
-                                    onClose: _closeSearch,
-                                  )
-                                : _ChipRow(
-                                    // 행정 공지는 추천에 나오지 않는다
-                                    categories: {
-                                      for (final MapEntry(:key, :value) in _categories.entries)
-                                        if (key != 'admin_notice') key: value,
-                                    },
-                                    selected: _category,
-                                    query: _query,
-                                    onSearch: _openSearch,
-                                    onSelect: _onCategory,
-                                  ),
-                          ),
-                        ),
-                      ],
+    return RefreshIndicator(
+      onRefresh: refresh,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverToBoxAdapter(
+            child: ScreenHeader(
+              list.personalized ? '나에게 맞는 공고' : '최신 공고',
+              trailing: !_filtering ? (list.personalized ? '추천순' : '최신순') : (_searching ? '찾는 중' : '${items.length}건'),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 52,
+              child: _typing
+                  ? _SearchRow(
+                      controller: _queryField,
+                      focus: _queryFocus,
+                      onChanged: _onQueryChanged,
+                      onSubmitted: (_) => _search(),
+                      onClose: _closeSearch,
+                    )
+                  : _ChipRow(
+                      // 행정 공지는 추천에 나오지 않는다
+                      categories: {
+                        for (final MapEntry(:key, :value) in _categories.entries)
+                          if (key != 'admin_notice') key: value,
+                      },
+                      selected: _category,
+                      query: _query,
+                      onSearch: _openSearch,
+                      onSelect: _onCategory,
                     ),
+            ),
+          ),
+          if (items.isEmpty && !_searching)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: _filtering
+                  ? const MessageView(title: '찾는 공고가 없습니다', detail: '다른 검색어나 분류로 찾아 보세요.')
+                  : const MessageView(title: '표시할 공고가 없습니다', detail: '학교 공지를 다시 확인하면 여기에 표시됩니다.'),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+              sliver: SliverList.separated(
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (context, i) {
+                  final e = items[i];
+                  return NoticeCard(
+                    entry: e,
+                    category: _categories[e.notice.category] ?? e.notice.category,
+                    today: _today,
+                    onTap: () => _open(e),
                   );
                 },
               ),
             ),
-            if (_filtering)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
-                  child: Text(_searching ? '찾는 중' : '${items.length}건 · 추천순', style: captionStyle(context)),
-                ),
-              ),
-            if (items.isEmpty && !_searching)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: _filtering
-                    ? const MessageView(title: '찾는 공고가 없습니다', detail: '다른 검색어나 분류로 찾아 보세요.')
-                    : const MessageView(title: '표시할 공고가 없습니다', detail: '학교 공지를 다시 확인하면 여기에 표시됩니다.'),
-              )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                sliver: SliverList.separated(
-                  itemCount: items.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (context, i) {
-                    final e = items[i];
-                    return NoticeCard(
-                      entry: e,
-                      category: _categories[e.notice.category] ?? e.notice.category,
-                      today: _today,
-                      onTap: () => _open(e),
-                    );
-                  },
-                ),
-              ),
-            // 목록이 짧아도 당김 여유를 숨길 수 있게 화면 높이만큼은 늘 내려갈 수 있다.
-            SliverLayoutBuilder(
-              builder: (context, constraints) {
-                final rest = constraints.viewportMainAxisExtent + _pull - constraints.precedingScrollExtent;
-                return SliverToBoxAdapter(child: SizedBox(height: rest > 0 ? rest : 0));
-              },
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -365,7 +291,7 @@ class _CardChip extends StatelessWidget {
   }
 }
 
-/// 머리 자리의 칩 줄: 검색 + 전체 + 분류. 옆으로 넘긴다.
+/// 제목 아래 칩 줄: 검색 + 전체 + 분류. 옆으로 넘긴다.
 class _ChipRow extends StatelessWidget {
   const _ChipRow({
     required this.categories,
@@ -384,7 +310,7 @@ class _ChipRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.only(bottom: 12),
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -424,7 +350,7 @@ class _SearchRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gw;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+      padding: const EdgeInsets.fromLTRB(16, 0, 8, 12),
       child: Row(
         children: [
           Expanded(
@@ -454,8 +380,10 @@ class _SearchRow extends StatelessWidget {
   }
 }
 
-/// 추천 공고 카드. 칩은 가장 중요한 하나만 둔다: 7일 안 마감이면 D-day, 아니면 조건 상태(확인 필요 등).
-/// 분류는 제목 위 작은 글자, 조건 충족은 추천 이유 앞의 작은 체크로 보인다.
+/// 추천 공고 카드 (2026-11-01 단순화). 자세한 내용은 눌러서 리포트로 본다.
+/// - 첫 줄: 분류 · 마감(날짜와 D-day). 마감일이 없으면 '마감일 없음' 또는 원문 설명(선착순 등)
+/// - 오른쪽 칩은 하나: 7일 안 마감이면 D-day, 아니면 조건 상태('조건 충족' / '확인 필요' 회색)
+/// - 마지막 줄: 추천 이유만. 조건 상태는 칩에만 둔다(체크 표시를 이유 앞에 두면 관련도로 읽힌다)
 class NoticeCard extends StatelessWidget {
   const NoticeCard({super.key, required this.entry, required this.category, required this.today, required this.onTap});
 
@@ -475,13 +403,16 @@ class NoticeCard extends StatelessWidget {
     // 확인 필요는 목록에서 회색으로 차분하게 보인다 (D-009).
     final chip = soon
         ? ddayPill(n, today)
-        : (status == 'met' ? null : Pill(status == 'not_met' ? '조건 미충족' : '확인 필요', tone: PillTone.neutral));
+        : switch (status) {
+            'met' => const Pill('조건 충족'),
+            'not_met' => const Pill('조건 미충족', tone: PillTone.neutral),
+            _ => const Pill('확인 필요', tone: PillTone.neutral),
+          };
     final reason = r.reasonCodes.any(personalReasons.containsKey)
         ? r.reasonCodes.map(reasonText).firstWhere((t) => t.isNotEmpty, orElse: () => '')
         : '';
     final deadline = n.applicationDeadline;
-    final accent = TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.accent);
-    final muted = TextStyle(fontSize: 14, color: c.muted);
+    final meta = TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c.muted);
     return GwCard(
       onTap: onTap,
       padding: const EdgeInsets.all(18),
@@ -491,62 +422,56 @@ class NoticeCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  category,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c.muted),
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: category),
+                      const TextSpan(text: ' · '),
+                      if (deadline != null) ...[
+                        TextSpan(
+                          // 한 줄에 들어가게 요일은 빼고(리포트에 있음), 시각은 남긴다
+                          text:
+                              '${deadline.day.month}월 ${deadline.day.day}일${deadline.hasTime ? ' ${deadline.time}' : ''} 마감',
+                          style: TextStyle(fontWeight: FontWeight.w600, color: soon ? c.urgent : c.body),
+                        ),
+                        if (left != null && !soon) TextSpan(text: ' · ${left == 0 ? '오늘' : 'D-$left'}'),
+                      ] else
+                        TextSpan(text: n.deadlineNote ?? '마감일 없음'),
+                    ],
+                  ),
+                  style: meta,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
               ?chip,
             ],
           ),
           const SizedBox(height: 6),
           Text(
-            keepAll(n.title),
+            n.title,
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: c.ink, height: 1.45),
           ),
-          const SizedBox(height: 6),
-          if (deadline != null)
+          if (reason.isNotEmpty || (soon && status != 'met')) ...[
+            const SizedBox(height: 6),
             Text.rich(
               TextSpan(
                 children: [
-                  TextSpan(
-                    text: '${shortDate(deadline)} 마감',
-                    style: TextStyle(fontWeight: FontWeight.w600, color: c.body),
-                  ),
-                  if (left != null && !soon) TextSpan(text: ' · ${left == 0 ? '오늘' : 'D-$left'}'),
+                  if (reason.isNotEmpty)
+                    TextSpan(
+                      text: reason,
+                      style: TextStyle(fontWeight: FontWeight.w500, color: c.accent),
+                    ),
+                  // 칩 자리를 D-day가 차지하면 조건 상태는 여기에 둔다.
+                  if (soon && status != 'met')
+                    TextSpan(
+                      text: '${reason.isEmpty ? '' : ' · '}${status == 'not_met' ? '조건 미충족' : '조건 확인 필요'}',
+                      style: TextStyle(color: c.muted),
+                    ),
                 ],
               ),
-              style: TextStyle(fontSize: 14, color: c.sub),
-            )
-          else
-            Text(n.deadlineNote ?? '공고에 마감일 없음', style: TextStyle(fontSize: 14, color: c.sub)),
-          if (status == 'met' || reason.isNotEmpty || (soon && status != 'met')) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                if (status == 'met') ...[
-                  Icon(Icons.check_rounded, size: 16, color: c.accent, semanticLabel: '조건 충족'),
-                  const SizedBox(width: 4),
-                ],
-                Flexible(
-                  child: Text.rich(
-                    TextSpan(
-                      children: [
-                        if (reason.isNotEmpty)
-                          TextSpan(text: reason, style: accent)
-                        else if (status == 'met')
-                          TextSpan(text: '지원 조건 충족', style: accent),
-                        // 칩 자리를 D-day가 차지하면 조건 상태는 여기에 둔다.
-                        if (soon && status != 'met')
-                          TextSpan(
-                            text: '${reason.isEmpty ? '' : ' · '}${status == 'not_met' ? '조건 미충족' : '조건 확인 필요'}',
-                            style: muted,
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+              style: const TextStyle(fontSize: 14),
             ),
           ],
         ],
