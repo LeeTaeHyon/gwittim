@@ -12,6 +12,7 @@ flutter run            # 에뮬레이터 또는 실기기
 
 - 데이터 접근은 `lib/data/repository.dart`의 `NoticeRepository`로만 합니다. `SampleNoticeRepository`(지금)와 실제 구현(W6: Firebase 로그인·Firestore·서버 API)을 교체합니다.
 - 샘플 자료 `assets/sample/`는 `uv run python -m tools.export_mobile_sample`로 fixtures에서 만듭니다. 추천 순서·이유는 백엔드 추천 함수 출력 그대로이며, 앱은 점수를 계산하지 않습니다.
+- `flutter run`(샘플 모드)은 샘플 날짜를 오늘 기준으로 옮겨 보여 줍니다. 10월 30일을 오늘로 만든 자료라 언제 켜도 발표회가 오늘 마감, 경진대회가 D-3입니다. 테스트는 원래 날짜를 씁니다.
 - 날짜만 확인된 마감은 시각 없이 표시합니다. 시각이 있는데 시간대가 미상이면 "(시간대 미확인)"을 붙입니다.
 
 ## 서버 API로 실행
