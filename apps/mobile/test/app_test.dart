@@ -654,11 +654,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(opened.single.toString(), 'https://mpu.mjc.ac.kr');
 
-    await tester.scrollUntilVisible(find.text('[합성 샘플] AI 활용 경진대회 참가 안내'), 200);
+    await tester.scrollUntilVisible(findText('[합성 샘플] AI 활용 경진대회 참가 안내'), 200);
     expect(find.text('관련 학교 공지'), findsOneWidget);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -600)); // 아래 버튼에 가리지 않게 끝까지
     await tester.pumpAndSettle();
-    await tester.tap(find.text('[합성 샘플] AI 활용 경진대회 참가 안내'));
+    await tester.tap(findText('[합성 샘플] AI 활용 경진대회 참가 안내'));
     await tester.pumpAndSettle();
     expect(repo.requested.last, 'n_board');
   });
