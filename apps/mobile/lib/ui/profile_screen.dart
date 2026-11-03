@@ -1274,15 +1274,13 @@ class _ChoiceChips extends StatelessWidget {
                     child: Container(
                       height: 44,
                       padding: const EdgeInsets.symmetric(horizontal: 14),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (on) ...[Icon(Icons.check_rounded, size: 16, color: c.onCta), const SizedBox(width: 5)],
-                          Text(
-                            item.name,
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: on ? c.onCta : c.body),
-                          ),
-                        ],
+                      // 체크 아이콘을 넣으면 칩 폭이 바뀌어 줄이 다시 나뉘므로 색 면만으로 표시
+                      child: Center(
+                        widthFactor: 1,
+                        child: Text(
+                          item.name,
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: on ? c.onCta : c.body),
+                        ),
                       ),
                     ),
                   ),
