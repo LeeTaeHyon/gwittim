@@ -562,19 +562,13 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
               child: AnimatedSwitcher(
                 duration: still ? Duration.zero : const Duration(milliseconds: 320),
                 switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, animation) {
-                  final entering = child.key == ValueKey(_step);
-                  return FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: animation.drive(
-                        Tween(begin: Offset((entering ? _direction : -_direction) * 0.12, 0), end: Offset.zero),
-                      ),
-                      child: child,
-                    ),
-                  );
-                },
+                // 앞 단계는 바로 감추고 새 단계만 밀려 들어온다.
+                // 화면 전체를 흐리게 겹치면 GPU 그리기가 프레임당 20~40ms까지 늘어 끊긴다(S25 Ultra 측정).
+                layoutBuilder: (current, _) => current ?? const SizedBox.shrink(),
+                transitionBuilder: (child, animation) => SlideTransition(
+                  position: animation.drive(Tween(begin: Offset(_direction * 0.12, 0), end: Offset.zero)),
+                  child: child,
+                ),
                 child: KeyedSubtree(key: ValueKey(_step), child: intro ? const _SetupIntro() : _page(c)),
               ),
             ),
