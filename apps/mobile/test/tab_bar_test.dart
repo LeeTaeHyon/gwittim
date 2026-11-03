@@ -134,7 +134,7 @@ void main() {
     expect(tester.getRect(find.byKey(const ValueKey('tab-dot'))).width, 4);
   });
 
-  testWidgets('탭을 바꾸면 화면이 좌우로 밀리며 바뀌고, 화면 상태는 유지된다', (tester) async {
+  testWidgets('탭을 바꾸면 새 화면이 고른 쪽에서 밀려 들어오고, 화면 상태는 유지된다', (tester) async {
     final repo = SampleNoticeRepository();
     await tester.runAsync(repo.preload);
     await tester.pumpWidget(
@@ -149,15 +149,14 @@ void main() {
     double x(Type screen) => tester.getTopLeft(find.byType(screen)).dx;
     final home = tester.state(find.byType(HomeScreen));
 
-    // 오른쪽 탭으로: 새 화면은 오른쪽에서 들어오고 홈은 왼쪽으로 밀려난다
+    // 오른쪽 탭으로: 새 화면은 오른쪽에서 들어오고 홈은 바로 감춘다(겹쳐 흐리게 하면 끊긴다)
     await tester.tap(find.text('공고'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 80));
     expect(x(NoticesScreen), greaterThan(0));
-    expect(x(HomeScreen), lessThan(0));
+    expect(find.byType(HomeScreen), findsNothing);
     await tester.pumpAndSettle();
     expect(x(NoticesScreen), 0);
-    expect(find.byType(HomeScreen), findsNothing); // 화면 밖으로 빠졌다
 
     // 왼쪽 탭으로: 홈이 왼쪽에서 들어온다
     await tester.tap(find.text('오늘'));

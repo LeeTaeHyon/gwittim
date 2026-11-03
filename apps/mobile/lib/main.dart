@@ -214,15 +214,12 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   final _savedKey = GlobalKey<SavedScreenState>();
   int _tab = 0;
 
-  /// 탭을 바꾸는 동안 밀려나는 화면과 방향 (오른쪽 탭으로 가면 1)
-  int? _leaving;
+  /// 탭을 바꾼 방향 (오른쪽 탭으로 가면 1)
   int _direction = 1;
 
-  /// 탭을 바꾸면 지금 화면은 반대쪽으로 밀려나며 흐려지고, 새 화면은 고른 쪽에서 들어온다.
-  late final _switch = AnimationController(vsync: this, duration: const Duration(milliseconds: 320), value: 1)
-    ..addStatusListener((status) {
-      if (status == AnimationStatus.completed && _leaving != null) setState(() => _leaving = null);
-    });
+  /// 탭을 바꾸면 지금 화면은 바로 감추고, 새 화면만 고른 쪽에서 밀려 들어온다.
+  /// 두 화면을 겹쳐 흐리게 하면 GPU 그리기가 프레임당 30~50ms까지 늘어 끊긴다(S25 Ultra 측정).
+  late final _switch = AnimationController(vsync: this, duration: const Duration(milliseconds: 320), value: 1);
 
   void _select(int i) {
     // 저장 상태가 다른 탭에서 바뀔 수 있어 다시 받는다.
@@ -232,7 +229,6 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     final animate = MediaQuery.maybeDisableAnimationsOf(context) != true;
     setState(() {
       _direction = i > _tab ? 1 : -1;
-      _leaving = animate ? _tab : null;
       _tab = i;
     });
     if (animate) _switch.forward(from: 0);
@@ -292,22 +288,14 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   /// 탭 화면 하나. 위젯 구조는 늘 같게 두어 화면 상태가 유지된다.
   Widget _page(int i, Widget screen) {
     return Offstage(
-      offstage: i != _tab && i != _leaving,
+      offstage: i != _tab,
       child: AnimatedBuilder(
         animation: _switch,
         child: screen,
         builder: (context, child) {
-          final raw = _switch.value;
-          final t = Curves.easeOutCubic.transform(raw);
-          final entering = i == _tab;
-          final opacity = entering
-              ? Curves.easeOut.transform(((raw - 0.2) / 0.8).clamp(0.0, 1.0))
-              : 1 - Curves.easeOut.transform((raw / 0.4).clamp(0.0, 1.0));
-          final dx = entering ? _direction * 48 * (1 - t) : -_direction * 48 * t;
-          return Opacity(
-            opacity: i == _tab || i == _leaving ? opacity : 1,
-            child: Transform.translate(offset: Offset(i == _tab || i == _leaving ? dx : 0, 0), child: child),
-          );
+          final t = Curves.easeOutCubic.transform(_switch.value);
+          final dx = i == _tab ? _direction * 48 * (1 - t) : 0.0;
+          return Transform.translate(offset: Offset(dx, 0), child: child);
         },
       ),
     );
