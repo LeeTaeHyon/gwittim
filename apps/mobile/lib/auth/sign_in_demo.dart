@@ -493,15 +493,12 @@ class _RankingScene extends StatelessWidget {
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(color: on ? c.cta : c.neutral, borderRadius: BorderRadius.circular(14)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (on) ...[Icon(Icons.check_rounded, size: 14, color: c.onCta), const SizedBox(width: 3)],
-          Text(
-            label,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: on ? c.onCta : c.sub),
-          ),
-        ],
+      child: Center(
+        widthFactor: 1,
+        child: Text(
+          label,
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: on ? c.onCta : c.sub),
+        ),
       ),
     ),
   );
