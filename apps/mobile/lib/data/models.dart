@@ -59,6 +59,9 @@ class NoticeSummary {
   final String category;
   /// 원문 링크. 웹 원문이 없는 카카오톡 알림톡은 null (D-019).
   final String? sourceUrl;
+
+  /// 카카오톡 알림톡 공고. 웹 원문이 없는 출처는 알림톡뿐이다 (D-019).
+  bool get isKakao => sourceUrl == null;
   final DateInfo? published;
   final DateInfo? applicationDeadline;
   final String? deadlineNote;

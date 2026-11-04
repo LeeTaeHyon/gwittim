@@ -9,6 +9,7 @@ import 'briefing_data.dart';
 import 'common.dart';
 import 'components.dart';
 import 'format.dart';
+import 'icons.dart';
 import 'report_screen.dart';
 import 'skeleton.dart';
 import 'theme.dart';
@@ -384,6 +385,7 @@ class _SearchRow extends StatelessWidget {
 /// - 첫 줄: 분류 · 마감(날짜와 D-day). 마감일이 없으면 '마감일 없음' 또는 원문 설명(선착순 등)
 /// - 오른쪽 칩은 하나: 7일 안 마감이면 D-day, 아니면 조건 상태(리포트와 같은 색)
 /// - 마지막 줄: 추천 이유만. 조건 상태는 칩에만 둔다(체크 표시를 이유 앞에 두면 관련도로 읽힌다)
+/// - 카카오톡 알림톡 공고는 말풍선 카드에 첫 줄 앞 말풍선 아이콘. 열어 보지 않아도 게시판 공고와 구분된다 (2026-11-03 팀장 요청)
 class NoticeCard extends StatelessWidget {
   const NoticeCard({super.key, required this.entry, required this.category, required this.today, required this.onTap});
 
@@ -415,6 +417,7 @@ class NoticeCard extends StatelessWidget {
     final meta = TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c.muted);
     return GwCard(
       onTap: onTap,
+      bubble: n.isKakao,
       padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -425,6 +428,14 @@ class NoticeCard extends StatelessWidget {
                 child: Text.rich(
                   TextSpan(
                     children: [
+                      if (n.isKakao)
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.middle,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 5),
+                            child: GwIcon(GwGlyph.today, size: 16, color: c.muted, semanticLabel: '카카오톡 알림톡'),
+                          ),
+                        ),
                       TextSpan(text: category),
                       const TextSpan(text: ' · '),
                       if (deadline != null) ...[
