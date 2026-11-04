@@ -504,7 +504,7 @@ class _BriefingCard extends StatelessWidget {
               if (urgentCount > 0) _Badge(icon: Icons.schedule_rounded, label: '마감 임박 $urgentCount건', urgent: true),
               if (b.fresh.isNotEmpty) _Badge(icon: Icons.fiber_new_rounded, label: '새 공고 ${b.fresh.length}건'),
               if (b.career.isNotEmpty) _Badge(icon: Icons.explore_rounded, label: '진로 관련 ${b.career.length}건'),
-              if (b.majorPick != null) const _Badge(icon: Icons.school_rounded, label: '학과 통계 추천'),
+              if (b.majorPick != null) const _Badge(icon: Icons.school_rounded, label: '졸업생 진로 추천'),
               if (b.changed.isNotEmpty) _Badge(icon: Icons.update_rounded, label: '마감 바뀐 저장 공고 ${b.changed.length}건'),
             ],
           ),

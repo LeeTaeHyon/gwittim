@@ -86,7 +86,7 @@ class BriefingScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
               child: Text(
-                keepAll('추천 순서는 관심사·희망 직무·전공·학과 통계·마감 시기로 정합니다. 합격 가능성과는 관계없습니다.'),
+                keepAll('추천 순서는 관심사·희망 직무·전공·졸업생 진로·마감 시기로 정합니다. 합격 가능성과는 관계없습니다.'),
                 style: TextStyle(fontSize: 12.5, height: 1.6, color: c.muted),
               ),
             ),
@@ -273,7 +273,7 @@ class MajorPickLabel extends StatelessWidget {
   const MajorPickLabel({super.key});
 
   @override
-  Widget build(BuildContext context) => const Pill('학과 통계 추천', tone: PillTone.neutral);
+  Widget build(BuildContext context) => const Pill('졸업생 진로 추천', tone: PillTone.neutral);
 }
 
 /// 학과 통계 추천 (D-021). 학생이 고르지 않은 분야를 앱이 먼저 권하는 것이라, 표시를 붙이고 원하는지 묻는다.
@@ -298,9 +298,9 @@ class _MajorPickBubbleState extends State<_MajorPickBubble> {
     if (!mounted) return;
     setState(
       () => _answered = interested
-          ? '답변 감사합니다. 학과 통계 추천을 계속 표시합니다.'
+          ? '답변 감사합니다. 졸업생 진로 추천을 계속 표시합니다.'
           : stopped
-          ? '관심 없음 답이 이어져 학과 통계 추천을 $majorPickPauseDays일 동안 표시하지 않습니다.'
+          ? '관심 없음 답이 이어져 졸업생 진로 추천을 $majorPickPauseDays일 동안 표시하지 않습니다.'
           : '이 공고는 다시 추천하지 않습니다.',
     );
   }
@@ -381,7 +381,7 @@ class _Hero extends StatelessWidget {
       if (b.urgent != null) '마감 임박',
       if (b.fresh.isNotEmpty) '새 공고 ${b.fresh.length}건',
       if (b.career.isNotEmpty) '진로 관련 ${b.career.length}건',
-      if (b.majorPick != null) '학과 통계 추천',
+      if (b.majorPick != null) '졸업생 진로 추천',
       if (b.changed.isNotEmpty) '마감 변경 ${b.changed.length}건',
     ];
     return Container(

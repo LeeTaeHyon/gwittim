@@ -5,7 +5,9 @@ import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/main.dart';
 import 'package:gwittim/ui/briefing_data.dart';
 import 'package:gwittim/ui/briefing_screen.dart';
+import 'package:gwittim/ui/components.dart';
 import 'package:gwittim/ui/home_screen.dart';
+import 'package:gwittim/ui/icons.dart';
 import 'package:gwittim/ui/notices_screen.dart';
 import 'package:gwittim/ui/report_screen.dart';
 import 'package:gwittim/ui/theme.dart';
@@ -752,7 +754,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('학과 통계 추천'), findsNWidgets(2)); // 머리 배지와 카드 표시
+    expect(find.text('졸업생 진로 추천'), findsNWidgets(2)); // 머리 배지와 카드 표시
     expect(findTextContaining('같은 학과 졸업생이 많이 가는 분야'), findsOneWidget);
     // 아래 고정 버튼에 가리지 않게 끝까지 올린다
     await tester.drag(find.byType(ListView), const Offset(0, -2000));
@@ -837,5 +839,40 @@ void main() {
     await tester.tap(find.descendant(of: home, matching: find.text('다시 시도')));
     await tester.pumpAndSettle();
     expect(repo.calls, before + 1);
+  });
+
+  testWidgets('알림톡 공고 카드는 말풍선 모양과 말풍선 아이콘, 게시판 공고는 일반 카드', (tester) async {
+    final board = entry('게시판 공고', deadline: '2026-10-30');
+    final kakao = RecommendationEntry(
+      recommendation: board.recommendation,
+      notice: NoticeSummary(
+        noticeId: 'k',
+        noticeVersion: 1,
+        title: '알림톡 공고',
+        category: 'contest',
+        sourceUrl: null,
+        published: null,
+        applicationDeadline: day('2026-10-30'),
+        deadlineNote: null,
+        lifecycleStatus: 'open',
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: gwittimTheme(),
+        home: Scaffold(
+          body: Column(
+            children: [
+              for (final e in [board, kakao]) NoticeCard(entry: e, category: '공모전', today: today, onTap: () {}),
+            ],
+          ),
+        ),
+      ),
+    );
+    GwCard card(String title) => tester.widget(find.ancestor(of: findText(title), matching: find.byType(GwCard)));
+    expect(card('게시판 공고').bubble, isFalse);
+    expect(card('알림톡 공고').bubble, isTrue);
+    expect(find.byType(GwIcon), findsOneWidget);
+    expect(tester.widget<GwIcon>(find.byType(GwIcon)).semanticLabel, '카카오톡 알림톡');
   });
 }
