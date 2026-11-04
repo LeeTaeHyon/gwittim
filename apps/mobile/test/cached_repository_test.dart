@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gwittim/data/cached_repository.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/main.dart';
 import 'package:gwittim/ui/briefing_data.dart';
+import 'package:gwittim/ui/theme.dart';
 
 /// 샘플 저장소에 요청 횟수를 센다. [failNext]이면 다음 추천 목록 요청이 실패한다.
 class CountingRepository extends SampleNoticeRepository {
@@ -127,5 +129,74 @@ void main() {
     expect(find.text('나에게 맞는 공고'), findsOneWidget);
     expect(counting.calls['recommendations'], 1);
     expect(counting.calls['saved'], 1);
+  });
+
+  testWidgets('뒤로 갔던 앱이 돌아오면: 같은 날 잠깐이면 그대로, 날짜가 바뀌었거나 30분 지났으면 다시 받는다', (tester) async {
+    final counting = CountingRepository();
+    await tester.runAsync(counting.preload);
+    var now = DateTime(2026, 10, 17, 23, 40);
+    await tester.pumpWidget(
+      GwMaterialApp(
+        themeController: ThemeController(),
+        home: HomeShell(
+          repository: CachedNoticeRepository(counting),
+          openUrl: (_) async => true,
+          briefingStore: MemoryBriefingStore(alwaysShown: true),
+          themeController: ThemeController(),
+          today: DateTime(2026, 10, 17),
+          clock: () => now,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(counting.calls['recommendations'], 1);
+
+    Future<void> away(Duration d) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      now = now.add(d);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+    }
+
+    await away(const Duration(minutes: 5)); // 23:45, 같은 날
+    expect(counting.calls['recommendations'], 1);
+
+    await away(const Duration(minutes: 20)); // 다음 날 00:05
+    expect(counting.calls['recommendations'], 2);
+    expect(counting.calls['saved'], 2);
+
+    await away(const Duration(minutes: 30)); // 같은 날 00:35, 30분 지남
+    expect(counting.calls['recommendations'], 3);
+  });
+
+  testWidgets('화면을 켜 둔 채 자정을 넘기면 다시 받는다', (tester) async {
+    final counting = CountingRepository();
+    await tester.runAsync(counting.preload);
+    await tester.pumpWidget(
+      GwMaterialApp(
+        themeController: ThemeController(),
+        home: HomeShell(
+          repository: CachedNoticeRepository(counting),
+          openUrl: (_) async => true,
+          briefingStore: MemoryBriefingStore(alwaysShown: true),
+          themeController: ThemeController(),
+          today: DateTime(2026, 10, 17),
+          clock: () => DateTime(2026, 10, 17, 23, 59, 30),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(counting.calls['recommendations'], 1);
+
+    await tester.pump(const Duration(seconds: 29));
+    expect(counting.calls['recommendations'], 1);
+    await tester.pump(const Duration(seconds: 2)); // 00:00:01
+    await tester.pumpAndSettle();
+    expect(counting.calls['recommendations'], 2);
+    expect(counting.calls['saved'], 2);
   });
 }
