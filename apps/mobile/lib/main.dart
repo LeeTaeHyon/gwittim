@@ -309,6 +309,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
         (_) => ProfileScreen(
           repository: widget.repository,
           themeController: widget.themeController,
+          openUrl: widget.openUrl,
           onSaved: () {
             _homeKey.currentState?.reload();
             _noticesKey.currentState?.reload();
