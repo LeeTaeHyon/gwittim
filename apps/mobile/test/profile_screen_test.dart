@@ -4,6 +4,8 @@ import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/main.dart';
 import 'package:gwittim/ui/briefing_data.dart';
+import 'package:gwittim/ui/common.dart';
+import 'package:gwittim/ui/legal.dart';
 import 'package:gwittim/ui/profile_screen.dart';
 
 import 'finders.dart';
@@ -22,13 +24,14 @@ void main() {
     WidgetTester tester, {
     T? repository,
     Future<void> Function()? onSignOut,
+    OpenUrl? openUrl,
   }) async {
     final repo = repository ?? SampleNoticeRepository(personalized: false) as T;
     await tester.runAsync(repo.preload);
     await tester.pumpWidget(
       GwittimApp(
         repository: repo,
-        openUrl: (_) async => true,
+        openUrl: openUrl ?? (_) async => true,
         today: DateTime(2026, 10, 17),
         briefingStore: MemoryBriefingStore(alwaysShown: true),
         onSignOut: onSignOut,
@@ -295,7 +298,21 @@ void main() {
     );
   });
 
-  testWidgets('계정: 로그아웃은 동작하고, 탈퇴는 아직 화면만 있다', (tester) async {
+  testWidgets('앱 정보: 이용약관·개인정보 처리방침 줄을 누르면 문서가 열린다 (D-030)', (tester) async {
+    final opened = <Uri>[];
+    await openProfile(
+      tester,
+      openUrl: (url) async {
+        opened.add(url);
+        return true;
+      },
+    );
+    await tapIn(tester, profileList(), find.text('이용약관'));
+    await tapIn(tester, profileList(), find.text('개인정보 처리방침'));
+    expect(opened, [termsUrl, privacyUrl]);
+  });
+
+  testWidgets('계정: 로그아웃은 동작하고, 탈퇴 연결이 없으면 준비 중으로 안내한다', (tester) async {
     var signedOut = 0;
     // 프로필이 없으면 로그인 모드에서 입력 단계가 먼저 뜬다. 계정 칸만 보므로 프로필이 있는 상태로 시작한다.
     await openProfile(tester, repository: SampleNoticeRepository(), onSignOut: () async => signedOut++);

@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../data/api_repository.dart';
@@ -6,6 +7,7 @@ import '../main.dart';
 import '../ui/briefing_data.dart';
 import '../ui/common.dart';
 import '../ui/format.dart';
+import '../ui/legal.dart';
 import '../ui/logo.dart';
 import '../ui/skeleton.dart';
 import '../ui/theme.dart';
@@ -80,7 +82,7 @@ class _AuthGateState extends State<AuthGate> {
         }
         return GwMaterialApp(
           themeController: _theme,
-          home: SignInScreen(auth: widget.auth),
+          home: SignInScreen(auth: widget.auth, openUrl: widget.openUrl),
         );
       },
     );
@@ -89,9 +91,12 @@ class _AuthGateState extends State<AuthGate> {
 
 /// 로그인 화면 (D-010). 소개 문구에서 알림을 약속하지 않는다 (푸시 알림은 P0 제외).
 class SignInScreen extends StatefulWidget {
-  const SignInScreen({super.key, required this.auth});
+  const SignInScreen({super.key, required this.auth, required this.openUrl});
 
   final AuthService auth;
+
+  /// 약관·처리방침 문서를 연다.
+  final OpenUrl openUrl;
 
   @override
   State<SignInScreen> createState() => _SignInScreenState();
@@ -245,7 +250,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                _TermsLine(color: c.loginSub, linkColor: c.loginInk),
+                _TermsLine(color: c.loginSub, linkColor: c.loginInk, openUrl: widget.openUrl),
               ],
             ),
           ),
@@ -255,24 +260,41 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 }
 
-/// 이용약관·개인정보 처리방침 동의 문구. 문서가 아직 없어 링크 자리만 둔다 (D-010 한계).
-class _TermsLine extends StatelessWidget {
-  const _TermsLine({required this.color, required this.linkColor});
+/// 이용약관·개인정보 처리방침 동의 문구. 밑줄 친 두 말을 누르면 공개 문서가 열린다 (D-030).
+class _TermsLine extends StatefulWidget {
+  const _TermsLine({required this.color, required this.linkColor, required this.openUrl});
 
   final Color color;
   final Color linkColor;
+  final OpenUrl openUrl;
+
+  @override
+  State<_TermsLine> createState() => _TermsLineState();
+}
+
+class _TermsLineState extends State<_TermsLine> {
+  late final _terms = TapGestureRecognizer()..onTap = () => openLegal(context, widget.openUrl, termsUrl);
+  late final _privacy = TapGestureRecognizer()..onTap = () => openLegal(context, widget.openUrl, privacyUrl);
+
+  @override
+  void dispose() {
+    _terms.dispose();
+    _privacy.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final linkColor = widget.linkColor;
     final link = TextStyle(color: linkColor, decoration: TextDecoration.underline, decorationColor: linkColor);
     return Text.rich(
       TextSpan(
-        style: TextStyle(fontSize: 12.5, height: 1.6, color: color),
+        style: TextStyle(fontSize: 12.5, height: 1.6, color: widget.color),
         children: [
           const TextSpan(text: '시작하면 '),
-          TextSpan(text: '이용약관', style: link),
+          TextSpan(text: '이용약관', style: link, recognizer: _terms),
           const TextSpan(text: '과 '),
-          TextSpan(text: '개인정보 처리방침', style: link),
+          TextSpan(text: '개인정보 처리방침', style: link, recognizer: _privacy),
           const TextSpan(text: '에 동의한 것으로 봅니다'),
         ],
       ),
