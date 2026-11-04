@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/api_repository.dart';
 import '../data/repository.dart';
 import '../main.dart';
 import '../ui/briefing_data.dart';
@@ -26,7 +27,7 @@ class AuthGate extends StatefulWidget {
   final AuthService auth;
 
   /// 로그인된 사용자의 토큰 공급자로 실제 Repository를 만든다.
-  final NoticeRepository Function(Future<String?> Function() tokenProvider) repositoryFor;
+  final NoticeRepository Function(TokenProvider tokenProvider) repositoryFor;
   final OpenUrl openUrl;
 
   /// 테스트에서 바꿔 끼운다. 기본은 기기 저장소.

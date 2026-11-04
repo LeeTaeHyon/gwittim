@@ -50,7 +50,7 @@ Future<void> main() async {
   if (_devToken.isNotEmpty) {
     _run(
       GwittimApp(
-        repository: CachedNoticeRepository(ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: () async => _devToken)),
+        repository: CachedNoticeRepository(ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: ({refresh = false}) async => _devToken)),
         openUrl: _openExternal,
         themeController: theme,
       ),
