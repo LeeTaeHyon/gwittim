@@ -6,6 +6,7 @@ import 'app_info.dart';
 import 'common.dart';
 import 'components.dart';
 import 'format.dart';
+import 'legal.dart';
 import 'logo.dart';
 import 'skeleton.dart';
 import 'theme.dart';
@@ -19,12 +20,16 @@ class ProfileScreen extends StatefulWidget {
     required this.repository,
     required this.themeController,
     required this.onSaved,
+    required this.openUrl,
     this.onSignOut,
     this.onDeleteAccount,
   });
 
   final NoticeRepository repository;
   final ThemeController themeController;
+
+  /// 이용약관·개인정보 처리방침 문서를 연다 (D-030).
+  final OpenUrl openUrl;
 
   /// 저장 후 추천을 다시 받도록 알린다.
   final VoidCallback onSaved;
@@ -296,6 +301,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Divider(height: 1, color: c.line),
                 ),
                 const _InfoRow(label: '버전', value: appVersion),
+                Divider(height: 1, color: c.line),
+                _InfoRow(label: '이용약관', onTap: () => openLegal(context, widget.openUrl, termsUrl)),
+                Divider(height: 1, color: c.line),
+                _InfoRow(label: '개인정보 처리방침', onTap: () => openLegal(context, widget.openUrl, privacyUrl)),
                 Divider(height: 1, color: c.line),
                 _InfoRow(label: '오픈소스 라이선스', onTap: _openLicenses),
               ],

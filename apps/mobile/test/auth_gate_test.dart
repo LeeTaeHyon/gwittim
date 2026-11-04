@@ -8,6 +8,7 @@ import 'package:gwittim/auth/google_sign_in_button.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/ui/briefing_data.dart';
+import 'package:gwittim/ui/legal.dart';
 import 'package:gwittim/ui/profile_screen.dart';
 import 'package:gwittim/ui/theme.dart';
 
@@ -274,6 +275,36 @@ void main() {
     expect(find.textContaining('알려'), findsNothing);
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
     expect(scaffold.backgroundColor, GwColors.light.loginBg);
+  });
+
+  testWidgets('로그인 화면: 이용약관·개인정보 처리방침을 누르면 문서가 열리고, 못 열면 안내한다 (D-030)', (tester) async {
+    final auth = FakeAuth();
+    final opened = <Uri>[];
+    var ok = true;
+    await tester.pumpWidget(
+      AuthGate(
+        auth: auth,
+        repositoryFor: (_) => SampleNoticeRepository(),
+        openUrl: (url) async {
+          opened.add(url);
+          return ok;
+        },
+      ),
+    );
+    auth.start();
+    await settle(tester);
+
+    await tester.tapOnText(find.textRange.ofSubstring('이용약관'));
+    await tester.tapOnText(find.textRange.ofSubstring('개인정보 처리방침'));
+    await settle(tester);
+    expect(opened, [termsUrl, privacyUrl]);
+    expect(find.text('문서를 열지 못했습니다.'), findsNothing);
+
+    ok = false;
+    await tester.tapOnText(find.textRange.ofSubstring('이용약관'));
+    await settle(tester);
+    expect(find.text('문서를 열지 못했습니다.'), findsOneWidget);
+    expect(auth.signInCalls, 0);
   });
 
   testWidgets('다크 설정이면 로그인 바탕도 다크', (tester) async {
