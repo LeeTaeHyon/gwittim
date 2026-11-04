@@ -142,6 +142,7 @@ Widget _riseIn(double p, Widget child) => Opacity(
 TextStyle _kicker(Color color) => TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color);
 
 /// 장면 1: 앱이 알려 주는 소식의 예시. 말풍선마다 '…' 입력 중 표시가 잠깐 보인 뒤 0.9초 간격으로 도착한다.
+/// 말풍선이 카톡·푸시 알림으로 읽히지 않도록 위에 '오늘의 귀띔' 이름표와 설명을 한 줄로 둔다.
 class _BubbleScene extends StatelessWidget {
   const _BubbleScene({required this.ms});
 
@@ -159,8 +160,39 @@ class _BubbleScene extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Opacity(
+          opacity: Curves.easeOut.transform(_span(ms, 0, 300)),
+          alwaysIncludeSemantics: true,
+          // 로그인 화면 높이가 빠듯해서 이름표와 설명을 한 줄로 둔다. 카드 밖 남색 바탕 위라 로고처럼 라임 배지로 둔다.
+          child: Row(
+            children: [
+              Container(
+                height: 22,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(color: c.lime, borderRadius: BorderRadius.circular(6)),
+                child: Center(
+                  widthFactor: 1,
+                  child: Text(
+                    '오늘의 귀띔',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.limeInk),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  '앱에서 정리한 오늘 소식',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c.loginSub),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
         for (var i = 0; i < bubbles.length; i++) ...[
-          if (i > 0) const SizedBox(height: 10),
+          if (i > 0) const SizedBox(height: 6),
           Padding(
             padding: EdgeInsets.only(left: indents[i]),
             child: _slot(bubbles[i], ms - (300 + 900 * i)),
@@ -239,7 +271,7 @@ class _ExampleBubble extends StatelessWidget {
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(color: c.loginCard, borderRadius: _bubbleRadius),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -297,7 +329,7 @@ Widget _tag(GwColors c, String text) => Container(
 );
 
 /// 장면 2: 공고 리포트의 지원 전 체크리스트. 카드가 아래에서 올라온 뒤 빈 칸에 차례로 체크가 찍히고,
-/// 성적 조건은 받지 않으므로 '직접 확인'으로 남는다 (D-009).
+/// 성적 조건은 받지 않으므로 '직접 확인'으로 남는다 (D-009). 평점을 실제로 보는 장학 공고를 예로 든다 (D-029).
 class _ChecklistScene extends StatelessWidget {
   const _ChecklistScene({required this.ms});
 
@@ -314,7 +346,7 @@ class _ChecklistScene extends StatelessWidget {
           Text('지원 전 체크리스트', style: _kicker(c.accent)),
           const SizedBox(height: 3),
           Text(
-            '컴퓨터공학과 프로젝트 발표회',
+            '컴퓨터공학과 장학생 선발',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink),
