@@ -79,6 +79,9 @@ class CalendarScreenState extends State<CalendarScreen> {
   late DateTime _month = DateTime(_today.year, _today.month);
   late DateTime _selected = _day(_today);
 
+  /// [_month]·[_selected]를 정할 때의 오늘
+  late DateTime _shownToday = _day(_today);
+
   DateTime get _today => widget.today ?? DateTime.now();
 
   static DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -113,7 +116,14 @@ class CalendarScreenState extends State<CalendarScreen> {
       }
       if (!mounted) return;
       final savedIds = {for (final s in saved) s.notice.noticeId};
+      final today = _day(_today);
       setState(() {
+        // 켜 둔 채 날짜가 바뀌었으면 이번 달·선택한 날을 새 오늘로 옮긴다.
+        if (today != _shownToday) {
+          _shownToday = today;
+          _month = DateTime(today.year, today.month);
+          _selected = today;
+        }
         _items = calendarItems(list, saved);
         _undated = deadlineCandidates(list)
             .where((e) => e.notice.applicationDeadline == null && !savedIds.contains(e.notice.noticeId))
