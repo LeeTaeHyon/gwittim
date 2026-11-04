@@ -139,6 +139,33 @@ void main() {
     expect(find.text('조건 충족'), findsOneWidget);
   });
 
+  testWidgets('켜 둔 채 날짜가 바뀌면 다시 받을 때 이번 달·고른 날이 새 오늘로 옮겨 간다', (tester) async {
+    tester.view.physicalSize = const Size(800, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repo = SampleNoticeRepository();
+    await tester.runAsync(repo.preload);
+    Widget app(DateTime today) => GwittimApp(
+      repository: repo,
+      openUrl: (_) async => true,
+      today: today,
+      briefingStore: MemoryBriefingStore(alwaysShown: true),
+    );
+    await tester.pumpWidget(app(DateTime(2026, 10, 31)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('달력'));
+    await tester.pumpAndSettle();
+    expect(find.text('2026년 10월'), findsOneWidget);
+    expect(find.text('10월 31일(토) 마감'), findsOneWidget);
+
+    await tester.pumpWidget(app(DateTime(2026, 11, 1)));
+    await tester.tap(find.text('달력').last); // 탭을 다시 누르면 다시 받는다 (화면 제목도 '달력')
+    await tester.pumpAndSettle();
+    expect(find.text('2026년 11월'), findsOneWidget);
+    expect(find.text('11월 1일(일) 마감'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'^11월 1일 일요일, 오늘')), findsOneWidget);
+  });
+
   testWidgets('저장한 공고는 채운 점과 북마크로 보인다', (tester) async {
     tester.view.physicalSize = const Size(800, 2000);
     tester.view.devicePixelRatio = 1;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -193,6 +195,7 @@ class HomeShell extends StatefulWidget {
     this.today,
     this.onSignOut,
     this.onDeleteAccount,
+    this.clock = DateTime.now,
   });
 
   final Future<void> Function()? onSignOut;
@@ -203,16 +206,28 @@ class HomeShell extends StatefulWidget {
   final ThemeController themeController;
   final DateTime? today;
 
+  /// 앱이 다시 앞으로 나왔을 때 새로 받을지 정하는 시계. 테스트용.
+  final DateTime Function() clock;
+
   @override
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMixin {
+/// 뒤로 갔던 앱이 이만큼 지나 돌아오면 탭을 새로 받는다. 수집 배치가 하루 두 번이라 잠깐 다녀온 경우는 그대로 둔다.
+const resumeRefreshAfter = Duration(minutes: 30);
+
+class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final _homeKey = GlobalKey<HomeScreenState>();
   final _noticesKey = GlobalKey<NoticesScreenState>();
   final _calendarKey = GlobalKey<CalendarScreenState>();
   final _savedKey = GlobalKey<SavedScreenState>();
   int _tab = 0;
+
+  /// 앱이 뒤로 간 시각. 돌아올 때 날짜가 바뀌었으면 D-day·달력 '오늘'이 어제에 머물지 않게 다시 받는다.
+  DateTime? _leftAt;
+
+  /// 화면을 켜 둔 채 자정을 넘길 때 탭을 새로 받는 타이머. 앱이 뒤로 가면 멈추고, 돌아오면 그때 시계로 다시 잡는다.
+  Timer? _midnight;
 
   /// 탭을 바꾼 방향 (오른쪽 탭으로 가면 1)
   int _direction = 1;
@@ -235,9 +250,55 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _scheduleMidnight();
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _midnight?.cancel();
     _switch.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final now = widget.clock();
+    if (state == AppLifecycleState.hidden || state == AppLifecycleState.paused) {
+      _leftAt ??= now;
+      _midnight?.cancel();
+      return;
+    }
+    if (state != AppLifecycleState.resumed) return;
+    _scheduleMidnight();
+    final left = _leftAt;
+    _leftAt = null;
+    if (left == null) return;
+    final newDay = DateUtils.dateOnly(left) != DateUtils.dateOnly(now);
+    if (newDay || now.difference(left) >= resumeRefreshAfter) _refreshTabs();
+  }
+
+  /// 다음 자정에 탭을 새로 받는다. 타이머가 조금 일찍 깨도 새 날짜로 계산되게 1초 뒤로 잡는다.
+  void _scheduleMidnight() {
+    _midnight?.cancel();
+    final now = widget.clock();
+    final next = DateTime(now.year, now.month, now.day + 1);
+    _midnight = Timer(next.difference(now) + const Duration(seconds: 1), () {
+      _refreshTabs();
+      _scheduleMidnight();
+    });
+  }
+
+  /// 탭끼리 나눠 쓰는 응답을 버리고 네 탭을 다시 받는다. 받는 동안 보이던 화면은 그대로 둔다.
+  void _refreshTabs() {
+    forgetCached(widget.repository);
+    _homeKey.currentState?.reload();
+    _noticesKey.currentState?.reload();
+    _calendarKey.currentState?.reload();
+    _savedKey.currentState?.reload();
   }
 
   /// 내 정보는 탭이 아니라 홈 머리 오른쪽 버튼으로 연다 (2026-10-25 팀장 결정 Q1 B).
