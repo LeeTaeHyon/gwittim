@@ -104,7 +104,7 @@ http.Response _route(http.Request req) {
 
 ApiNoticeRepository repo({String? token = 'good', http.Client? client}) => ApiNoticeRepository(
   baseUrl: _base,
-  tokenProvider: () async => token,
+  tokenProvider: ({refresh = false}) async => token,
   client: client ?? MockClient((r) async => _route(r)),
 );
 
@@ -176,11 +176,36 @@ void main() {
     await expectLater(repo(token: 'bad').listRecommendations(), throwsKind(RepositoryErrorKind.unauthenticated));
     final html = ApiNoticeRepository(
       baseUrl: _base.resolve('boom/'),
-      tokenProvider: () async => 'good',
+      tokenProvider: ({refresh = false}) async => 'good',
       client: MockClient((req) async => http.Response('<html>oops</html>', 502)),
     );
     await expectLater(html.listRecommendations(), throwsKind(RepositoryErrorKind.unavailable));
     final offline = repo(client: MockClient((_) async => throw const SocketException('offline')));
     await expectLater(offline.listRecommendations(), throwsKind(RepositoryErrorKind.unavailable));
+  });
+
+  test('401이면 토큰을 새로 받아 한 번만 다시 보낸다 (기기 시계가 틀려 만료된 토큰을 받은 경우)', () async {
+    final sent = <String?>[];
+    final refreshes = <bool>[];
+    ApiNoticeRepository withTokens(String cached, String fresh) => ApiNoticeRepository(
+      baseUrl: _base,
+      tokenProvider: ({refresh = false}) async {
+        refreshes.add(refresh);
+        return refresh ? fresh : cached;
+      },
+      client: MockClient((req) async {
+        sent.add(req.headers['Authorization']);
+        return _route(req); // 'good'이 아니면 401
+      }),
+    );
+
+    await withTokens('stale', 'good').listRecommendations();
+    expect(sent, ['Bearer stale', 'Bearer good']);
+    expect(refreshes, [false, true]);
+
+    // 새로 받아도 같은 토큰이면 다시 보내지 않는다
+    sent.clear();
+    await expectLater(withTokens('stale', 'stale').listRecommendations(), throwsKind(RepositoryErrorKind.unauthenticated));
+    expect(sent, ['Bearer stale']);
   });
 }

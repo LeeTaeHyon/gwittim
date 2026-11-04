@@ -6,8 +6,8 @@ abstract class AuthService {
   /// 로그인 상태 변화. true = 로그인됨.
   Stream<bool> get signedIn;
 
-  /// 서버 API에 보낼 Firebase ID 토큰. 로그인 전이면 null.
-  Future<String?> idToken();
+  /// 서버 API에 보낼 Firebase ID 토큰. 로그인 전이면 null. [refresh]이면 받아 둔 토큰 대신 새로 받는다.
+  Future<String?> idToken({bool refresh = false});
 
   /// 사용자가 취소하면 false.
   Future<bool> signInWithGoogle();
@@ -35,7 +35,7 @@ class FirebaseAuthService implements AuthService {
   Stream<bool> get signedIn => _auth.authStateChanges().map((user) => user != null);
 
   @override
-  Future<String?> idToken() async => _auth.currentUser?.getIdToken();
+  Future<String?> idToken({bool refresh = false}) async => _auth.currentUser?.getIdToken(refresh);
 
   @override
   Future<bool> signInWithGoogle() async {
