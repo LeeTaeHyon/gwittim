@@ -30,7 +30,7 @@ class FakeAuth implements AuthService {
   Stream<bool> get signedIn => _state.stream;
 
   @override
-  Future<String?> idToken() async => _signedIn ? 'fake-id-token' : null;
+  Future<String?> idToken({bool refresh = false}) async => _signedIn ? 'fake-id-token' : null;
 
   @override
   Future<bool> signInWithGoogle() async {

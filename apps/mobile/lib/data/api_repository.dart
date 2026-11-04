@@ -7,8 +7,9 @@ import 'package:http/http.dart' as http;
 import 'models.dart';
 import 'repository.dart';
 
-/// 로그인 토큰 공급자. W6에서 Firebase Auth의 ID 토큰으로 바꾼다. 로그인 전이면 null.
-typedef TokenProvider = Future<String?> Function();
+/// 로그인 토큰 공급자 (Firebase Auth ID 토큰). 로그인 전이면 null.
+/// [refresh]이면 받아 둔 토큰을 쓰지 않고 새로 받는다.
+typedef TokenProvider = Future<String?> Function({bool refresh});
 
 /// 서버 API(backend/api, W13)를 쓰는 실제 Repository.
 /// 사용자 ID는 보내지 않는다. 서버가 토큰에서 정한다 (SPEC §5).
@@ -39,6 +40,18 @@ class ApiNoticeRepository implements NoticeRepository {
   Future<http.Response> _send(String method, String path, {Map<String, dynamic>? body}) async {
     final token = await tokenProvider();
     if (token == null) throw const RepositoryException(RepositoryErrorKind.unauthenticated);
+    var response = await _request(method, path, token, body);
+    // 기기 시계가 틀리면 만료된 토큰을 아직 쓸 수 있다고 보고 그대로 줄 수 있다.
+    // 401이면 토큰을 새로 받아 한 번만 다시 보낸다. 서버는 401일 때 요청을 처리하지 않으므로 저장·삭제도 다시 보내도 된다.
+    if (response.statusCode == 401) {
+      final fresh = await tokenProvider(refresh: true);
+      if (fresh != null && fresh != token) response = await _request(method, path, fresh, body);
+    }
+    if (response.statusCode >= 200 && response.statusCode < 300) return response;
+    throw RepositoryException(_kindOf(response));
+  }
+
+  Future<http.Response> _request(String method, String path, String token, Map<String, dynamic>? body) async {
     final request = http.Request(method, baseUrl.resolve(path))
       ..headers['Authorization'] = 'Bearer $token'
       ..headers['Accept'] = 'application/json';
@@ -46,9 +59,8 @@ class ApiNoticeRepository implements NoticeRepository {
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(body);
     }
-    final http.Response response;
     try {
-      response = await http.Response.fromStream(await _client.send(request).timeout(timeout));
+      return await http.Response.fromStream(await _client.send(request).timeout(timeout));
     } on TimeoutException {
       throw const RepositoryException(RepositoryErrorKind.unavailable);
     } on SocketException {
@@ -56,8 +68,6 @@ class ApiNoticeRepository implements NoticeRepository {
     } on http.ClientException {
       throw const RepositoryException(RepositoryErrorKind.unavailable);
     }
-    if (response.statusCode >= 200 && response.statusCode < 300) return response;
-    throw RepositoryException(_kindOf(response));
   }
 
   RepositoryErrorKind _kindOf(http.Response response) {

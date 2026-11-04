@@ -14,7 +14,7 @@ void main() {
   final skip = base == null ? 'GWITTIM_LIVE_API 미설정' : false;
 
   ApiNoticeRepository repo(String token) =>
-      ApiNoticeRepository(baseUrl: Uri.parse(base!), tokenProvider: () async => token);
+      ApiNoticeRepository(baseUrl: Uri.parse(base!), tokenProvider: ({refresh = false}) async => token);
 
   test('실제 서버 응답을 앱 모델로 읽는다', () async {
     final r = repo('dev-token');
