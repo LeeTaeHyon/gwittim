@@ -474,6 +474,11 @@ class ProfileEditScreen extends StatefulWidget {
 
 const _steps = ['학적', '관심 분야', '희망 직무'];
 
+/// 관심 분야·희망 직무는 각각 최대 5개, 3개 넘으면 안내 (D-031).
+/// 점수는 하나라도 겹치면 1이라 많이 고를수록 덜 원하는 분야 공고가 섞인다.
+const _maxPicks = 5;
+const _suggestedPicks = 3;
+
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
   late String? _universityId = widget.profile?.universityId ?? _p0University;
   late String? _majorId = widget.profile?.majorId;
@@ -493,6 +498,19 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     _direction = step > _step ? 1 : -1;
     _step = step;
   });
+
+  /// 예전에 5개보다 많이 저장한 프로필은 줄여야 다음 단계·저장으로 넘어간다.
+  bool get _overLimit => switch (_step) {
+    1 => _interests.length > _maxPicks,
+    2 => _interests.length > _maxPicks || _roles.length > _maxPicks,
+    _ => false,
+  };
+
+  void _showLimit() {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('최대 $_maxPicks개까지 선택할 수 있습니다.')));
+  }
 
   Future<void> _save() async {
     setState(() => _saving = true);
@@ -601,7 +619,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                     ],
                   )
                 : FilledButton(
-                    onPressed: _saving ? null : (last ? _save : () => _go(_step + 1)),
+                    onPressed: _saving || _overLimit ? null : (last ? _save : () => _go(_step + 1)),
                     child: Text(last ? '저장하기' : '다음'),
                   ),
           ),
@@ -676,7 +694,12 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       _ => (
         '희망 직무',
         '선택한 직무와 관련된 공고가 먼저 표시됩니다.',
-        _ChoiceChips(items: widget.roles, selected: _roles, onChanged: (s) => setState(() => _roles = s)),
+        _ChoiceChips(
+          items: widget.roles,
+          selected: _roles,
+          onChanged: (s) => setState(() => _roles = s),
+          onLimit: _showLimit,
+        ),
       ),
     };
     final count = switch (_step) {
@@ -698,11 +721,16 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                 ),
               ),
             ),
-            if (count != null) Text('$count개 선택', style: caption),
+            if (count != null)
+              Semantics(
+                label: '$_maxPicks개 중 $count개 선택',
+                child: ExcludeSemantics(child: Text('$count/$_maxPicks개 선택', style: caption)),
+              ),
           ],
         ),
         const SizedBox(height: 6),
         Text(keepAll(detail), style: caption),
+        if (count != null && count > _suggestedPicks) _PickLimitNote(count: count),
         const SizedBox(height: 16),
         body,
       ],
@@ -713,7 +741,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   /// 미리 고르지 않는다. 학생이 눌러야 프로필에 들어간다.
   Widget _interestBody(String? majorName) {
     void onChanged(Set<String> s) => setState(() => _interests = s);
-    final all = _ChoiceChips(items: widget.interests, selected: _interests, onChanged: onChanged);
+    final all = _ChoiceChips(items: widget.interests, selected: _interests, onChanged: onChanged, onLimit: _showLimit);
     final ids = widget.majorInterests[_majorId] ?? const <String>[];
     final suggested = [for (final id in ids) ...widget.interests.where((i) => i.id == id)];
     if (majorName == null || suggested.isEmpty) return all;
@@ -722,7 +750,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       children: [
         TipBubble(title: '$majorName 졸업생이 많이 가는 분야', detail: '커리어넷 학과정보의 졸업생 진로 통계(2020 조사) 기준입니다. 누른 분야만 저장됩니다.'),
         const SizedBox(height: 12),
-        _ChoiceChips(items: suggested, selected: _interests, onChanged: onChanged),
+        _ChoiceChips(items: suggested, selected: _interests, onChanged: onChanged, onLimit: _showLimit),
         const SizedBox(height: 28),
         const _FieldLabel('전체 분야'),
         const SizedBox(height: 8),
@@ -1247,12 +1275,52 @@ class _SegmentsState<T> extends State<_Segments<T>> {
 }
 
 /// 공통 사전의 칩 여러 개 고르기
+/// 3개를 넘겨 고르면 칩 위에 남는 안내 (D-031). 스낵바처럼 사라지지 않아 고르는 동안 계속 보인다.
+class _PickLimitNote extends StatelessWidget {
+  const _PickLimitNote({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final text = count > _maxPicks
+        ? '최대 $_maxPicks개까지 저장됩니다. ${count - _maxPicks}개를 해제해 주세요.'
+        : '$_suggestedPicks개 이하일 때 추천이 더 정확합니다.';
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Semantics(
+        liveRegion: true,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(Icons.info_outline_rounded, size: 16, color: c.check),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                keepAll(text),
+                style: TextStyle(fontSize: 13, height: 1.5, fontWeight: FontWeight.w600, color: c.check),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ChoiceChips extends StatelessWidget {
-  const _ChoiceChips({required this.items, required this.selected, required this.onChanged});
+  const _ChoiceChips({required this.items, required this.selected, required this.onChanged, required this.onLimit});
 
   final List<DictionaryItem> items;
   final Set<String> selected;
   final ValueChanged<Set<String>> onChanged;
+
+  /// 이미 최대 개수를 골랐는데 새 칩을 누를 때
+  final VoidCallback onLimit;
 
   @override
   Widget build(BuildContext context) {
@@ -1273,7 +1341,11 @@ class _ChoiceChips extends StatelessWidget {
                   shape: StadiumBorder(side: BorderSide(color: on ? c.cta : c.line, width: 1.5)),
                   child: InkWell(
                     customBorder: const StadiumBorder(),
-                    onTap: () => onChanged(on ? ({...selected}..remove(item.id)) : {...selected, item.id}),
+                    onTap: () {
+                      if (on) return onChanged({...selected}..remove(item.id));
+                      if (selected.length >= _maxPicks) return onLimit();
+                      onChanged({...selected, item.id});
+                    },
                     child: Container(
                       height: 44,
                       padding: const EdgeInsets.symmetric(horizontal: 14),

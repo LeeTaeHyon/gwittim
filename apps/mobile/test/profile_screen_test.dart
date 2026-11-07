@@ -118,16 +118,16 @@ void main() {
 
     // 2단계 관심 분야: 칩을 여러 개 고르면 개수를 보이고, 다시 누르면 뺀다
     expect(find.bySemanticsLabel('2/3단계'), findsOneWidget);
-    expect(find.text('0개 선택'), findsOneWidget);
+    expect(find.text('0/5개 선택'), findsOneWidget);
     // 학과 졸업생이 많이 가는 분야를 먼저 보이지만 미리 고르지 않는다 (D-020)
     expect(find.text('컴퓨터공학과 졸업생이 많이 가는 분야'), findsOneWidget);
     expect(findTextContaining('커리어넷 학과정보'), findsOneWidget);
     expect(find.text('소프트웨어 개발'), findsNWidgets(2)); // 추천 칸과 전체 분야
     await tapIn(tester, editList(), find.text('소프트웨어 개발').first);
     await tapIn(tester, editList(), find.text('AI·데이터'));
-    await expectCount(tester, '2개 선택');
+    await expectCount(tester, '2/5개 선택');
     await tapIn(tester, editList(), find.text('소프트웨어 개발').last); // 전체 분야 칸에서도 같은 선택
-    await expectCount(tester, '1개 선택');
+    await expectCount(tester, '1/5개 선택');
 
     // 뒤로 가면 앞 단계로, 고른 값은 남아 있다
     await tester.tap(find.byTooltip('뒤로'));
@@ -135,7 +135,7 @@ void main() {
     expect(find.bySemanticsLabel('1/3단계'), findsOneWidget);
     expect(find.text('컴퓨터공학과'), findsOneWidget);
     await next(tester);
-    expect(find.text('1개 선택'), findsOneWidget);
+    expect(find.text('1/5개 선택'), findsOneWidget);
     await next(tester);
 
     // 3단계 희망 직무 → 저장하기
@@ -170,6 +170,47 @@ void main() {
     expect(find.text('소프트웨어 개발'), findsOneWidget);
   });
 
+  testWidgets('관심 분야는 최대 5개, 3개를 넘기면 안내가 남는다 (D-031)', (tester) async {
+    await openProfile(tester);
+    await tester.tap(find.text('입력하기'));
+    await tester.pumpAndSettle();
+    await next(tester);
+    for (final name in ['AI·데이터', '소프트웨어 개발', '정보보안']) {
+      await tapIn(tester, editList(), find.text(name));
+    }
+    expect(findTextContaining('추천이 더 정확'), findsNothing);
+    await tapIn(tester, editList(), find.text('전자·하드웨어'));
+    await expectCount(tester, '4/5개 선택');
+    expect(findTextContaining('추천이 더 정확'), findsOneWidget);
+    await tapIn(tester, editList(), find.text('기계·제조'));
+    // 6번째는 고르지 않고 짧게 알린다
+    await tapIn(tester, editList(), find.text('건설·공간정보'));
+    expect(find.text('최대 5개까지 선택할 수 있습니다.'), findsOneWidget);
+    await expectCount(tester, '5/5개 선택');
+    await tapIn(tester, editList(), find.text('AI·데이터')); // 빼는 것은 언제나 된다
+    await expectCount(tester, '4/5개 선택');
+  });
+
+  testWidgets('예전에 5개보다 많이 저장했으면 줄여야 넘어간다 (D-031)', (tester) async {
+    final repo = SampleNoticeRepository(personalized: false);
+    await repo.updateProfile(
+      const UserProfile(
+        universityId: 'mjc',
+        interestIds: ['ai_data', 'construction_spatial', 'design', 'electronics_hw', 'mechanical_manufacturing', 'security'],
+      ),
+    );
+    await openProfile(tester, repository: repo);
+    await tester.tap(find.text('고치기'));
+    await tester.pumpAndSettle();
+    await next(tester);
+    expect(findTextContaining('1개를 해제해'), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, '다음')).onPressed, isNull);
+    await tapIn(tester, editList(), find.text('디자인'));
+    await expectCount(tester, '5/5개 선택');
+    expect(findTextContaining('추천이 더 정확'), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, '다음')).onPressed, isNotNull);
+  });
+
   testWidgets('저장에 실패하면 알리고 입력은 남긴다', (tester) async {
     await openProfile(tester, repository: SaveFails());
     await tester.tap(find.text('입력하기'));
@@ -183,7 +224,7 @@ void main() {
     expect(find.byType(ProfileEditScreen), findsOneWidget);
     await tester.tap(find.byTooltip('뒤로'));
     await tester.pumpAndSettle();
-    expect(find.text('1개 선택'), findsOneWidget);
+    expect(find.text('1/5개 선택'), findsOneWidget);
   });
 
   testWidgets('학과 선택 팝업: 가운데에 뜨고, 고른 학과에 체크, 이름으로 찾고 고르면 닫힌다', (tester) async {

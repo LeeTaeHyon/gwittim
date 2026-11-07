@@ -78,6 +78,16 @@ def test_profile_rejects_user_id_and_unknown_codes(client):
     assert_error(client.put("/v1/profile", headers=ALICE, json={**profile_body(), "grade": 9}), 400, "invalid_argument")
 
 
+def test_profile_limits_interests_and_roles_to_five(client):
+    """관심사·직무는 각각 최대 5개 (D-031)."""
+    five = ["ai_data", "software", "security", "design", "media_content"]
+    assert client.put("/v1/profile", headers=ALICE, json={**profile_body(), "interest_ids": five}).status_code == 200
+    six = [*five, "startup"]
+    assert_error(client.put("/v1/profile", headers=ALICE, json={**profile_body(), "interest_ids": six}), 400, "invalid_argument")
+    roles = ["software_developer", "data_ai", "designer", "marketer", "service", "accountant"]
+    assert_error(client.put("/v1/profile", headers=ALICE, json={**profile_body(), "target_role_ids": roles}), 400, "invalid_argument")
+
+
 def test_users_cannot_see_each_other(client):
     client.put("/v1/profile", headers=ALICE, json=profile_body())
     client.put("/v1/saved/n_synthetic_0004", headers=ALICE)
