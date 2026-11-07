@@ -5,13 +5,14 @@
 
 > 목표·범위·데이터 계약 및 처리 규칙은 [SPEC.md](SPEC.md)를 기준으로 작성되었습니다.
 
-## 현재 상태 (2026-11-03)
+## 현재 상태 (2026-11-07)
 
+- **체험판:** Android 릴리스 APK 0.9.0 배포 (이용약관·개인정보 처리방침 포함), 다른 계정·기기에서 설치·가입·추천 표시 확인
 - **dev 환경 (`gwittim-dev`):** 게시판 수집 배치(일 2회 자동), 알림톡 수동 반영, Cloud Run API 운영 중
 - **실기기 검증:** Galaxy S25 Ultra release 빌드 기준 화면 전환 및 렌더링 프레임 측정 완료
 - **테스트 현황:**
-  - 백엔드: `pytest` 206개 통과 (3개 skip)
-  - 앱: `flutter test` 148개 통과
+  - 백엔드: `pytest` 207개 통과 (3개 skip)
+  - 앱: `flutter test` 157개 통과 (2개 skip)
 - **기록:** 결정 사항 [docs/decisions.md](docs/decisions.md), 진행 상황 [docs/handoff.md](docs/handoff.md)
 
 ## 주요 기능
