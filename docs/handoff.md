@@ -167,7 +167,8 @@
 - 시작·끝에 Windows 알림. 끝 알림에 새·변경·그대로 건수와 gemma4 사용 여부(분석 건수)·걸린 시간 표시
 - gemma4는 새 공고나 내용이 바뀐 공고를 분석할 때만 GPU에 올라가고, 배치가 끝나면 바로 내림(Ollama 기본 5분 대기 없음)
 - 로그 한 줄 요약에 `started_at`·`finished_at`·`seconds`·`llm{used, analyzed, fallback_rule_only, unloaded}` 추가
-- 작업 스케줄러 실행 명령: `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File <Gwittim-batch>\scriptsun_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
+- 작업 스케줄러 실행 명령: `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File <Gwittim-batch>\scripts
+un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 
 운영:
 - 코드 갱신(main 병합 후): `git -C ..\Gwittim-batch fetch origin` → `git -C ..\Gwittim-batch checkout --detach origin/main` → `uv sync` (같은 폴더에서)
@@ -415,6 +416,17 @@
   - 다른 계정·다른 폰에서 설치·가입·홈 추천 표시
 - 남은 일
   - 드라이브 폴더(APK, 설치 안내 PDF) 링크 공유, 제출 폼에 링크 입력
+
+## 지원 조건 판정·추천 순위 수정 (2026-11-10)
+
+- 명세: `docs/eligibility-ranking-fix-spec.md`. 두 PR로 나눔.
+- W1 조건 판정(`fix/eligibility-unrestricted`, `rule-0.8`): 제한 없음 문구가 있어도 미해석 조건·불완전 추출이면 `needs_check`. `학년 무관, 소득분위 3분위 이하` 같은 줄도 소득 조건을 남김. `uv run pytest` 214건 통과(3건 건너뜀).
+- W2 추천 점수(`fix/ranking-untagged-mismatch`, `rank-0.6`, D-032): 고른 관심사·직무 꼬리표가 없는 공고는 불일치 0. SPEC 0.12, 앱 샘플 재생성. `uv run pytest` 208건, `flutter test` 157건 통과(2건 건너뜀).
+- D-020 다시 잼(공고 446건, 학과 31 × 관심사 1위·꼴찌): 상위 5 안 고른 관심사 일치 101 → 102, 91 → 99.
+- 남은 일
+  - 저장된 공고를 `rule-0.8`로 다시 분석해 `met` → `needs_check`로 바뀌는 건수 세기(W1). '성적 무관 누구나' 같은 줄도 확인 필요로 내려감
+  - 두 PR 병합 후 API 다시 배포(팀장 요청 시)
+  - 앱 화면 확인은 안 함(앱 코드 변경 없음)
 
 ## 미결·차단 사항
 

@@ -1,6 +1,6 @@
 """관심도 점수 (SPEC §6 추천 4~6, D-005 #8).
 
-평가 불가 요소는 분모에서 뺀다. 개인화 요소(관심사·직무·전공)를 하나도 평가할 수 없으면 점수를 만들지 않는다.
+평가 불가 요소는 분모에서 뺀다. 고른 관심사·직무의 꼬리표가 공고에 없으면 평가 불가가 아니라 불일치(0)다. 개인화 요소(관심사·직무·전공)를 하나도 평가할 수 없으면 점수를 만들지 않는다.
 """
 from __future__ import annotations
 
@@ -11,9 +11,14 @@ from .major_prior import major_prior_factor
 
 
 def _overlap(profile_codes, notice_codes) -> float | None:
-    if not profile_codes or not notice_codes:
+    """관심사·직무 일치. 학생이 고르지 않았으면 평가 불가.
+
+    학생이 골랐는데 공고에 그 꼬리표가 없으면 불일치(0)다. 평가 불가로 두면 분모에서 빠져
+    학과 통계만 맞는 공고가 고른 분야와 맞는 공고보다 앞선다 (SPEC §6 추천 5 예외).
+    """
+    if not profile_codes:
         return None
-    return 1.0 if set(profile_codes) & set(notice_codes) else 0.0
+    return 1.0 if set(profile_codes) & set(notice_codes or ()) else 0.0
 
 
 def timing_factor(notice: dict, today: date) -> float | None:
