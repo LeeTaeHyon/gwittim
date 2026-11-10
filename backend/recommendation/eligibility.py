@@ -14,9 +14,14 @@ def evaluate(eligibility: dict, profile: dict) -> tuple[str, list[dict]]:
     - 검증된 필수 조건 중 하나라도 확실히 불충족 → not_met
     - 불충족 없이 미입력·미해석 조건, 불완전한 추출, 조건 못 찾음이 있으면 → needs_check
     - 전체 조건 해석이 확인되고 모두 충족 → met
-    - 명시적 제한 없음(explicitly_unrestricted) → met
+    - 명시적 제한 없음(explicitly_unrestricted)이고 추출이 완전하며 미해석 조건이 없을 때만 바로 met.
+      제한 없음 문구가 있어도 미해석 조건·불완전한 추출이 있으면 아래 일반 판정으로 needs_check가 된다
     """
-    if eligibility["explicitly_unrestricted"]:
+    if (
+        eligibility["explicitly_unrestricted"]
+        and eligibility["extraction_complete"]
+        and not eligibility["unresolved_conditions"]
+    ):
         return "met", []
 
     results = []

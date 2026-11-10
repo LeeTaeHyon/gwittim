@@ -203,6 +203,7 @@ class OllamaAnalyzer:
         elig["unresolved_conditions"], _ = tidy_unresolved(elig["unresolved_conditions"] + extra, lines)
         if elig["unresolved_conditions"]:
             elig["extraction_complete"] = False  # LLM은 완전성을 올리지 않고 내리기만 한다
+            elig["explicitly_unrestricted"], elig["unrestricted_evidence"] = False, None  # 제한 없음도 내리기만
 
         year = int(raw["published"]["date"][:4]) if raw.get("published") else None
         lines = [title, *raw["body_text"].splitlines()]

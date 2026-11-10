@@ -7,12 +7,13 @@ import pytest
 from backend.analysis import RuleBasedAnalyzer, build_notice, validate
 from backend.collectors.common import InMemoryStore, content_hash, ingest
 from backend.contracts import schema_errors
-from backend.recommendation import recommend
+from backend.recommendation import evaluate, recommend
 from backend.sources import source_config
 
 ROOT = Path(__file__).resolve().parents[3]
 TODAY = date(2026, 10, 17)
 MJC = source_config("mjc_www_notice")
+PROFILE = json.loads((ROOT / "fixtures/valid/user_profile/complete.json").read_text(encoding="utf-8"))
 
 
 def raw_notice(body: str, title="[합성 샘플] 2026학년도 아이디어 경진대회 참가 안내", attachments=None, **extra) -> dict:
@@ -122,6 +123,27 @@ def test_explicitly_unrestricted():
     elig = RuleBasedAnalyzer().analyze(raw_notice("학년·학과 제한 없이 누구나 참여 가능"), MJC)["eligibility"]
     assert elig["explicitly_unrestricted"] is True
     assert elig["unrestricted_evidence"] == "학년·학과 제한 없이 누구나 참여 가능"
+
+
+@pytest.mark.parametrize("body", [
+    "학년 제한 없음\n소득분위 3분위 이하",
+    "지원자격: 학년 제한 없음, 소득분위 3분위 이하",
+    "학년 무관, 소득분위 3분위 이하",
+])
+def test_unrestricted_phrase_with_unresolved_condition_is_not_unrestricted(body):
+    """제한 없음 문구가 있어도 소득 같은 미해석 조건이 남으면 제한 없음이 아니다 (SPEC §5·§6)."""
+    elig = RuleBasedAnalyzer().analyze(raw_notice(body), MJC)["eligibility"]
+    assert elig["explicitly_unrestricted"] is False and elig["unrestricted_evidence"] is None
+    assert any("소득분위 3분위 이하" in u["evidence"] for u in elig["unresolved_conditions"])
+    assert elig["extraction_complete"] is False
+    assert evaluate(elig, PROFILE)[0] == "needs_check"
+
+
+def test_unrestricted_with_attachment_is_needs_check():
+    attachment = [{"file_name": "[합성] 모집요강.hwp", "url": None, "type": "hwp"}]
+    elig = RuleBasedAnalyzer().analyze(raw_notice("학년 제한 없음", attachments=attachment), MJC)["eligibility"]
+    assert elig["explicitly_unrestricted"] is True and elig["extraction_complete"] is False
+    assert evaluate(elig, PROFILE)[0] == "needs_check"
 
 
 def test_major_condition_and_tags():
