@@ -198,7 +198,9 @@ def test_three_profiles_explain_differences(notices, profile):
 def test_personalized_item_without_personal_factor_has_null_score_last(notices, profile):
     untagged = copy.deepcopy(notices[2])
     untagged.update(notice_id="n_untagged", interest_tags=[], related_roles=[], related_majors=[])
-    out = recommend([untagged, notices[3]], profile, today=TODAY, generated_at=NOW)
+    # 관심사·직무를 고르지 않은 학생: 꼬리표 없는 공고는 개인화 요소가 모두 평가 불가
+    no_choice = dict(profile, interest_ids=[], target_role_ids=[])
+    out = recommend([untagged, notices[3]], no_choice, today=TODAY, generated_at=NOW)
     assert schema_errors("recommendation_list_response", out) == []
     assert out["mode"] == "personalized"
     last = out["items"][-1]["recommendation"]
@@ -247,6 +249,26 @@ def test_chosen_interest_outranks_major_stats(notices):
     assert ids.index("n_synthetic_0003") < ids.index("n_synthetic_0001")
     first = next(i for i in out["items"] if i["notice"]["notice_id"] == "n_synthetic_0001")["recommendation"]
     assert "major_prior_match" in first["reason_codes"] and "interest_match" not in first["reason_codes"]
+
+
+def test_untagged_notice_is_mismatch_for_chosen_interest(notices):
+    """고른 관심사의 꼬리표가 없는 공고는 불일치(0)라, 학과 통계만 맞는 공고가 고른 분야 공고를 넘지 않는다 (D-032)."""
+    a = copy.deepcopy(notices[2])  # 0003 사본, 마감 8일 전
+    a.update(notice_id="n_interest", interest_tags=["public_service"], related_roles=[])
+    a["application_deadline"]["date"] = "2026-10-25"
+    b = copy.deepcopy(a)
+    b.update(notice_id="n_major_stats", interest_tags=[], related_roles=["software_developer"])
+    student = dict(major_only("mjc.computer_engineering"), interest_ids=["public_service"])
+    assert factors(b, student, TODAY)["interest"] == 0.0
+    out = recommend([b, a], student, today=TODAY, generated_at=NOW)
+    assert schema_errors("recommendation_list_response", out) == []
+    items = {i["notice"]["notice_id"]: i["recommendation"] for i in out["items"]}
+    assert [i["notice"]["notice_id"] for i in out["items"]] == ["n_interest", "n_major_stats"]
+    assert items["n_interest"]["score"] == pytest.approx(71.59)
+    assert items["n_major_stats"]["score"] == pytest.approx(42.86)
+    assert "interest_match" in items["n_interest"]["reason_codes"]
+    assert "major_prior_match" in items["n_major_stats"]["reason_codes"]
+    assert "interest_match" not in items["n_major_stats"]["reason_codes"]
 
 
 def test_major_only_profile_ranks_by_major_stats(notices):
