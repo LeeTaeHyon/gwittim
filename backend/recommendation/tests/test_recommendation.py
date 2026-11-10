@@ -66,6 +66,18 @@ def test_explicitly_unrestricted_is_met(notices, profile):
     assert evaluate(notices[2]["eligibility"], profile) == ("met", [])
 
 
+def test_unrestricted_with_unresolved_condition_is_needs_check(notices, profile):
+    elig = copy.deepcopy(notices[2]["eligibility"])
+    elig["unresolved_conditions"] = [{"evidence": "소득분위 3분위 이하", "note": None}]
+    assert evaluate(elig, profile) == ("needs_check", [])
+
+
+def test_unrestricted_with_incomplete_extraction_is_needs_check(notices, profile):
+    elig = copy.deepcopy(notices[2]["eligibility"])
+    elig["extraction_complete"] = False
+    assert evaluate(elig, profile) == ("needs_check", [])
+
+
 def test_unresolved_condition_keeps_needs_check_even_if_all_met(notices, profile):
     elig = copy.deepcopy(notices[0]["eligibility"])
     elig["unresolved_conditions"].append({"evidence": "직전 학기 평점 3.0 이상", "note": None})

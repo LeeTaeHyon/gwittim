@@ -16,7 +16,7 @@ from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
 
-ANALYSIS_VERSION = "rule-0.7"  # 0.7: LLM 미해석 조건은 신청자 본인 조건만(D-023). 0.6: 미해석 조건 정리·우대 사항 표시(D-015). 0.5: 근로·근무 기간은 마감 아님. 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
+ANALYSIS_VERSION = "rule-0.8"  # 0.8: 미해석 조건이 남으면 제한 없음 아님, 제한 없음 줄은 '무관' 면제 없음. 0.7: LLM 미해석 조건은 신청자 본인 조건만(D-023). 0.6: 미해석 조건 정리·우대 사항 표시(D-015). 0.5: 근로·근무 기간은 마감 아님. 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
 
 
 class Analyzer(Protocol):
@@ -418,13 +418,16 @@ class RuleBasedAnalyzer:
             if named:
                 add("major_id", "eq" if len(named) == 1 else "in", named[0] if len(named) == 1 else named, line)
 
-            if (UNRESOLVED.search(line) and not NOT_CONDITION.search(line)) or SEE_ATTACHMENT.search(line):
+            # 제한 없음 문구가 있는 줄은 '무관' 등으로 면제하지 않는다 ('학년 무관, 소득분위 3분위 이하')
+            exempt = NOT_CONDITION.search(line) and not UNRESTRICTED.search(line)
+            if (UNRESOLVED.search(line) and not exempt) or SEE_ATTACHMENT.search(line):
                 unresolved.append({"evidence": line, "note": None})
             if unrestricted_line is None and UNRESTRICTED.search(line):
                 unrestricted_line = line
 
         unresolved, dropped_heading = tidy_unresolved(unresolved, lines)
-        explicit = unrestricted_line is not None and not conditions
+        # 제한 없음 문구가 있어도 조건이나 미해석 조건이 남으면 '제한 없음'으로 보지 않는다 (SPEC §5)
+        explicit = unrestricted_line is not None and not conditions and not unresolved
         complete = (
             (bool(conditions) or explicit)
             and not unresolved
