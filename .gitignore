@@ -96,3 +96,6 @@ key.properties
 
 # ===== Node =====
 node_modules/
+
+# Claude 결과물 보관 폴더 (영상·문서, 저장소에 넣지 않음)
+Claude outputs/
