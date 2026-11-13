@@ -5,6 +5,7 @@
   bootstrap_ci         공지를 복원 추출해 지표(F1 등)의 95% 구간
   cohen_kappa          두 사람 라벨의 일치도 (우연히 같을 확률을 뺀 일치)
   paired_sample_size   두 방법의 정확도 차를 검출하는 데 필요한 시험 세트 크기
+  stratified_folds     교차 검증 겹 나눔 (층화, 묶음 유지)
 """
 from __future__ import annotations
 
@@ -81,6 +82,30 @@ def cohen_kappa(a: Sequence[Hashable], b: Sequence[Hashable]) -> float:
     if pe == 1:
         return 1.0
     return (po - pe) / (1 - pe)
+
+
+def stratified_folds(
+    ids: Sequence[Hashable],
+    stratum: Callable[[Hashable], Hashable],
+    k: int = 5,
+    seed: int = 0,
+    group: Callable[[Hashable], Hashable] | None = None,
+) -> dict[Hashable, int]:
+    """층화 k겹 나눔. {id: 겹 번호 0..k-1}.
+
+    같은 group 값의 id는 한 묶음으로 같은 겹에 넣는다 (거의 같은 공지가 학습과 채점에 갈라지지 않게).
+    묶음을 씨앗으로 섞은 뒤 층(묶음 첫 id의 stratum) 순서로 안정 정렬하고 차례로 0, 1, ..., k-1, 0, ...을 매긴다.
+    그래서 층마다 겹에 고르게 퍼지고, 전체 겹 크기 차도 묶음 크기 정도로 작다.
+    """
+    if k < 2:
+        raise ValueError("k는 2 이상")
+    units: dict[Hashable, list] = {}
+    for i in ids:
+        units.setdefault(group(i) if group else i, []).append(i)
+    order = list(units.values())
+    random.Random(seed).shuffle(order)
+    order.sort(key=lambda members: str(stratum(members[0])))
+    return {i: pos % k for pos, members in enumerate(order) for i in members}
 
 
 def paired_sample_size(psi: float, delta: float, alpha: float = 0.05, power: float = 0.8) -> int:
