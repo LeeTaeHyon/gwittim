@@ -1,13 +1,16 @@
 """두 작업자의 라벨 표 일치도와 합의 (docs/stage2-work-spec.md W2).
 
 입력 (--data-dir, 기본 kakaoTalk_data/processed): 채운 label_sheet_A.csv, label_sheet_B.csv
-검사: 사전에 없는 코드, 빈 칸, 두 표의 공지 목록 차이 → 표 이름·행 번호와 함께 오류를 모두 내고 멈춘다.
+  한쪽 표는 일부만 채워도 된다 (예: A 287건 + B 80건). 세 정답 칸이 모두 빈 행은 '안 매김'으로 본다.
+  일치도와 갈린 칸은 두 사람이 모두 매긴 공지로만 낸다.
+검사: 사전에 없는 코드, 일부 칸만 빈 행, 두 표의 공지 목록 차이 → 표 이름·행 번호와 함께 오류를 모두 내고 멈춘다.
 출력
   화면                       종류 κ, 관심사 꼬리표별 κ(양쪽 합쳐 5건 미만인 꼬리표는 건수만), 전체 대상 κ
   label_disagreements.csv    갈린 칸 목록 (id, 항목, 제목, A, B, 합의). '합의' 칸은 둘이 정해 채운다.
                              다시 돌려도 A·B 답이 그대로인 행의 '합의'는 남긴다.
-  --merge                    합의 칸이 모두 찼을 때만 labels_human.jsonl을 쓴다.
-                             한 줄에 id, interest_ids, category, for_all_students, a, b(합의 전 두 사람의 답)
+  --merge                    합의 칸이 모두 찼고 모든 공지를 한 사람 이상이 매겼을 때만 labels_human.jsonl을 쓴다.
+                             한 줄에 id, interest_ids, category, for_all_students,
+                             a, b(합의 전 두 사람의 답, 안 매겼으면 null). 한 사람만 매긴 공지는 그 답이 정답이다.
 끝에 labels_human.jsonl의 SHA-256을 출력한다. 합의가 끝나면 이 값과 날짜를 docs/decisions.md에 적는다.
 
 사용 (표준 라이브러리만)
@@ -60,16 +63,22 @@ def fmt(field, v):
 
 
 def read_sheet(path, interests, categories, errors):
-    """{id: {"제목", "관심사", "카테고리", "전체대상"}}. 오류는 errors에 모은다."""
+    """({id: {"제목", "관심사", "카테고리", "전체대상"}} 매긴 행만, {id: 제목} 표의 모든 행).
+
+    오류는 errors에 모은다. 세 정답 칸이 모두 빈 행은 안 매긴 행으로 건너뛴다.
+    """
     name = os.path.basename(path)
     if not os.path.exists(path):
         errors.append(f"{name}: 파일 없음")
-        return {}
-    out = {}
+        return {}, {}
+    out, titles = {}, {}
     with open(path, encoding="utf-8-sig") as f:
         for line_no, row in enumerate(csv.DictReader(f), start=2):  # 1행은 머리글
-            if row["id"] in out:
+            if row["id"] in titles:
                 errors.append(f"{name} {line_no}행: id {row['id']} 중복")
+                continue
+            titles[row["id"]] = row["제목"]
+            if not any((row.get(col) or "").strip() for col in FIELDS.values()):
                 continue
             rec = {"제목": row["제목"]}
             for field, col in FIELDS.items():
@@ -78,25 +87,31 @@ def read_sheet(path, interests, categories, errors):
                     errors.append(f"{name} {line_no}행 ({row['id']}) {col}: {err}")
                 rec[field] = v
             out[row["id"]] = rec
-    return out
+    if not out:
+        errors.append(f"{name}: 매긴 행이 없음")
+    return out, titles
 
 
 def load_both(data_dir):
     interests = {i for i, _ in load_dict("interests")}
     categories = {i for i, _ in load_dict("categories")}
     errors = []
-    a = read_sheet(sheet_path(data_dir, "A"), interests, categories, errors)
-    b = read_sheet(sheet_path(data_dir, "B"), interests, categories, errors)
-    if a and b and set(a) != set(b):
-        errors.append(f"두 표의 공지 목록이 다름: A에만 {sorted(set(a) - set(b))}, B에만 {sorted(set(b) - set(a))}")
+    a, titles_a = read_sheet(sheet_path(data_dir, "A"), interests, categories, errors)
+    b, titles_b = read_sheet(sheet_path(data_dir, "B"), interests, categories, errors)
+    if titles_a and titles_b and set(titles_a) != set(titles_b):
+        errors.append(f"두 표의 공지 목록이 다름: A에만 {sorted(set(titles_a) - set(titles_b))}, "
+                      f"B에만 {sorted(set(titles_b) - set(titles_a))}")
+    if a and b and not set(a) & set(b):
+        errors.append("두 사람이 모두 매긴 공지가 없음 (일치도를 낼 수 없음)")
     if errors:
         raise LabelError("\n".join(errors))
-    return a, b, interests, categories
+    return a, b, titles_a, interests, categories
 
 
 def agreement(a, b, interests):
-    ids = sorted(a)
-    report = {"n": len(ids), "category_kappa": cohen_kappa([a[i]["카테고리"] for i in ids], [b[i]["카테고리"] for i in ids]),
+    ids = sorted(set(a) & set(b))
+    report = {"n": len(ids), "n_a": len(a), "n_b": len(b),
+              "category_kappa": cohen_kappa([a[i]["카테고리"] for i in ids], [b[i]["카테고리"] for i in ids]),
               "for_all_kappa": cohen_kappa([a[i]["전체대상"] for i in ids], [b[i]["전체대상"] for i in ids]),
               "interest_exact": sum(a[i]["관심사"] == b[i]["관심사"] for i in ids) / len(ids), "tags": {}}
     for t in sorted(interests):
@@ -110,11 +125,11 @@ def agreement(a, b, interests):
 
 def print_agreement(r):
     flag = lambda k: "" if k >= KAPPA_OK else f"  ← {KAPPA_OK} 미만: 정의 보충 후 다시 매김"
-    print(f"공지 {r['n']}건")
+    print(f"두 사람 모두 매긴 공지 {r['n']}건 (A {r['n_a']}건, B {r['n_b']}건)")
     print(f"종류 κ {r['category_kappa']:.3f}{flag(r['category_kappa'])}")
     print(f"전체 대상 κ {r['for_all_kappa']:.3f}{flag(r['for_all_kappa'])}")
     print(f"관심사 묶음 완전 일치 {r['interest_exact']:.1%}")
-    print("관심사 꼬리표별 (A 건수 / B 건수 / κ)")
+    print("관심사 꼬리표별 (A 건수 / B 건수 / κ, 겹친 공지 기준)")
     for t, s in r["tags"].items():
         if s["A"] + s["B"] == 0:
             continue
@@ -129,7 +144,7 @@ def write_disagreements(data_dir, a, b):
         with open(path, encoding="utf-8-sig") as f:
             kept = {(r["id"], r["항목"], r["A"], r["B"]): r["합의"] for r in csv.DictReader(f)}
     rows = []
-    for i in sorted(a):
+    for i in sorted(set(a) & set(b)):
         for field in FIELDS:
             if a[i][field] != b[i][field]:
                 va, vb = fmt(field, a[i][field]), fmt(field, b[i][field])
@@ -142,8 +157,12 @@ def write_disagreements(data_dir, a, b):
     return path, rows
 
 
-def merge(data_dir, a, b, rows, interests, categories):
+def merge(data_dir, a, b, titles, rows, interests, categories):
     errors, decided = [], {}
+    nobody = sorted(set(titles) - set(a) - set(b))
+    if nobody:
+        more = " …" if len(nobody) > 10 else ""
+        errors.append(f"아무도 매기지 않은 공지 {len(nobody)}건: {nobody[:10]}{more}")
     for line_no, r in enumerate(rows, start=2):
         if not r["합의"].strip():
             errors.append(f"label_disagreements.csv {line_no}행 ({r['id']} {r['항목']}): 합의 칸이 비어 있음")
@@ -160,9 +179,11 @@ def merge(data_dir, a, b, rows, interests, categories):
 
     path = os.path.join(data_dir, "labels_human.jsonl")
     with open(path, "w", encoding="utf-8", newline="\n") as f:
-        for i in sorted(a):
-            final = {field: decided.get((i, field), a[i][field]) for field in FIELDS}
-            line = {"id": i, **answer(final), "a": answer(a[i]), "b": answer(b[i])}
+        for i in sorted(titles):
+            first = a[i] if i in a else b[i]  # 한 사람만 매겼으면 그 사람의 답
+            final = {field: decided.get((i, field), first[field]) for field in FIELDS}
+            line = {"id": i, **answer(final),
+                    "a": answer(a[i]) if i in a else None, "b": answer(b[i]) if i in b else None}
             f.write(json.dumps(line, ensure_ascii=False) + "\n")
     return path
 
@@ -173,12 +194,12 @@ def main(argv=None):
     ap.add_argument("--merge", action="store_true", help="합의 칸이 모두 찼으면 labels_human.jsonl을 쓴다")
     args = ap.parse_args(argv)
     try:
-        a, b, interests, categories = load_both(args.data_dir)
+        a, b, titles, interests, categories = load_both(args.data_dir)
         print_agreement(agreement(a, b, interests))
         path, rows = write_disagreements(args.data_dir, a, b)
         print(f"\n갈린 칸 {len(rows)}개 → {path}")
         if args.merge:
-            merge(args.data_dir, a, b, rows, interests, categories)
+            merge(args.data_dir, a, b, titles, rows, interests, categories)
     except LabelError as e:
         sys.exit(f"오류:\n{e}")
     human = os.path.join(args.data_dir, "labels_human.jsonl")
