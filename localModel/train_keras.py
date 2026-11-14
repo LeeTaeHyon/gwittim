@@ -22,6 +22,10 @@
   .venv/Scripts/python train_keras.py --board             게시판 공고 보강분을 학습에 보탬 (보강 효과 비교용)
   .venv/Scripts/python train_keras.py --cv --unit char --arch avg
                                                           사람 정답으로 채점하는 교차 검증 (labels_human.jsonl 필요)
+  .venv/Scripts/python train_keras.py --cv --target category --unit char --arch avg --board --train-labels human
+                                                          학습 정답도 사람 정답으로 (채점 겹의 정답은 학습에 안 씀)
+  .venv/Scripts/python train_keras.py --compare models/cv_A.json models/cv_B.json
+                                                          두 교차 검증의 자체 모델을 같은 공지·씨앗끼리 짝지어 비교
 
 학습 뒤 export_weights.py로 가중치를 backend/classifier/models/에 꺼내면 앱 배치가 쓴다 (D-019).
 
@@ -175,6 +179,9 @@ def fit(target, unit, arch, tr_ids, val_ids, notices, gemma, min_count=5, epochs
         counts = Counter(gemma[i][key] for i in tr_ids)
         classes, dropped = sorted(counts), []
         to_y = lambda ids: np.array([classes.index(gemma[i][key]) for i in ids])
+        # 학습 세트에 한 번도 없는 종류(예: 전체 1건뿐인 volunteer)는 출력 칸이 없어 검증 손실을 낼 수 없다.
+        # 그런 검증 공지는 조기 종료 판단에서만 뺀다 (없으면 지금과 똑같다)
+        val_ids = [i for i in val_ids if gemma[i][key] in counts]
 
     # 4. 토큰화: 학습 세트로만 단어장을 만들고, 모든 공지를 같은 단어장으로 숫자로 바꾼다
     tokenizer = layers.TextVectorization(
@@ -352,11 +359,17 @@ def print_report(info):
                   + "".join(f"{r[c]:.2f}".rjust(10) for c in cols[1:]) + f"{r['ms']:.0f}".rjust(8))
 
 
-# ---------- 교차 검증: Gemma 라벨로 학습, 사람 정답으로 채점 (docs/stage2-work-spec.md W3) ----------
+# ---------- 교차 검증: 사람 정답으로 채점 (docs/stage2-work-spec.md W3) ----------
 #
 # 사람 정답(labels_human.jsonl)이 있는 공지를 방·정답 종류로 층화해 5겹으로 나누고 씨앗 5개로 반복한다.
 # 겹마다 나머지 공지로만 학습·단어장·조기 종료·문턱값을 정하고, 채점 겹은 예측에만 쓴다.
-# 기준선 측정만 한다: 모델 파일(.keras, _vocab.json)은 쓰지 않고 접힌 예측과 지표만 models/cv_*.json에 남긴다.
+# 모델 파일(.keras, _vocab.json)은 쓰지 않고 접힌 예측과 지표만 models/cv_*.json에 남긴다.
+#
+# 학습 정답(--train-labels)
+#   gemma  Gemma 라벨로 학습 (기준선). Gemma 라벨에는 'other'가 없어 모델도 'other'를 못 낸다.
+#   human  사람 정답으로 학습. 채점 겹의 사람 정답은 그 겹에서 학습·검증 어디에도 안 들어간다
+#          (나머지 4겹의 사람 정답으로만 배운다). 게시판 보강분(--board)은 사람 정답이 없어 Gemma 라벨을 쓴다.
+# 겹 나눔은 사람 정답의 종류로만 정하므로 두 방식의 겹이 똑같다. 그래서 --compare로 공지·씨앗끼리 짝지어 비교할 수 있다.
 
 HUMAN_LABELS = os.path.join(DATA, "labels_human.jsonl")
 CV_FOLDS = 5
@@ -365,6 +378,12 @@ CV_BAND = 0.05  # 캐스케이드 정책 '기타 또는 문턱 ±0.05' (backend/
 CV_METHODS = ["규칙", "Gemma", "자체", "캐스케이드"]
 CV_PAIRS = [("자체", "Gemma"), ("자체", "규칙"), ("Gemma", "규칙"), ("캐스케이드", "Gemma"), ("캐스케이드", "자체")]
 NON_WORD_RE = re.compile(r"\W")
+# 사람끼리도 가장 많이 갈린 두 종류 (D-033 카테고리 κ 0.565의 갈림 대부분). 합쳐 본 정확도를 따로 낸다
+MERGED_CATEGORIES = {"education_program", "extracurricular"}
+
+
+def merge_category(c):
+    return "education_program+extracurricular" if c in MERGED_CATEGORIES else c
 
 
 def dup_key(notice):
@@ -395,8 +414,15 @@ def cv_seed_metrics(rows, target, all_tags, learned):
     if target == "category":
         hit = {m: [r[m] == r["정답"] for r in rows] for m in CV_METHODS}
         score = lambda m, s: sum(hit[m][k] for k in s) / len(s)
-        out = {m: {"맞힘": sum(hit[m]), "정확도": score(m, idx), "wilson": wilson(sum(hit[m]), len(rows))}
-               for m in CV_METHODS}
+        answers = sorted({r["정답"] for r in rows})
+        out = {}
+        for m in CV_METHODS:
+            merged = sum(merge_category(r[m]) == merge_category(r["정답"]) for r in rows)
+            # 정답 종류별 재현율: 사람이 그 종류라고 한 공지 중 이 방법이 맞힌 비율 ('other'를 내는지 보려는 것)
+            recall = {c: [sum(hit[m][k] for k, r in enumerate(rows) if r["정답"] == c),
+                          sum(r["정답"] == c for r in rows)] for c in answers}
+            out[m] = {"맞힘": sum(hit[m]), "정확도": score(m, idx), "wilson": wilson(sum(hit[m]), len(rows)),
+                      "교육비교과_합친_정확도": merged / len(rows), "정답_종류별_맞힘": recall}
     else:
         tag_sets = {"전체": lambda r: all_tags, "배운": lambda r: learned[(r["seed"], r["fold"])]}
         cnt = {(m, t): [tag_counts(r["정답"], r[m], f(r)) for r in rows] for m in CV_METHODS for t, f in tag_sets.items()}
@@ -422,7 +448,8 @@ def cv_seed_metrics(rows, target, all_tags, learned):
             "검정_기준": "정확도" if target == "category" else "관심사 코드 전체로 정확히 일치 (차·구간은 F1_코드전체)"}
 
 
-def run_cv(target, unit, arch, min_count=5, epochs=60, board=False, board_weight=1.0, labels_path=HUMAN_LABELS):
+def run_cv(target, unit, arch, min_count=5, epochs=60, board=False, board_weight=1.0, labels_path=HUMAN_LABELS,
+           train_labels="gemma"):
     if not os.path.exists(labels_path):
         sys.exit(f"사람 정답 {labels_path}가 없어 교차 검증을 하지 않습니다.\n"
                  "make_label_sheet.py → 두 사람이 표 채우기 → label_agreement.py --merge 순서로 만든 뒤, "
@@ -433,24 +460,26 @@ def run_cv(target, unit, arch, min_count=5, epochs=60, board=False, board_weight
     human = {r["id"]: r for r in map(json.loads, filter(str.strip, raw.decode("utf-8").splitlines()))}
     multi = target == "interest"
     key = "interest_ids" if multi else "category"
-    name = f"cv_{target}_{unit}_{arch}" + ("_board" if board else "")
+    name = f"cv_{target}_{unit}_{arch}" + ("_board" if board else "") + ("_human" if train_labels == "human" else "")
 
     notices = read_jsonl("notices.jsonl")
     gemma = read_jsonl("labels_gemma.jsonl")
     rule = read_jsonl("labels_rule.jsonl")
     scored = [i for i in notices if i in human and i in gemma and i in rule]  # 채점 대상
     unknown = sorted(set(human) - set(notices))
-    pool = [i for i in notices if i in gemma]  # 학습에 쓸 수 있는 알림톡 (채점 겹은 겹마다 뺀다)
+    # 학습 정답의 출처. 'Gemma' 열(비교 대상)은 어느 쪽이든 Gemma 라벨 그대로다
+    train_src = human if train_labels == "human" else gemma
+    pool = [i for i in notices if i in train_src]  # 학습에 쓸 수 있는 알림톡 (채점 겹은 겹마다 뺀다)
     group = {i: dup_key(n) for i, n in notices.items()}
 
-    # 게시판 보강분: 학습 세트에만 보탠다 (알림톡과 id가 겹치지 않음: 'mjc_www_*:' 접두)
-    all_notices, all_gemma, board_ids = notices, gemma, []
+    # 게시판 보강분: 학습 세트에만 보탠다 (알림톡과 id가 겹치지 않음: 'mjc_www_*:' 접두). 사람 정답이 없어 Gemma 라벨
+    all_notices, all_labels, board_ids = notices, train_src, []
     if board:
         board_notices, board_labels = read_jsonl("board_notices.jsonl"), read_jsonl("labels_gemma_board.jsonl")
         board_ids = [i for i in board_notices if i in board_labels]
         if set(board_ids) & set(notices):
             sys.exit("게시판 공고와 알림톡 id가 겹침")
-        all_notices, all_gemma = {**notices, **board_notices}, {**gemma, **board_labels}
+        all_notices, all_labels = {**notices, **board_notices}, {**train_src, **board_labels}
 
     rows, folds_info, learned = [], [], {}
     for seed in CV_SEEDS:
@@ -467,7 +496,7 @@ def run_cv(target, unit, arch, min_count=5, epochs=60, board=False, board_weight
             assert not set(test_ids) & (set(tr_ids) | set(val_ids))
 
             tf.keras.utils.set_random_seed(seed * CV_FOLDS + fold)
-            main_fit = fit(target, unit, arch, tr_ids + board_ids, val_ids, all_notices, all_gemma, min_count, epochs,
+            main_fit = fit(target, unit, arch, tr_ids + board_ids, val_ids, all_notices, all_labels, min_count, epochs,
                            frozenset(board_ids), board_weight)
             probs = main_fit.model.predict(main_fit.to_x(test_ids), verbose=0)
             # 캐스케이드의 '애매'는 운영과 같이 관심사 모델이 판단한다 (종류를 채점할 때도 관심사 모델을 따로 학습)
@@ -475,7 +504,7 @@ def run_cv(target, unit, arch, min_count=5, epochs=60, board=False, board_weight
                 inter, inter_probs = main_fit, probs
             else:
                 tf.keras.utils.set_random_seed(seed * CV_FOLDS + fold)
-                inter = fit("interest", unit, arch, tr_ids, val_ids, notices, gemma, min_count, epochs)
+                inter = fit("interest", unit, arch, tr_ids, val_ids, notices, train_src, min_count, epochs)
                 inter_probs = inter.model.predict(inter.to_x(test_ids), verbose=0)
             n_tags = len(inter.classes)
             learned[(seed, fold)] = set(inter.classes)
@@ -504,7 +533,8 @@ def run_cv(target, unit, arch, min_count=5, epochs=60, board=False, board_weight
     point = [k for k, v in per_seed[0]["방법"]["자체"].items() if isinstance(v, float)]
     mean = {m: {k: float(np.mean([per_seed[s]["방법"][m][k] for s in CV_SEEDS])) for k in point} for m in CV_METHODS}
     mean["Gemma_호출"] = float(np.mean([per_seed[s]["Gemma_호출"] for s in CV_SEEDS]))
-    info = {"name": name, "target": target, "labels_file": os.path.basename(labels_path), "labels_sha256": sha256,
+    info = {"name": name, "target": target, "train_labels": train_labels,
+            "labels_file": os.path.basename(labels_path), "labels_sha256": sha256,
             "folds": CV_FOLDS, "seeds": list(CV_SEEDS), "band": CV_BAND, "scored": len(scored),
             "predictions": len(rows), "labels_not_in_notices": unknown, "mean": mean,
             "per_seed": {str(s): v for s, v in per_seed.items()}, "fold_info": folds_info, "rows": rows}
@@ -517,6 +547,8 @@ def run_cv(target, unit, arch, min_count=5, epochs=60, board=False, board_weight
 
 def print_cv_report(info):
     print(f"\n== {info['name']}  (사람 정답 {info['scored']}건 × 씨앗 {len(info['seeds'])}개 = 예측 {info['predictions']}건)")
+    src = {"gemma": "Gemma 라벨", "human": "사람 정답(채점 겹 제외)"}[info.get("train_labels", "gemma")]
+    print(f"학습 정답: {src}")
     print(f"사람 정답 {info['labels_file']} SHA-256 {info['labels_sha256']}")
     if info["labels_not_in_notices"]:
         print(f"notices.jsonl에 없어 뺀 사람 정답 {len(info['labels_not_in_notices'])}건")
@@ -535,7 +567,65 @@ def print_cv_report(info):
     for p in s0["쌍"]:
         print(f"  {p['a']} vs {p['b']}: {p['a만_맞힘']} 대 {p['b만_맞힘']}, McNemar p {p['mcnemar_p']:.3f}, "
               f"차 {p['차']:+.3f} ({p['차_구간'][0]:+.3f} ~ {p['차_구간'][1]:+.3f})")
+    if info["target"] == "category":
+        print("\n씨앗 0 정답 종류별 맞힘 (맞힘/사람 정답 건수)")
+        answers = list(s0["방법"]["자체"]["정답_종류별_맞힘"])
+        print("".ljust(10) + "".join(a[:12].rjust(14) for a in answers))
+        for m, v in s0["방법"].items():
+            print(m.ljust(10) + "".join(f"{v['정답_종류별_맞힘'][a][0]}/{v['정답_종류별_맞힘'][a][1]}".rjust(14)
+                                        for a in answers))
     print(f"\n저장: models/{info['name']}.json (접힌 예측 전체, 씨앗별 지표)")
+
+
+def compare_cv(path_a, path_b):
+    """두 교차 검증 결과의 '자체' 모델을 같은 (공지, 씨앗)끼리 짝지어 비교한다. 파일은 쓰지 않는다.
+
+    같은 사람 정답(SHA-256)·같은 겹 나눔이어야 짝지을 수 있다. 씨앗마다 McNemar(정확 검정)를 내고 평균을 낸다.
+    종류는 정답과 같으면 맞힘, 관심사는 코드 전체로 정확히 일치하면 맞힘(cv_seed_metrics의 검정 기준과 같음).
+    """
+    runs = []
+    for p in (path_a, path_b):
+        with open(p, encoding="utf-8") as f:
+            runs.append(json.load(f))
+    a, b = runs
+    if a["labels_sha256"] != b["labels_sha256"] or a["target"] != b["target"]:
+        sys.exit("사람 정답 파일이나 대상(관심사/종류)이 달라 짝지을 수 없습니다.")
+    target = a["target"]
+    key = lambda r: (r["id"], r["seed"])
+    rows_b = {key(r): r for r in b["rows"]}
+    if set(rows_b) != {key(r) for r in a["rows"]}:
+        sys.exit("두 결과의 (공지, 씨앗) 목록이 다릅니다.")
+    if any(rows_b[key(r)]["fold"] != r["fold"] for r in a["rows"]):
+        sys.exit("겹 나눔이 달라 짝지을 수 없습니다.")
+
+    def correct(r, merged=False):
+        if target == "category":
+            f = merge_category if merged else (lambda c: c)
+            return f(r["자체"]) == f(r["정답"])
+        return set(r["자체"]) == set(r["정답"])
+
+    print(f"\n== 짝 비교: A {a['name']} (학습 정답 {a.get('train_labels', 'gemma')})"
+          f"  vs  B {b['name']} (학습 정답 {b.get('train_labels', 'gemma')})")
+    print("씨앗".ljust(6) + "A 정확도".rjust(10) + "B 정확도".rjust(10) + "A만".rjust(6) + "B만".rjust(6) + "McNemar p".rjust(12)
+          + ("  교육·비교과 합친 A / B" if target == "category" else ""))
+    acc_a, acc_b, merged_a, merged_b = [], [], [], []
+    for seed in a["seeds"]:
+        ra = [r for r in a["rows"] if r["seed"] == seed]
+        ha = [correct(r) for r in ra]
+        hb = [correct(rows_b[key(r)]) for r in ra]
+        only_a = sum(x and not y for x, y in zip(ha, hb))
+        only_b = sum(y and not x for x, y in zip(ha, hb))
+        acc_a.append(sum(ha) / len(ra))
+        acc_b.append(sum(hb) / len(ra))
+        line = (str(seed).ljust(6) + f"{acc_a[-1]:.3f}".rjust(10) + f"{acc_b[-1]:.3f}".rjust(10) + str(only_a).rjust(6)
+                + str(only_b).rjust(6) + f"{mcnemar_exact(only_a, only_b):.4f}".rjust(12))
+        if target == "category":
+            merged_a.append(sum(correct(r, True) for r in ra) / len(ra))
+            merged_b.append(sum(correct(rows_b[key(r)], True) for r in ra) / len(ra))
+            line += f"  {merged_a[-1]:.3f} / {merged_b[-1]:.3f}"
+        print(line)
+    print(f"평균  A {np.mean(acc_a):.3f}  B {np.mean(acc_b):.3f}  차(B−A) {np.mean(acc_b) - np.mean(acc_a):+.3f}"
+          + (f"  |  합친 A {np.mean(merged_a):.3f}  B {np.mean(merged_b):.3f}" if target == "category" else ""))
 
 
 def main():
@@ -552,11 +642,19 @@ def main():
     ap.add_argument("--cv", action="store_true",
                     help="사람 정답(labels_human.jsonl)으로 채점하는 5겹 × 씨앗 5개 교차 검증. 모델 파일은 쓰지 않는다")
     ap.add_argument("--labels", default=HUMAN_LABELS, help="--cv의 사람 정답 파일 (기본 processed/labels_human.jsonl)")
+    ap.add_argument("--train-labels", choices=["gemma", "human"], default="gemma",
+                    help="--cv의 학습 정답: Gemma 라벨(기본) 또는 사람 정답(채점 겹 제외)")
+    ap.add_argument("--compare", nargs=2, metavar=("CV_A", "CV_B"),
+                    help="두 교차 검증 결과(models/cv_*.json)의 자체 모델을 같은 공지·씨앗끼리 비교")
     args = ap.parse_args()
     board = args.board
 
+    if args.compare:
+        compare_cv(*args.compare)
+        return
     if args.cv:
-        run_cv(args.target, args.unit, args.arch, args.min_count, args.epochs, board, args.board_weight, args.labels)
+        run_cv(args.target, args.unit, args.arch, args.min_count, args.epochs, board, args.board_weight, args.labels,
+               args.train_labels)
         return
     if not args.all:
         run(args.target, args.unit, args.arch, args.min_count, args.epochs, board, board_weight=args.board_weight)

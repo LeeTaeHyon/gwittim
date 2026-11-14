@@ -469,6 +469,16 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
   - 수집기: 알림 수신 서비스, 서버로 올리는 관리자 전용 통로(API 다시 배포 필요), 마지막 수신 시각 기록
 - 개인 알림 거르기·가리기 Dart 이식(`feat/ondevice-kakao-filter`, `lib/classifier/kakao_filter.dart`): 카톡 내보내기 665건에서 종류·가림·제목 모두 파서와 같음. 측정 앱에는 아직 연결하지 않음.
 
+## 카테고리 모델 사람 정답 학습 교차 검증 (2026-11-15, D-035)
+
+- 브랜치 `feat/category-human-cv`. `train_keras.py --cv --train-labels human`, `--compare`.
+- 정확도(씨앗 5개 평균): 사람 학습 0.782(보강 있음)·0.769(없음), 지금 앱 배치 방식(Gemma 학습) 0.418, Gemma 0.498. 같은 공지끼리 짝 비교 p < 0.0001.
+- 사람 학습 모델이 `other` 39건 중 35건, `extracurricular` 66건 중 49건을 맞힘(Gemma 학습 모델은 둘 다 0).
+- 결과 파일: `localModel/models/cv_category_char_avg{,_board}{,_human}.json`, 로그 `data/local/cv_category_*.log` (git 제외)
+- 남은 일
+  - 앱 배치 모델 교체 결정(D-035 다음 결정). 교체하면 재학습·내보내기·`MODEL_VERSION`·앱 사본·D-034 일치 확인
+  - 관심사 모델도 사람 정답 학습으로 같은 비교
+
 ## 미결·차단 사항
 
 - 앱 화면 확인 (2026-10-18): 실기기·에뮬레이터 대신 임시 웹 빌드로 피드·상세·저장·프로필을 확인했습니다. 웹 빌드는 저장소에 넣지 않았습니다. 웹에서는 한글 글꼴이 늦게 로드되는 현상이 있었고, 이는 웹 전용입니다.
