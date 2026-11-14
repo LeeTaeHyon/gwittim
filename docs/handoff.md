@@ -465,7 +465,8 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
     - `adb pull /sdcard/Android/data/kr.gwittim.gwittim.probe/files/notif_probe data/local/`
     - 새 알림톡을 PC 카톡에서 내보내 `kakaoTalk_data/inbox/`에 넣고 `python localModel/kakao_collect.py`
     - `uv run python tools/compare_notif_probe.py`
-  - 개인 알림 거르기 규칙 Dart 이식, 알림 수신 서비스, 처리방침 문구
+  - 알림 수신 서비스와 화면, 처리방침 문구
+- 개인 알림 거르기·가리기 Dart 이식(`feat/ondevice-kakao-filter`, `lib/classifier/kakao_filter.dart`): 카톡 내보내기 665건에서 종류·가림·제목 모두 파서와 같음. 측정 앱에는 아직 연결하지 않음.
 
 ## 미결·차단 사항
 

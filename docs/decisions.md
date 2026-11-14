@@ -1629,12 +1629,19 @@ SPEC 범위 변경 (AGENTS.md §3, SPEC 0.4)
 
 - 재현: `uv run python tools/dump_classifier_probs.py` → `apps/mobile`에서 `dart run tool/classifier_parity.dart`. 폰 시간은 `flutter run --profile -t tool/classifier_bench.dart`.
 
+### 개인 알림 거르기·가리기 (2026-11-15)
+
+- 파서(`backend/collectors/mjc_kakao/parser.py`)의 본문 정리, 받는 사람 이름 찾기, 종류 판정(공통 공지·수강 과목·개인·참여자·잡음), 학번·휴대폰·교수·이름 가림, 제목 규칙을 `apps/mobile/lib/classifier/kakao_filter.dart`로 옮김.
+- 파이썬 정규식의 공백(`\s`)·`strip`·`splitlines` 범위가 Dart와 달라 직접 맞췄다. `\d`·`\w`는 파이썬이 Unicode 기준이라 `\p{Nd}`·`[\p{L}\p{N}_]`로 썼다(전 코드 포인트에서 같음을 확인).
+- 합성 골든 25건(`backend/collectors/mjc_kakao/tests/filter_golden.json`)을 파서로 만들고 파이썬·Dart 테스트가 같은 파일을 검사한다.
+- 카톡 내보내기 메시지 665건 전체: 본문 정리·종류·가림·제목 모두 665/665, 받는 사람 이름 목록 같음.
+- 재현: `uv run python tools/dump_kakao_filter.py` → `apps/mobile`에서 `dart run tool/kakao_filter_parity.dart`.
+
 ### 남은 일
 
 - 준비 명세 전제 A: 폰 알림에 본문이 분류할 만큼 들어오는지 확인. 200자 미만이면 수신 방식을 바꾼다.
   - 덤프 대신 알림 기록용 측정 앱(`kr.gwittim.gwittim.probe`, 2026-11-15 S25 Ultra에 설치)으로 잰다. 카카오톡 학교 채널 6곳 알림만 폰 안에 기록하고 받는 순간 기기 안에서 분류한다. 귀띔 앱과 따로 설치되고, 처리방침 대상인 배포 빌드에는 들어가지 않는다.
   - 기록이 모이면 `adb pull`로 받아 `tools/compare_notif_probe.py`로 내보내기 본문과 짝지어 본문 길이와 판정 일치율을 낸다.
-- 개인 알림 거르기·가리기 규칙(`backend/collectors/mjc_kakao/parser.py`)의 Dart 이식
 - 알림 수신 서비스와 화면. 이 기능을 빌드에 넣기 전에 처리방침에 "학교 채널 알림을 기기 안에서만 읽고 서버로 보내지 않음"과 알림 접근 권한 안내를 넣는다.
 
 ### 영향
