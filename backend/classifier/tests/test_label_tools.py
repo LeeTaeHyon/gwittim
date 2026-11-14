@@ -69,10 +69,15 @@ def test_sheet_to_merge(tmp_path, capsys):
     with pytest.raises(SystemExit):
         make_label_sheet.main(["--data-dir", str(tmp_path)])
 
-    # 빈 칸·사전 밖 코드는 행 번호와 함께 오류
+    # 아무것도 안 채운 표, 일부 칸만 빈 행, 사전 밖 코드는 행 번호와 함께 오류
     with pytest.raises(SystemExit) as e:
         label_agreement.main(["--data-dir", str(tmp_path)])
-    assert "2행" in str(e.value) and "빈 칸" in str(e.value)
+    assert "매긴 행이 없음" in str(e.value)
+    fill(tmp_path / "label_sheet_A.csv", {**A, "s01": ("ai_data", "", "N")})
+    fill(tmp_path / "label_sheet_B.csv", B)
+    with pytest.raises(SystemExit) as e:
+        label_agreement.main(["--data-dir", str(tmp_path)])
+    assert "(s01) 정답_카테고리: 빈 칸" in str(e.value)
     fill(tmp_path / "label_sheet_A.csv", {**A, "s01": ("ai_dataa", "education_program", "N")})
     fill(tmp_path / "label_sheet_B.csv", B)
     with pytest.raises(SystemExit) as e:
@@ -111,3 +116,30 @@ def test_sheet_to_merge(tmp_path, capsys):
     label_agreement.main(["--data-dir", str(tmp_path)])
     with open(tmp_path / "label_disagreements.csv", encoding="utf-8-sig") as f:
         assert all(r["합의"] for r in csv.DictReader(f))
+
+
+def test_partial_second_sheet(tmp_path, capsys):
+    """A는 전부, B는 일부만 매김: 일치도는 겹친 공지로, 나머지는 A의 답이 정답."""
+    (tmp_path / "notices.jsonl").write_text("".join(json.dumps(n, ensure_ascii=False) + "\n" for n in NOTICES), encoding="utf-8")
+    make_label_sheet.main(["--data-dir", str(tmp_path)])
+    blank = ("", "", "")
+    fill(tmp_path / "label_sheet_A.csv", A)
+    fill(tmp_path / "label_sheet_B.csv", {**B, "s03": blank, "s05": blank})
+    label_agreement.main(["--data-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert "두 사람 모두 매긴 공지 3건 (A 5건, B 3건)" in out and "갈린 칸 2개" in out
+
+    set_consensus(tmp_path / "label_disagreements.csv", {("s02", "관심사"): "global_language", ("s04", "카테고리"): "contest"})
+    label_agreement.main(["--data-dir", str(tmp_path), "--merge"])
+    human = {r["id"]: r for r in map(json.loads, (tmp_path / "labels_human.jsonl").read_text(encoding="utf-8").splitlines())}
+    assert len(human) == 5
+    assert human["s05"]["category"] == "scholarship" and human["s05"]["b"] is None
+    assert human["s04"]["category"] == "contest" and human["s04"]["b"]["category"] == "event"
+
+    # 아무도 안 매긴 공지가 있으면 합치지 않는다
+    (tmp_path / "labels_human.jsonl").unlink()
+    fill(tmp_path / "label_sheet_A.csv", {**A, "s05": blank})
+    with pytest.raises(SystemExit) as e:
+        label_agreement.main(["--data-dir", str(tmp_path), "--merge"])
+    assert "아무도 매기지 않은 공지 1건" in str(e.value)
+    assert not (tmp_path / "labels_human.jsonl").exists()
