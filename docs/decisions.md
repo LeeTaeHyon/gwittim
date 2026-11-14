@@ -1624,13 +1624,13 @@ SPEC 범위 변경 (AGENTS.md §3, SPEC 0.4)
   | 알림톡 287건 종류 판정 | 287/287 | 287/287 (최대 확률 차 4.4e-16) |
   | 알림톡 287건 애매함 판정 | — | 287/287 |
   | 한 건 분류 시간, 개발 PC (참고치) | — | p50 0.05ms, p95 0.09ms |
-  | 한 건 분류 시간, S25 Ultra | p95 50ms 이하 | 미실행 (폰 연결 안 됨) |
+  | 한 건 분류 시간, S25 Ultra 프로파일 빌드 (354자, 2000회) | p95 50ms 이하 | p50 0.075ms, p95 0.084ms, 최대 8.1ms |
+  | 같은 측정, 600자(모델이 보는 최대 길이) | — | p50 0.125ms, p95 0.130ms, 최대 12.2ms |
 
 - 재현: `uv run python tools/dump_classifier_probs.py` → `apps/mobile`에서 `dart run tool/classifier_parity.dart`. 폰 시간은 `flutter run --profile -t tool/classifier_bench.dart`.
 
 ### 남은 일
 
-- 폰 시간 측정 (S25 Ultra, 프로파일 빌드)
 - 준비 명세 전제 A: 폰 알림에 본문이 분류할 만큼 들어오는지 `adb shell dumpsys notification --noredact`로 확인. 200자 미만이면 수신 방식을 바꾼다.
 - 개인 알림 거르기·가리기 규칙(`backend/collectors/mjc_kakao/parser.py`)의 Dart 이식
 - 알림 수신 서비스와 화면. 이 기능을 빌드에 넣기 전에 처리방침에 "학교 채널 알림을 기기 안에서만 읽고 서버로 보내지 않음"과 알림 접근 권한 안내를 넣는다.

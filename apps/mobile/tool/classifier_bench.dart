@@ -1,6 +1,7 @@
 // 폰에서 알림톡 한 건을 분류하는 데 걸리는 시간을 잰다 (D-034 1주차 측정).
 //
-// 실행 (apps/mobile, 폰 연결):  flutter run --profile -t tool/classifier_bench.dart
+// 실행 (apps/mobile, 폰 연결):  flutter build apk --profile -t tool/classifier_bench.dart
+//                              adb install -r --user 0 build/app/outputs/flutter-apk/app-profile.apk
 // 결과는 화면과 로그(CLASSIFIER_BENCH 로 시작하는 줄)에 나온다.
 //
 // - 같은 패키지 이름으로 설치되므로 폰의 귀띔 앱이 이 측정 화면으로 바뀐다. 잰 뒤 배포용 APK를 다시 설치한다.

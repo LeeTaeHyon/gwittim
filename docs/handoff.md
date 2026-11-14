@@ -458,9 +458,9 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 
 - 브랜치 `feat/ondevice-classifier`. 서버 분류 계산을 Dart로 옮김(`apps/mobile/lib/classifier/`), 모델 파일 사본 `assets/classifier/`.
 - 서버 대비 알림톡 287건: 관심사·종류·애매함 판정 모두 287/287, 최대 확률 차 4.4e-16. 골든(모델당 51개) 1e-5 이하.
+- S25 Ultra 프로파일 빌드에서 한 건 분류 p95 0.084ms(354자), 0.130ms(600자). 측정 뒤 폰은 0.9.0 제출본(SHA-256 `54ddafdc…`)으로 되돌림.
 - 분류기는 아직 앱 화면 어디에서도 부르지 않는다.
 - 남은 일
-  - S25 Ultra 시간 측정: `flutter run --profile -t tool/classifier_bench.dart` (폰의 앱이 측정 화면으로 바뀌므로 잰 뒤 배포용 APK 다시 설치)
   - 폰 알림 덤프로 본문 길이 확인(준비 명세 전제 A)
   - 개인 알림 거르기 규칙 Dart 이식, 알림 수신 서비스, 처리방침 문구
 
