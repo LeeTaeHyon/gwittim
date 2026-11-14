@@ -456,6 +456,7 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 
 ## 기기 안 알림톡 분류 (2026-11-15, D-034)
 
+- 설계: 팀장 폰 한 대가 학교 채널 알림톡을 자동 수집하고, 개인 알림 거르기와 분류를 그 폰에서 한 뒤 공통 공지만 서버로 보낸다. 일반 사용자에게는 알림 읽기 권한을 요구하지 않는다.
 - 브랜치 `feat/ondevice-classifier`. 서버 분류 계산을 Dart로 옮김(`apps/mobile/lib/classifier/`), 모델 파일 사본 `assets/classifier/`.
 - 서버 대비 알림톡 287건: 관심사·종류·애매함 판정 모두 287/287, 최대 확률 차 4.4e-16. 골든(모델당 51개) 1e-5 이하.
 - S25 Ultra 프로파일 빌드에서 한 건 분류 p95 0.084ms(354자), 0.130ms(600자). 측정 뒤 폰은 0.9.0 제출본(SHA-256 `54ddafdc…`)으로 되돌림.
@@ -465,7 +466,7 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
     - `adb pull /sdcard/Android/data/kr.gwittim.gwittim.probe/files/notif_probe data/local/`
     - 새 알림톡을 PC 카톡에서 내보내 `kakaoTalk_data/inbox/`에 넣고 `python localModel/kakao_collect.py`
     - `uv run python tools/compare_notif_probe.py`
-  - 알림 수신 서비스와 화면, 처리방침 문구
+  - 수집기: 알림 수신 서비스, 서버로 올리는 관리자 전용 통로(API 다시 배포 필요), 마지막 수신 시각 기록
 - 개인 알림 거르기·가리기 Dart 이식(`feat/ondevice-kakao-filter`, `lib/classifier/kakao_filter.dart`): 카톡 내보내기 665건에서 종류·가림·제목 모두 파서와 같음. 측정 앱에는 아직 연결하지 않음.
 
 ## 미결·차단 사항
