@@ -7,7 +7,7 @@ import 'dart:typed_data';
 import 'text_model.dart';
 
 const String interestModelName = 'interest_char_avg';
-const String categoryModelName = 'category_char_avg_board';
+const String categoryModelName = 'category_char_avg_board_human'; // 사람 정답 학습 (D-035)
 const double band = 0.05; // 꼬리표 확률이 문턱 ± band 안이면 애매하다고 본다
 
 class Classification {

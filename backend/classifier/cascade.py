@@ -1,10 +1,13 @@
-"""알림톡 분류 캐스케이드: 내 모델이 먼저 분류하고, 애매하면 Gemma에 넘긴다 (D-019).
+"""알림톡 분류 캐스케이드: 내 모델이 먼저 분류하고, 관심사가 애매하면 Gemma에 넘긴다 (D-019, D-035).
 
 애매함 (localModel/train_keras.py 시험 세트 비교의 '기타 또는 문턱 ±0.05' 정책)
   · 기타 확률 ≥ 기타 문턱: 배운 적 없는 분야일 수 있음 (모델은 관심사 18개 중 3개만 배웠다)
   · 꼬리표 확률이 문턱 ± BAND 안: 붙일지 말지 경계
 사람 검수 47건에서 Gemma 호출 26%로 Gemma만 쓸 때와 같은 F1(0.68)을 냈다.
 Gemma가 없거나 실패하면 내 모델 결과를 쓴다.
+
+종류(카테고리)는 Gemma를 불러도 내 모델 답을 쓴다 (D-035). 사람 정답으로 학습한 종류 모델이
+교차 검증에서 Gemma보다 정확했고(0.782 vs 0.498), 애매할 때 Gemma로 바꾸면 오히려 조금 낮았다(0.771).
 """
 from __future__ import annotations
 
@@ -14,9 +17,11 @@ from dataclasses import dataclass, field
 from . import gemma_tags
 from .text_model import TextModel, text_of
 
-MODEL_VERSION = "kakao-0.1"  # 모델·문턱·캐스케이드 정책이 바뀌면 올린다 (분석 버전에 붙어 재분석을 일으킴)
+# 모델·문턱·캐스케이드 정책이 바뀌면 올린다 (분석 버전에 붙어 재분석을 일으킴)
+# 0.2: 종류 모델을 사람 정답 학습으로 교체, 종류는 Gemma로 바꾸지 않음 (D-035)
+MODEL_VERSION = "kakao-0.2"
 INTEREST_MODEL = "interest_char_avg"
-CATEGORY_MODEL = "category_char_avg_board"
+CATEGORY_MODEL = "category_char_avg_board_human"
 BAND = 0.05
 OTHER = "기타"
 
@@ -66,5 +71,5 @@ def classify(title: str, text: str, gemma: GemmaFn | None = None) -> Classificat
         except Exception:  # Ollama 꺼짐·시간 초과·스키마 밖 응답 → 내 모델 결과 유지
             result.source = "model_gemma_failed"
         else:
-            result.interest_ids, result.category, result.source = g["interest_ids"], g["category"], "gemma"
+            result.interest_ids, result.source = g["interest_ids"], "gemma"  # 종류는 내 모델 답 그대로
     return result

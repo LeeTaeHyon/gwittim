@@ -26,6 +26,8 @@
                                                           학습 정답도 사람 정답으로 (채점 겹의 정답은 학습에 안 씀)
   .venv/Scripts/python train_keras.py --compare models/cv_A.json models/cv_B.json
                                                           두 교차 검증의 자체 모델을 같은 공지·씨앗끼리 짝지어 비교
+  .venv/Scripts/python train_keras.py --final --target category --unit char --arch avg --board
+                                                          사람 정답 전부로 앱 배치용 모델 학습 (category_char_avg_board_human)
 
 학습 뒤 export_weights.py로 가중치를 backend/classifier/models/에 꺼내면 앱 배치가 쓴다 (D-019).
 
@@ -577,6 +579,58 @@ def print_cv_report(info):
     print(f"\n저장: models/{info['name']}.json (접힌 예측 전체, 씨앗별 지표)")
 
 
+# ---------- 최종 학습: 사람 정답 전부로 앱 배치용 모델 (D-035) ----------
+#
+# 교차 검증으로 "이 방식으로 학습하면 얼마나 맞히나"를 잰 뒤, 같은 방식으로 사람 정답 전부를 써서 모델 하나를 만든다.
+# 따로 떼어 둘 시험 세트가 없다(성능은 교차 검증 값으로 말한다). 학습 공지의 15%만 조기 종료·문턱값용 검증 세트로 뗀다.
+# 출력은 run()과 같은 모양(.keras, _vocab.json, .json)이라 export_weights.py로 그대로 꺼낼 수 있다.
+
+def run_final(target, unit, arch, min_count=5, epochs=60, board=False, board_weight=1.0, labels_path=HUMAN_LABELS):
+    if not os.path.exists(labels_path):
+        sys.exit(f"사람 정답 {labels_path}가 없습니다.")
+    with open(labels_path, "rb") as f:
+        raw = f.read()
+    sha256 = hashlib.sha256(raw).hexdigest()
+    human = {r["id"]: r for r in map(json.loads, filter(str.strip, raw.decode("utf-8").splitlines()))}
+    name = f"{target}_{unit}_{arch}" + ("_board" if board else "") + "_human"
+    tf.keras.utils.set_random_seed(0)
+
+    notices = read_jsonl("notices.jsonl")
+    ids = [i for i in notices if i in human]
+    order = np.random.default_rng(0).permutation(len(ids))
+    n_val = int(len(ids) * VAL_RATIO)
+    val_ids = [ids[k] for k in order[:n_val]]
+    tr_ids = [ids[k] for k in order[n_val:]]
+
+    all_notices, all_labels, board_ids = notices, human, []
+    if board:  # 게시판 보강분은 사람 정답이 없어 Gemma 라벨 (교차 검증과 같음)
+        board_notices, board_labels = read_jsonl("board_notices.jsonl"), read_jsonl("labels_gemma_board.jsonl")
+        board_ids = [i for i in board_notices if i in board_labels]
+        all_notices, all_labels = {**notices, **board_notices}, {**human, **board_labels}
+
+    fitted = fit(target, unit, arch, tr_ids + board_ids, val_ids, all_notices, all_labels, min_count, epochs,
+                 frozenset(board_ids), board_weight)
+    os.makedirs(OUT, exist_ok=True)
+    model_path = os.path.join(OUT, f"{name}.keras")
+    fitted.model.save(model_path)
+    with open(os.path.join(OUT, f"{name}_vocab.json"), "w", encoding="utf-8") as f:
+        json.dump({"unit": unit, "seq_len": SEQ_LEN[unit], "classes": fitted.classes, "threshold": fitted.threshold,
+                   "other_threshold": fitted.other_threshold, "vocab": fitted.tokenizer.get_vocabulary()},
+                  f, ensure_ascii=False)
+    info = {"name": name, "train_labels": "human", "labels_sha256": sha256, "train": len(tr_ids), "board": len(board_ids),
+            "val": len(val_ids), "classes": fitted.classes, "dropped": fitted.dropped, "threshold": fitted.threshold,
+            "other_threshold": fitted.other_threshold, "params": fitted.model.count_params(),
+            "size_kb": round(os.path.getsize(model_path) / 1024)}
+    with open(os.path.join(OUT, f"{name}.json"), "w", encoding="utf-8") as f:
+        json.dump(info, f, ensure_ascii=False, indent=2)
+    print(f"\n== {name}  학습 알림톡 {len(tr_ids)} + 게시판 {len(board_ids)}, 검증 {len(val_ids)}")
+    print(f"사람 정답 SHA-256 {sha256}")
+    print(f"출력 칸 {len(fitted.classes)}개: {fitted.classes}")
+    print(f"파라미터 {info['params']:,}, 파일 {info['size_kb']}KB → models/{name}.keras, _vocab.json")
+    print("성능은 교차 검증 값으로 말한다 (따로 떼어 둔 시험 세트 없음).")
+    return info
+
+
 def compare_cv(path_a, path_b):
     """두 교차 검증 결과의 '자체' 모델을 같은 (공지, 씨앗)끼리 짝지어 비교한다. 파일은 쓰지 않는다.
 
@@ -646,9 +700,14 @@ def main():
                     help="--cv의 학습 정답: Gemma 라벨(기본) 또는 사람 정답(채점 겹 제외)")
     ap.add_argument("--compare", nargs=2, metavar=("CV_A", "CV_B"),
                     help="두 교차 검증 결과(models/cv_*.json)의 자체 모델을 같은 공지·씨앗끼리 비교")
+    ap.add_argument("--final", action="store_true",
+                    help="사람 정답 전부로 앱 배치용 모델을 학습해 models/<이름>_human.keras로 저장 (시험 세트 없음)")
     args = ap.parse_args()
     board = args.board
 
+    if args.final:
+        run_final(args.target, args.unit, args.arch, args.min_count, args.epochs, board, args.board_weight, args.labels)
+        return
     if args.compare:
         compare_cv(*args.compare)
         return

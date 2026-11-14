@@ -36,11 +36,14 @@ def test_cascade_calls_gemma_only_when_unsure(monkeypatch):
 
     texts = ["[합성] 도서관 독서 감상문 공모전 안내", "[합성] 2026 AI 데이터 분석 특강 수강생 모집 파이썬 머신러닝 실습"]
     results = [cascade.classify(t, t, gemma) for t in texts]
-    for r in results:
+    alone = [cascade.classify(t, t, None) for t in texts]
+    for r, a in zip(results, alone):
         if r.unsure:
             assert r.source == "gemma" and r.interest_ids == ["culture_arts"]
         else:
             assert r.source == "model"
+        # 종류는 Gemma를 불러도 내 모델 답 (D-035)
+        assert r.category == a.category
     assert len(calls) == sum(bool(r.unsure) for r in results)
 
     # 애매함 기준: 기타 확률이 문턱 이상이거나 꼬리표 확률이 문턱 ± BAND 안

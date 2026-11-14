@@ -80,7 +80,7 @@ void main() {
     final classifier = KakaoClassifier(_load(interestModelName), _load(categoryModelName));
     final r = classifier.classify('글로벌교육센터 겨울방학 영어 회화 어학 프로그램 안내', 'TOEIC 대비반 포함');
     expect(r.interestIds, ['global_language']);
-    expect(r.category, 'education_program');
+    expect(r.category, 'extracurricular'); // 사람 합의: 어학 강좌는 비교과 (D-033, D-035)
 
     final threshold = classifier.interest.threshold!, other = classifier.interest.otherThreshold!;
     for (final text in ['', '2026 교내 AI 데이터 분석 경진대회 참가팀 모집', '도서관 독서 감상문 공모전 안내']) {
@@ -98,6 +98,7 @@ void main() {
   testWidgets('앱 자산에서 분류기를 읽는다', (tester) async {
     final classifier = await tester.runAsync(loadKakaoClassifier);
     expect(classifier!.interest.classes, ['ai_data', 'global_language', 'media_content']);
-    expect(classifier.category.classes.length, 12);
+    expect(classifier.category.classes.length, 13);
+    expect(classifier.category.classes, contains('other')); // 사람 정답 학습이라 'other'를 낸다 (D-035)
   });
 }

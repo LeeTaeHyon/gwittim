@@ -6,6 +6,7 @@ import pytest
 from backend.analysis.kakao import KakaoAnalyzer
 from backend.analysis.kakao_match import apply_url
 from backend.batch import run_kakao
+from backend.classifier import cascade
 from backend.collectors.common import InMemoryStore, notice_key
 from backend.collectors.mjc_kakao.adapter import to_raw_notices
 from backend.collectors.mjc_kakao.parser import read_exports
@@ -102,16 +103,24 @@ def test_run_kakao_publishes_with_model_tags_and_gemma_fallback(tmp_path):
     assert again.outcomes["unchanged"] == 2
 
 
-def test_gemma_answer_replaces_model_when_unsure(tmp_path):
+def test_gemma_answer_replaces_interest_when_unsure(tmp_path):
     raws = to_raw_notices(export_dir(tmp_path), collected_at="2026-10-30T01:00:00Z")
     gemma = lambda title, text: {"interest_ids": ["global_language"], "category": "global", "for_all_students": False, "reason": ""}
     analyzer = KakaoAnalyzer(gemma=gemma)
     fields = [analyzer.analyze(r, source_config("mjc_kakao")) for r in raws]
+    alone = [KakaoAnalyzer().analyze(r, source_config("mjc_kakao")) for r in raws]
     sources = analyzer.decided_by
     assert sources["gemma"] >= 1 and "model_gemma_failed" not in sources  # 두 합성 공고 모두 꼬리표 확률이 문턱 근처
     for f in fields:
         assert "_analysis_version" not in f  # 정상 경로는 분석기 버전 그대로
-    assert sum(f["category"] == "global" and f["interest_tags"] == ["global_language"] for f in fields) == sources["gemma"]
+    # Gemma는 관심사만 바꾸고 종류는 내 모델 답 그대로 (D-035). 행정 공지는 꼬리표 없이 게시
+    for r, f, a in zip(raws, fields, alone):
+        assert f["category"] == a["category"]
+        unsure = bool(cascade.classify(r["title"], r["body_text"]).unsure)
+        if f["category"] == "admin_notice":
+            assert f["interest_tags"] == []
+        else:
+            assert f["interest_tags"] == (["global_language"] if unsure else a["interest_tags"])
 
 
 # ---------- 연도 없는 날짜, 지난 공고, 제목 (D-019) ----------
