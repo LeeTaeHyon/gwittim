@@ -462,7 +462,10 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 - S25 Ultra 프로파일 빌드에서 한 건 분류 p95 0.084ms(354자), 0.130ms(600자). 측정 뒤 폰은 0.9.0 제출본(SHA-256 `54ddafdc…`)으로 되돌림.
 - 분류기는 아직 앱 화면 어디에서도 부르지 않는다.
 - 남은 일
-  - 폰 알림 덤프로 본문 길이 확인(준비 명세 전제 A)
+  - 폰 알림 본문 길이 확인(준비 명세 전제 A): 측정 앱 `kr.gwittim.gwittim.probe`를 폰에 설치함(`feat/notif-probe`). 알림 읽기 권한을 켜 두고 학교 알림톡이 모이면 아래로 받는다(기록·결과는 `data/local/notif_probe/`).
+    - `adb pull /sdcard/Android/data/kr.gwittim.gwittim.probe/files/notif_probe data/local/`
+    - 새 알림톡을 PC 카톡에서 내보내 `kakaoTalk_data/inbox/`에 넣고 `python localModel/kakao_collect.py`
+    - `uv run python tools/compare_notif_probe.py`
   - 개인 알림 거르기 규칙 Dart 이식, 알림 수신 서비스, 처리방침 문구
 
 ## 미결·차단 사항
