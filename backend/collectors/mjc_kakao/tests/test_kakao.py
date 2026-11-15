@@ -184,6 +184,16 @@ def test_past_kakao_notices_are_not_published_until_then_closed(tmp_path):
     assert later.held_past == 2
     assert [n["lifecycle_status"] for n in sink.public.values()] == ["closed"]
 
+    # 이미 게시한 끝난 공고는 분석이 바뀌면(예: 모델 교체) 공개본도 맞춘다. 나머지 지난 공고는 여전히 올리지 않는다
+    (public_id,) = sink.public
+    sink.public[public_id] = dict(sink.public[public_id], analysis_version="old", category="academic")
+    again = run_kakao(raws, store=store, sink=sink, notices=notices, today=date(2026, 11, 22), analyzer=KakaoAnalyzer())
+    assert again.held_past == 2 and again.published == 1
+    assert sink.public[public_id]["analysis_version"] == notices[next(iter(k for k, v in notices.items() if v["notice_id"] == public_id))]["analysis_version"]
+    assert len(sink.public) == 1
+    quiet = run_kakao(raws, store=store, sink=sink, notices=notices, today=date(2026, 11, 22), analyzer=KakaoAnalyzer())
+    assert quiet.published == 0 and quiet.skipped == 1  # 같으면 다시 쓰지 않는다
+
 
 # ---------- 게시판 공고와 짝, 신청 사이트 (D-025) ----------
 

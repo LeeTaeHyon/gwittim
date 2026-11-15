@@ -138,7 +138,12 @@ def run_kakao(
         notice["related_notices"] = related
         notices[result.key] = notice
         if _past(notice, today) and (previous is None or _past(previous, today)):
-            report.held_past += 1
+            # 이미 게시한 공고는 끝났어도 공개본을 지금 분석과 맞춘다 (예: MODEL_VERSION이 바뀌어 분류가 달라짐).
+            # 공개본이 없으면(처음부터 끝난 공고) 지금처럼 게시하지 않는다. 같으면 publish가 건너뛴다
+            if sink.get_public(notice["notice_id"]) is None:
+                report.held_past += 1
+                continue
+            _publish(notice, issues, sink, report)
             continue
         if same:
             report.duplicates += 1

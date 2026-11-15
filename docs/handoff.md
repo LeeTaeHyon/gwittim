@@ -485,10 +485,14 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 
 - 브랜치 `feat/kakao-inbox-upload`. 폰 → `POST /v1/ingest/kakao` → Firestore `kakao_inbox` → 정기 배치(게시판 다음 알림톡 단계).
 - 폰 거르기·가림이 PC 파서와 665/665 같음. 폰이 모두 온전히 받으면 공고 287건·ID 그대로.
-- 남은 일 (병합 뒤)
-  - 수집 토큰 만들기(`data/local/`에만 보관) → API 재배포에 `GWITTIM_INGEST_TOKEN` 넣기
-  - 수집기 빌드(`--dart-define`로 주소·토큰)·폰 설치, 실제 학교 알림 한 건이 앱에 뜨는지 확인
-  - `Gwittim-batch`를 새 main으로 갱신. 첫 알림톡 배치는 `MODEL_VERSION` 변경으로 알림톡 전부를 다시 분석하므로 손으로 한 번 돌린다
+- 반영 (2026-11-15)
+  - 수집 토큰: `data/local/ingest_token.txt`에만 보관(커밋 금지). API 재배포 리비전 `gwittim-api-00007-nxm`(main `075a4ff`)에 `GWITTIM_INGEST_TOKEN` 추가, 다른 설정 유지. 토큰 없음 401·틀림 403·개인 알림 저장 안 함을 배포 서버에서 확인
+  - 수집기: `--dart-define`로 주소·토큰을 넣어 빌드, S25 설치(`kr.gwittim.gwittim.probe`). 알림 읽기 권한 유지, 화면에 "서버로 올림" 표시. 귀띔 0.9.0 그대로
+  - `Gwittim-batch` → `075a4ff`. 알림톡 배치 손 실행(15:11~15:32): 287건 다시 분석(모두 자체 모델), 게시 8, 지난 공고 278, 게시판과 같은 공지 1, 받은편지함 0
+  - 이미 게시한 끝난 알림톡 6건은 예전 분류로 남았다 → 배치가 공개본이 있는 끝난 공고도 분석과 맞추도록 고침(`fix/kakao-past-resync`). 병합 뒤 `Gwittim-batch` 다시 갱신
+- 남은 일
+  - 평일 학교 알림 1건이 폰 → 받은편지함 → 정기 배치 → 앱까지 가는지, 알림 본문이 잘려 오는지 확인(폰 연결 후 `adb pull` → `tools/compare_notif_probe.py`)
+  - 수집기 재빌드 방법: `GWITTIM_PROBE=1 flutter build apk --release -t tool/notif_probe/main.dart --dart-define=GWITTIM_INGEST_URL=<API>/v1/ingest/kakao --dart-define=GWITTIM_INGEST_TOKEN=<data/local/ingest_token.txt>` → `adb install -r --user 0`
 
 ## 미결·차단 사항
 
