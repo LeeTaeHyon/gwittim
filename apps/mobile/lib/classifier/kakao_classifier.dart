@@ -11,7 +11,7 @@ import 'text_model.dart';
 const String interestModelName = 'interest_char_avg_human';
 const String categoryModelName = 'category_char_avg_board_human';
 // backend/classifier/cascade.py의 MODEL_VERSION과 같아야 한다 (테스트가 확인). 폰이 올린 분류가 어느 모델 것인지 남긴다
-const String modelVersion = 'kakao-0.2';
+const String modelVersion = 'kakao-0.3';
 
 class Classification {
   const Classification({
