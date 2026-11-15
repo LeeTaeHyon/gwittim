@@ -9,8 +9,12 @@
   GET    /v1/saved                 list_saved_notices
   PUT    /v1/saved/{notice_id}     save_notice (반복 요청 안전)
   DELETE /v1/saved/{notice_id}     delete_saved_notice (반복 요청 안전)
+  POST   /v1/ingest/kakao          팀장 폰 수집기의 학교 채널 알림톡 올리기 (D-036). 수집 토큰(X-Ingest-Token)으로만.
+                                   토큰이 설정되지 않은 서버에서는 없는 경로처럼 404
 """
 from __future__ import annotations
+
+import hmac
 
 import logging
 
@@ -18,6 +22,7 @@ from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
+from backend.collectors.mjc_kakao.inbox import InboxError, accept
 from backend.contracts import schema_errors
 from backend.dictionaries import codes, unknown_profile_codes
 from backend.recommendation import recommend
@@ -169,6 +174,25 @@ def create_app(deps: Deps) -> FastAPI:
     def delete_saved(notice_id: str, uid: str = Depends(current_uid)):
         deps.saved.delete(uid, notice_id)
         return Response(status_code=204)
+
+    @app.post("/v1/ingest/kakao")
+    def ingest_kakao(body: dict, x_ingest_token: str | None = Header(default=None)):
+        # 사용자 로그인과 따로: 팀장 폰의 수집 앱은 Firebase가 없는 별도 패키지라 수집 전용 토큰을 쓴다
+        if deps.kakao_inbox is None or not deps.ingest_token:
+            raise ApiError("not_found")
+        if not x_ingest_token:
+            raise ApiError("unauthenticated")
+        if not hmac.compare_digest(x_ingest_token.encode(), deps.ingest_token.encode()):
+            raise ApiError("permission_denied")
+        try:
+            accepted = accept(body, deps.now_iso())
+        except InboxError:
+            raise ApiError("invalid_argument") from None
+        if accepted is None:  # 개인 알림·잡음: 저장하지 않는다. 폰이 다시 올리지 않게 성공으로 답한다
+            return {"stored": False, "reason": "not_broadcast"}
+        doc_id, doc = accepted
+        created = deps.kakao_inbox.put(doc_id, doc)
+        return {"stored": True, "id": doc_id, "new": created}
 
     return app
 

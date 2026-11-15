@@ -210,3 +210,71 @@ def test_cached_notice_reader_limits_reads(deps):
     reader.list_published()
     assert len(calls) == 2
     assert reader.get("n_synthetic_0005") is None  # 단건은 캐시 없이 published 규칙 그대로
+
+
+# ---------- 팀장 폰 수집기 올리기 (D-036) ----------
+
+INGEST = {"X-Ingest-Token": "ingest-secret"}
+PHONE_NOTICE = {
+    "room": "명지전문대학 합성채널",
+    "sent_at": "2026-10-20T14:05:00+09:00",
+    "text": "[합성 샘플] 2026 교내 AI 데이터 분석 경진대회 참가팀 모집\n대상: 재학생\n문의: 010-1234-5678",
+    "model_version": "kakao-0.2",
+    "classification": {"category": "contest", "interest_ids": ["ai_data"], "unsure": False},
+}
+
+
+@pytest.fixture
+def ingest_client(deps):
+    from backend.collectors.mjc_kakao.inbox import InMemoryInbox
+
+    deps.kakao_inbox, deps.ingest_token = InMemoryInbox(), "ingest-secret"
+    return TestClient(create_app(deps), raise_server_exceptions=False), deps.kakao_inbox
+
+
+def test_ingest_is_hidden_without_token_config(client):
+    assert_error(client.post("/v1/ingest/kakao", json=PHONE_NOTICE, headers=INGEST), 404, "not_found")
+
+
+@pytest.mark.parametrize("headers,status,code", [
+    ({}, 401, "unauthenticated"),
+    ({"X-Ingest-Token": "wrong"}, 403, "permission_denied"),
+    (ALICE, 401, "unauthenticated"),  # 사용자 로그인 토큰으로는 올릴 수 없다
+])
+def test_ingest_needs_ingest_token(ingest_client, headers, status, code):
+    client, inbox = ingest_client
+    assert_error(client.post("/v1/ingest/kakao", json=PHONE_NOTICE, headers=headers), status, code)
+    assert inbox.docs == {}
+
+
+def test_ingest_stores_masked_broadcast_once(ingest_client):
+    client, inbox = ingest_client
+    first = client.post("/v1/ingest/kakao", json=PHONE_NOTICE, headers=INGEST)
+    assert first.status_code == 200 and first.json()["stored"] and first.json()["new"]
+    again = client.post("/v1/ingest/kakao", json=PHONE_NOTICE, headers=INGEST)
+    assert again.json() == {**first.json(), "new": False}  # 같은 알림을 다시 올려도 한 건
+    (doc,) = inbox.docs.values()
+    assert "010-1234-5678" not in doc["text"] and "<휴대폰>" in doc["text"]  # 서버에서도 다시 가린다
+    assert doc["received_at"] == "2026-10-17T03:05:00Z"
+    assert doc["phone"]["classification"]["category"] == "contest"
+
+
+def test_ingest_drops_personal_notice(ingest_client):
+    client, inbox = ingest_client
+    personal = {**PHONE_NOTICE, "text": "[합성 샘플] 데이터베이스 801반 강의를 아직 수강하지 않았습니다. 2026123456 학생"}
+    resp = client.post("/v1/ingest/kakao", json=personal, headers=INGEST)
+    assert resp.status_code == 200 and resp.json() == {"stored": False, "reason": "not_broadcast"}
+    assert inbox.docs == {}
+
+
+@pytest.mark.parametrize("change", [
+    {"room": "다른 방"},
+    {"sent_at": "2026-10-20 14:05"},
+    {"sent_at": "2026-10-20T14:05:30+09:00"},
+    {"text": ""},
+    {"text": "가" * 8001},
+])
+def test_ingest_rejects_bad_fields(ingest_client, change):
+    client, inbox = ingest_client
+    assert_error(client.post("/v1/ingest/kakao", json={**PHONE_NOTICE, **change}, headers=INGEST), 400, "invalid_argument")
+    assert inbox.docs == {}

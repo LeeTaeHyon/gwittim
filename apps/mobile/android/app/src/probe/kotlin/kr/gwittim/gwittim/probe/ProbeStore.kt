@@ -13,6 +13,8 @@ import java.util.Locale
  *     records.jsonl     알림 한 건에 한 줄
  *     classified.jsonl  기기 안 분류 결과 (records의 id로 잇는다)
  *     events.jsonl      서비스 연결·분류 실패 같은 상태 기록 (알림 내용 없음)
+ *     bodies.jsonl      학교 채널 알림 본문 (받는 사람 이름 찾기용, 폰 밖으로 나가지 않음)
+ *     upload_queue.jsonl  아직 못 올린 공통 공지 (가린 본문), uploaded.jsonl  올린 기록 (본문 없음)
  */
 object ProbeStore {
     private const val DIR = "notif_probe"
@@ -36,6 +38,17 @@ object ProbeStore {
     fun appendRecord(context: Context, json: JSONObject) = append(context, "records.jsonl", json)
 
     fun appendClassified(context: Context, json: JSONObject) = append(context, "classified.jsonl", json)
+
+    fun appendBody(context: Context, body: String) = append(context, "bodies.jsonl", JSONObject().put("body", body))
+
+    /** 최근 학교 채널 알림 본문. 받는 사람 이름은 두 번 이상 나온 '○○○님'이라 이전 알림이 필요하다 (parser.detect_names). */
+    fun recentBodies(context: Context, limit: Int = 300): List<String> {
+        val f = File(dir(context), "bodies.jsonl")
+        if (!f.exists()) return emptyList()
+        return f.useLines { lines ->
+            lines.filter { it.isNotBlank() }.map { JSONObject(it).optString("body") }.toList().takeLast(limit)
+        }
+    }
 
     fun event(context: Context, kind: String, detail: String? = null) = append(
         context, "events.jsonl",

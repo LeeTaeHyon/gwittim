@@ -62,6 +62,8 @@ NOT_NAMES = {"학생", "교수", "선생", "담당자", "여러분", "고객", "
 # 거의 같은 메시지로 볼 글자 3-gram 자카드 유사도, 같은 공지로 묶을 최대 간격(일)
 NEAR_DUP = 0.8
 DUP_WINDOW_DAYS = 45
+# 폰 알림 본문은 잘려 올 수 있다. 공백을 뗀 본문이 이 길이 이상이고 한쪽이 다른 쪽의 앞부분이면 같은 공지로 본다 (D-036)
+PREFIX_MIN = 30
 
 
 def room_of(path: str) -> str:
@@ -166,13 +168,16 @@ def jaccard(a: set, b: set) -> float:
     return len(a & b) / len(a | b) if a and b else 0.0
 
 
-def read_exports(paths: Iterable[str]) -> tuple[list[dict], dict[str, list[dict]]]:
+def read_exports(paths: Iterable[str], extra: Iterable[dict] = ()) -> tuple[list[dict], dict[str, list[dict]]]:
     """내보내기 파일들 → (전체 메시지, 중복 묶음 {묶음 ID: 메시지 목록}).
 
     메시지에 id·kind·masked·title·urls·hash·dup_group을 채운다. 묶음 ID(g0000)는 파일·메시지 순서대로 붙는
     학습용 번호라 내보내기 파일이 바뀌면 달라질 수 있다. 수집에서는 stable_id()를 쓴다.
+
+    extra: 폰 수집기 받은편지함 메시지(inbox.to_message, source='phone'). 내보내기 메시지 뒤에 붙여
+    같은 판정·가림·중복 묶기를 거친다. 잘려 온 폰 본문은 앞부분이 같은 내보내기 메시지와 묶인다.
     """
-    msgs = [m for p in sorted(paths) for m in parse_export(p)]
+    msgs = [m for p in sorted(paths) for m in parse_export(p)] + [dict(m) for m in extra]
     for m in msgs:
         m["text"] = clean_body(m)
     names = detect_names(m["text"] for m in msgs)
@@ -190,6 +195,8 @@ def read_exports(paths: Iterable[str]) -> tuple[list[dict], dict[str, list[dict]
     reps: list[dict] = []
     for m in msgs:
         sh = shingles(m["masked"])
+        flat = re.sub(r"\s+", "", m["masked"])
+        phone = m.get("source") == "phone"
         day = date.fromisoformat(m["sent_at"][:10])
         hit = None
         for rep in reps:
@@ -198,8 +205,13 @@ def read_exports(paths: Iterable[str]) -> tuple[list[dict], dict[str, list[dict]
             if rep["hash"] == m["hash"] or jaccard(rep["sh"], sh) >= NEAR_DUP:
                 hit = rep
                 break
+            if phone and min(len(flat), len(rep["flat"])) >= PREFIX_MIN and (
+                rep["flat"].startswith(flat) or flat.startswith(rep["flat"])
+            ):
+                hit = rep
+                break
         if hit is None:
-            hit = {"room": m["room"], "hash": m["hash"], "sh": sh, "gid": f"g{len(reps):04d}"}
+            hit = {"room": m["room"], "hash": m["hash"], "sh": sh, "flat": flat, "gid": f"g{len(reps):04d}"}
             reps.append(hit)
         hit["last"] = day
         m["dup_group"] = hit["gid"]

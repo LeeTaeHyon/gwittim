@@ -2,12 +2,15 @@
 # - 시작·끝을 Windows 알림으로 띄운다: gemma4(GPU) 사용 여부와 분석 건수, 걸린 시간
 # - 출력은 -LogFile 에 이어 쓴다 (UTF-8)
 # 사용: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\run_batch.ps1 -DataDir <data\local> [-ProjectId gwittim-dev]
+# - 게시판 다음에 알림톡도 돈다 (D-036): 카톡 내보내기 폴더(-KakaoDir, 기본 <Gwittim>\localModel\kakaoTalk_data)와
+#   팀장 폰 수집기 받은편지함(Firestore kakao_inbox). 폴더가 없으면 알림톡은 건너뛴다
 # Windows 알림(WinRT)이 필요하므로 Windows PowerShell 5.1로 실행한다. 이 파일은 UTF-8 BOM으로 저장한다(5.1의 한글 처리).
 param(
     [Parameter(Mandatory = $true)][string]$DataDir,
     [string]$ProjectId = "gwittim-dev",
     [string]$LogFile = (Join-Path $DataDir "batch.log"),
-    [string]$Uv = "uv"
+    [string]$Uv = "uv",
+    [string]$KakaoDir = ""
 )
 
 $ErrorActionPreference = "Continue"
@@ -48,13 +51,36 @@ try {
 }
 foreach ($line in $lines) { Write-Log $line }
 
+# 알림톡 (D-019, D-036): 게시판 공고와 짝을 찾으므로 게시판 다음에 돈다
+if (-not $KakaoDir) {
+    $KakaoDir = Join-Path (Split-Path (Split-Path $DataDir -Parent) -Parent) "localModel\kakaoTalk_data"
+}
+$kakaoLine = $null
+if ($exit -eq 0 -and (Test-Path $KakaoDir)) {
+    Push-Location $code
+    try {
+        $klines = & $Uv run --frozen python -m backend.collectors.mjc_kakao --export-dir $KakaoDir --data-dir $DataDir 2>&1 | ForEach-Object { "$_" }
+        $kexit = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    foreach ($line in $klines) { Write-Log $line }
+    $kakaoLine = $klines | Where-Object { $_ -like '{*' } | Select-Object -Last 1
+    if ($kexit -ne 0) { $exit = $kexit }
+}
+
 $minutes = [math]::Round(((Get-Date) - $started).TotalMinutes, 1)
 $summaryLine = $lines | Where-Object { $_ -like '{*' } | Select-Object -Last 1
 if ($exit -eq 0 -and $summaryLine) {
     $s = $summaryLine | ConvertFrom-Json
     $o = $s.outcomes
     $gpu = if ($s.llm.used) { "gemma4 $($s.llm.analyzed)건 분석 후 GPU 해제" } else { "gemma4 사용 안 함 (바뀐 공고 없음)" }
-    Show-Toast "귀띔 수집 완료 ($minutes분)" "새 $($o.new) · 변경 $($o.changed) · 그대로 $($o.unchanged) | $gpu"
+    $kakao = ""
+    if ($kakaoLine) {
+        $k = $kakaoLine | ConvertFrom-Json
+        $kakao = " | 알림톡 게시 $($k.published) (폰 수집 $($k.inbox))"
+    }
+    Show-Toast "귀띔 수집 완료 ($minutes분)" "새 $($o.new) · 변경 $($o.changed) · 그대로 $($o.unchanged) | $gpu$kakao"
 } else {
     Show-Toast "귀띔 수집 실패" "batch.log를 확인해 주세요. (종료 코드 $exit)"
 }

@@ -22,15 +22,32 @@ object ProbeEngine {
     private var ready = false
     private val pending = ArrayList<Map<String, Any?>>()
 
-    fun classify(context: Context, id: String, body: String, source: String) {
-        val request = mapOf("id" to id, "body" to body, "source" to source)
-        try {
-            start(context)
-        } catch (e: Exception) {
-            ProbeStore.event(context, "engine_start_failed", e.javaClass.simpleName)
-            return
-        }
+    fun classify(
+        context: Context, id: String, body: String, source: String,
+        room: String, postTime: Long, history: List<String>,
+    ) {
+        val request = mapOf(
+            "method" to "classify", "id" to id, "body" to body, "source" to source,
+            "room" to room, "post_time" to postTime, "history" to history,
+            "dir" to ProbeStore.dir(context).absolutePath,
+        )
+        if (!ensureStarted(context)) return
         if (ready) send(context, request) else pending.add(request)
+    }
+
+    /** 못 올린 공지를 다시 올린다 (앱 화면을 열 때). */
+    fun flush(context: Context) {
+        val request = mapOf("method" to "flush", "dir" to ProbeStore.dir(context).absolutePath)
+        if (!ensureStarted(context)) return
+        if (ready) send(context, request) else pending.add(request)
+    }
+
+    private fun ensureStarted(context: Context): Boolean = try {
+        start(context)
+        true
+    } catch (e: Exception) {
+        ProbeStore.event(context, "engine_start_failed", e.javaClass.simpleName)
+        false
     }
 
     private fun start(context: Context) {
@@ -60,9 +77,14 @@ object ProbeEngine {
     }
 
     private fun send(context: Context, request: Map<String, Any?>) {
-        channel?.invokeMethod("classify", request, object : MethodChannel.Result {
+        val method = request["method"] as String
+        channel?.invokeMethod(method, request - "method", object : MethodChannel.Result {
             override fun success(result: Any?) {
                 val map = result as? Map<*, *> ?: return
+                if (method == "flush") {
+                    ProbeStore.event(context, "flush", "sent=" + map["sent"] + " left=" + map["left"])
+                    return
+                }
                 ProbeStore.appendClassified(context, JSONObject().apply {
                     put("id", request["id"])
                     put("body_source", request["source"])
@@ -73,11 +95,11 @@ object ProbeEngine {
             }
 
             override fun error(code: String, message: String?, details: Any?) {
-                ProbeStore.event(context, "classify_failed", code)
+                ProbeStore.event(context, method + "_failed", code)
             }
 
             override fun notImplemented() {
-                ProbeStore.event(context, "classify_not_implemented")
+                ProbeStore.event(context, method + "_not_implemented")
             }
         })
     }
