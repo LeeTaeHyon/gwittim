@@ -9,13 +9,18 @@
 //
 // 알림 받기와 기록은 Kotlin(android/app/src/probe/)이 하고, 분류는 화면 없는 엔진에서
 // 아래 notifProbeBackground가 한다. 이 화면은 권한 상태와 기록 건수만 보여 준다.
+//
+// 수집기로 빌드 (D-036): 위 빌드 명령에 아래 두 값을 더한다. 토큰은 저장소에 넣지 않는다.
+//   --dart-define=GWITTIM_INGEST_URL=https://<API 주소>/v1/ingest/kakao --dart-define=GWITTIM_INGEST_TOKEN=<수집 토큰>
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gwittim/classifier/classifier_assets.dart';
 
+import 'collector.dart';
 import 'probe_classify.dart';
 
 const _background = MethodChannel('gwittim/notif_probe');
@@ -25,10 +30,42 @@ const _ui = MethodChannel('gwittim/notif_probe_ui');
 Future<void> notifProbeBackground() async {
   WidgetsFlutterBinding.ensureInitialized();
   final classifier = await loadKakaoClassifier();
+  final config = CollectorConfig.fromEnvironment();
+  Uploader? uploader;
+  Uploader uploaderAt(String dir) => uploader ??= Uploader(Directory(dir), config);
   _background.setMethodCallHandler((call) async {
-    if (call.method != 'classify') throw MissingPluginException();
     final args = (call.arguments as Map).cast<String, Object?>();
-    return classifyForProbe(classifier, args['body'] as String);
+    switch (call.method) {
+      case 'classify':
+        // 측정용: 알림 본문 그대로 분류 (PC 비교 도구가 내보내기 본문 판정과 맞춰 본다)
+        final out = classifyForProbe(classifier, args['body'] as String);
+        final p = prepare(
+          classifier,
+          room: args['room'] as String,
+          postTimeMillis: args['post_time'] as int,
+          body: args['body'] as String,
+          history: (args['history'] as List).cast<String>(),
+        );
+        out['kind'] = p['kind'];
+        out['sent_at'] = p['sent_at'];
+        out['collector'] = p['classification'];
+        if (p['kind'] != 'broadcast') {
+          out['upload'] = 'not_broadcast'; // 개인 알림·잡음은 올리지 않는다
+        } else if (!config.enabled) {
+          out['upload'] = 'disabled';
+        } else {
+          final u = uploaderAt(args['dir'] as String);
+          await u.enqueue(uploadBody(p));
+          final r = await u.flush();
+          out['upload'] = {'sent': r.sent, 'left': r.left};
+        }
+        return out;
+      case 'flush':
+        final r = await uploaderAt(args['dir'] as String).flush();
+        return {'sent': r.sent, 'left': r.left};
+      default:
+        throw MissingPluginException();
+    }
   });
   await _background.invokeMethod('ready');
 }
@@ -103,6 +140,9 @@ class _ProbeScreenState extends State<ProbeScreen> with WidgetsBindingObserver {
                 const Divider(height: 32),
                 Text('기록한 알림: ${s['records']}건'),
                 Text('기기 안 분류: ${s['classified']}건'),
+                Text(CollectorConfig.fromEnvironment().enabled
+                    ? '서버로 올림: ${s['uploaded']}건 · 대기 ${s['pending']}건'
+                    : '서버로 올리기: 꺼짐 (기록만)'),
                 Text('마지막 기록: ${_last()}'),
                 if (s['last_event'] != null) Text('마지막 상태: ${s['last_event']}'),
                 const SizedBox(height: 12),

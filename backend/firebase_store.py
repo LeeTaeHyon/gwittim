@@ -13,6 +13,7 @@ from firebase_admin import auth, credentials, firestore
 from google.auth.credentials import AnonymousCredentials
 
 from backend.publish import NOTICES, REVIEW_QUEUE, SAVED, USERS
+from backend.collectors.mjc_kakao.inbox import INBOX as KAKAO_INBOX
 
 _PROFILE_FIELDS = ("university_id", "major_id", "grade", "enrollment_status", "interest_ids", "target_role_ids", "updated_at")
 
@@ -124,3 +125,19 @@ class FirestoreSink(_Base):
 
     def delete_review(self, notice_id):
         self.db.collection(REVIEW_QUEUE).document(notice_id).delete()
+
+
+class FirestoreKakaoInbox(_Base):
+    """팀장 폰 수집기가 올린 알림톡 받은편지함 (D-036). 클라이언트 접근은 보안 규칙의 기본값으로 막힌다."""
+
+    def put(self, doc_id, doc):
+        from google.api_core.exceptions import AlreadyExists, Conflict
+
+        try:
+            self.db.collection(KAKAO_INBOX).document(doc_id).create(doc)  # 같은 알림을 다시 올리면 처음 것을 둔다
+        except (AlreadyExists, Conflict):
+            return False
+        return True
+
+    def list(self):
+        return [snap.to_dict() for snap in self.db.collection(KAKAO_INBOX).stream()]

@@ -262,3 +262,55 @@ def test_crew_kakao_published_earlier_is_taken_down(tmp_path):
 )
 def test_apply_url_is_first_school_site(body, url):
     assert apply_url(body) == url
+
+
+# ---------- 폰 수집기 받은편지함과 PC 내보내기 합치기 (D-036) ----------
+
+AI_TEXT = "[합성 샘플] 2026 교내 AI 데이터 분석 경진대회 참가팀 모집\n대상: 재학생\n신청기간: 2026.10.20.(화) ~ 2026.11.13.(금)"
+
+
+def phone_doc(text=AI_TEXT, sent_at="2026-10-20T14:05:00+09:00"):
+    from backend.collectors.mjc_kakao.inbox import accept
+
+    accepted = accept({"room": ROOM, "sent_at": sent_at, "text": text}, "2026-10-20T05:06:00Z")
+    assert accepted is not None
+    return accepted[1]
+
+
+def test_phone_only_notice_becomes_raw_notice():
+    (raw,) = to_raw_notices([], collected_at="2026-10-20T06:00:00Z", inbox=[phone_doc()])
+    assert raw["title"] == "[합성 샘플] 2026 교내 AI 데이터 분석 경진대회 참가팀 모집"
+    assert raw["published"]["date"] == "2026-10-20" and raw["published"]["time"] == "14:05"
+    assert schema_errors("raw_notice", raw) == []
+
+
+def test_phone_id_stays_when_export_arrives(tmp_path):
+    (alone,) = to_raw_notices([], collected_at="2026-10-20T06:00:00Z", inbox=[phone_doc()])
+    raws = to_raw_notices(export_dir(tmp_path), collected_at="2026-10-30T01:00:00Z", inbox=[phone_doc()])
+    assert len(raws) == 2  # 폰 알림과 내보내기의 같은 공지는 한 공고
+    ai = next(r for r in raws if "AI" in r["title"])
+    assert ai["source_notice_id"] == alone["source_notice_id"]
+
+
+def test_truncated_phone_text_joins_export_and_takes_export_body(tmp_path):
+    cut = AI_TEXT[:45]  # 알림에 앞부분만 온 경우
+    (alone,) = to_raw_notices([], collected_at="2026-10-20T06:00:00Z", inbox=[phone_doc(cut, "2026-10-20T14:06:00+09:00")])
+    raws = to_raw_notices(export_dir(tmp_path), collected_at="2026-10-30T01:00:00Z",
+                          inbox=[phone_doc(cut, "2026-10-20T14:06:00+09:00")])
+    assert len(raws) == 2
+    ai = next(r for r in raws if "AI" in r["title"])
+    assert ai["source_notice_id"] == alone["source_notice_id"]  # 폰이 먼저 받은 ID 그대로
+    assert "2026.11.13." in ai["body_text"]  # 본문은 온전한 내보내기 글
+
+
+def test_phone_resend_of_published_notice_keeps_export_id(tmp_path):
+    # 내보내기에 10/20 첫 발송과 10/22 재발송이 있다. 폰이 10/22 재발송을 받아도 이미 게시한 공고 ID 그대로
+    exported = next(r for r in to_raw_notices(export_dir(tmp_path), collected_at="x") if "AI" in r["title"])
+    raws = to_raw_notices(export_dir(tmp_path), collected_at="x", inbox=[phone_doc(sent_at="2026-10-22T09:00:00+09:00")])
+    assert len(raws) == 2
+    ai = next(r for r in raws if "AI" in r["title"])
+    assert ai["source_notice_id"] == exported["source_notice_id"]
+
+
+def test_export_only_raws_unchanged_by_empty_inbox(tmp_path):
+    assert to_raw_notices(export_dir(tmp_path), collected_at="x") == to_raw_notices(export_dir(tmp_path), collected_at="x", inbox=[])

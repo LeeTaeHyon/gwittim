@@ -19,6 +19,8 @@ class ProbeActivity : FlutterActivity() {
                             "permission" to listenerEnabled(),
                             "records" to ProbeStore.count(this, "records.jsonl"),
                             "classified" to ProbeStore.count(this, "classified.jsonl"),
+                            "uploaded" to ProbeStore.count(this, "uploaded.jsonl"),
+                            "pending" to ProbeStore.count(this, "upload_queue.jsonl"),
                             "last_record" to ProbeStore.lastLine(this, "records.jsonl"),
                             "last_event" to ProbeStore.lastLine(this, "events.jsonl"),
                             "dir" to ProbeStore.dir(this).absolutePath,
@@ -32,6 +34,11 @@ class ProbeActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ProbeEngine.flush(this) // 못 올린 공통 공지를 다시 올린다 (D-036)
     }
 
     private fun listenerEnabled(): Boolean {

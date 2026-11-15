@@ -12,6 +12,7 @@ import java.util.UUID
 /**
  * 카카오톡 학교 채널 알림만 기록한다 (D-034 1주차 측정).
  * 다른 알림은 받는 즉시 버리고 아무것도 남기지 않는다.
+ * 수집 주소·토큰을 넣고 빌드하면 공통 공지를 거르고 가려 서버로 올린다 (D-036, tool/notif_probe/collector.dart).
  */
 class NotifProbeService : NotificationListenerService() {
 
@@ -113,7 +114,10 @@ class NotifProbeService : NotificationListenerService() {
             !text.isNullOrBlank() -> text to "text"
             else -> return
         }
-        ProbeEngine.classify(applicationContext, id, body, source)
+        // 받는 사람 이름 찾기용 이전 본문은 지금 본문을 넣기 전에 읽는다
+        val history = ProbeStore.recentBodies(this)
+        ProbeStore.appendBody(this, body)
+        ProbeEngine.classify(applicationContext, id, body, source, room, sbn.postTime, history)
     }
 
     private fun Bundle.text(key: String): String? = getCharSequence(key)?.toString()

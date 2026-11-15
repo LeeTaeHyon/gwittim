@@ -1,5 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- 알림 기록용 측정 앱 (D-034). GWITTIM_PROBE=1 빌드에서만 src/main 대신 쓴다. -->
+    <!-- 수집 주소를 넣고 빌드하면 공통 공지를 서버로 올린다 (D-036) -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="귀띔 측정"
         android:name="${applicationName}"

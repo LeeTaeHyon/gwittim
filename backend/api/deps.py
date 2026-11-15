@@ -33,6 +33,11 @@ class SavedStore(Protocol):
     def delete_all(self, uid: str) -> None: ...
 
 
+class KakaoInbox(Protocol):
+    def put(self, doc_id: str, doc: dict) -> bool: ...
+    def list(self) -> list[dict]: ...
+
+
 class Clock(Protocol):
     def now(self) -> datetime: ...
 
@@ -131,6 +136,9 @@ class Deps:
     profiles: ProfileStore
     saved: SavedStore
     clock: Clock = field(default_factory=SystemClock)
+    # 팀장 폰 수집기 (D-036). 둘 다 있어야 /v1/ingest/kakao가 열린다
+    kakao_inbox: KakaoInbox | None = None
+    ingest_token: str | None = None
 
     def today_kst(self) -> date:
         return self.clock.now().astimezone(KST).date()
