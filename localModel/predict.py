@@ -25,7 +25,7 @@ from dataclasses import asdict
 BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(BASE))  # 저장소 루트 (backend 패키지)
 
-from backend.classifier.cascade import OTHER, classify, ollama  # noqa: E402
+from backend.classifier.cascade import INTEREST_MODEL, OTHER, classify, ollama  # noqa: E402
 from backend.classifier.text_model import TextModel  # noqa: E402
 from backend.collectors.mjc_kakao.parser import mask, title_of  # noqa: E402
 
@@ -78,7 +78,7 @@ def main():
             print(f"  애매함    {'; '.join(c.unsure)}")
         print(f"  → 최종    관심사 {c.interest_ids or '없음'}  카테고리 {c.category}  [{SOURCE_LABEL[c.source]}, {ms:.0f}ms]")
 
-    interest = TextModel.load("interest_char_avg")
+    interest = TextModel.load(INTEREST_MODEL)
     sent = sum(1 for r in results if r["unsure"])
     print(f"\n{len(results)}건 중 애매한 공지 {sent}건"
           f" (관심사 문턱 {interest.threshold}, {OTHER} 문턱 {interest.other_threshold})")

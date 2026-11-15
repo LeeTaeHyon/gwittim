@@ -89,15 +89,14 @@ void main() {
         for (final e in c.interestProbs.entries)
           if (e.value >= threshold) e.key,
       ]);
-      final near = c.interestProbs.values.any((p) => (p - threshold).abs() < band);
-      expect(c.unsure, c.otherProb >= other || near);
+      expect(c.unsure, c.otherProb >= other); // '기타'일 때만 애매 (D-035)
       expect(c.categoryProbs.reduce((a, b) => a + b), closeTo(1, 1e-9));
     }
   });
 
   testWidgets('앱 자산에서 분류기를 읽는다', (tester) async {
     final classifier = await tester.runAsync(loadKakaoClassifier);
-    expect(classifier!.interest.classes, ['ai_data', 'global_language', 'media_content']);
+    expect(classifier!.interest.classes, ['ai_data', 'global_language', 'media_content', 'volunteering']);
     expect(classifier.category.classes.length, 13);
     expect(classifier.category.classes, contains('other')); // 사람 정답 학습이라 'other'를 낸다 (D-035)
   });

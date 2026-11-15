@@ -46,14 +46,13 @@ def test_cascade_calls_gemma_only_when_unsure(monkeypatch):
         assert r.category == a.category
     assert len(calls) == sum(bool(r.unsure) for r in results)
 
-    # 애매함 기준: 기타 확률이 문턱 이상이거나 꼬리표 확률이 문턱 ± BAND 안
+    # 애매함 기준: '기타' 확률이 기타 문턱 이상일 때 하나 (D-035)
     interest = TextModel.load(cascade.INTEREST_MODEL)
     for r in results:
-        near = any(abs(p - interest.threshold) < cascade.BAND for p in r.interest_probs.values())
-        assert bool(r.unsure) == (near or r.other_prob >= interest.other_threshold)
+        assert bool(r.unsure) == (r.other_prob >= interest.other_threshold)
 
 
 def test_model_only_without_gemma():
     r = cascade.classify("[합성] 영어 회화 어학 프로그램", "TOEIC 대비반", None)
     assert r.source == "model"
-    assert set(r.interest_ids) <= {"ai_data", "global_language", "media_content"}
+    assert set(r.interest_ids) <= {"ai_data", "global_language", "media_content", "volunteering"}

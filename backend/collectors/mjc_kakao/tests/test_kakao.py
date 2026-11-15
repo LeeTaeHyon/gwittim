@@ -7,6 +7,7 @@ from backend.analysis.kakao import KakaoAnalyzer
 from backend.analysis.kakao_match import apply_url
 from backend.batch import run_kakao
 from backend.classifier import cascade
+from backend.classifier.text_model import TextModel
 from backend.collectors.common import InMemoryStore, notice_key
 from backend.collectors.mjc_kakao.adapter import to_raw_notices
 from backend.collectors.mjc_kakao.parser import read_exports
@@ -75,8 +76,15 @@ def test_id_stays_when_later_export_has_more_messages(tmp_path):
     assert [r["content_hash"] for r in first] == [r["content_hash"] for r in second[:2]]
 
 
-def test_run_kakao_publishes_with_model_tags_and_gemma_fallback(tmp_path):
+def force_unsure(monkeypatch):
+    """모든 공지를 '기타'(배운 꼬리표 밖)로 보게 해 Gemma 경로를 확실히 탄다. 테스트가 끝나면 되돌아간다."""
+    monkeypatch.setattr(TextModel.load(cascade.INTEREST_MODEL), "other_threshold", 0.0)
+
+
+def test_run_kakao_publishes_with_model_tags_and_gemma_fallback(tmp_path, monkeypatch):
     raws = to_raw_notices(export_dir(tmp_path), collected_at="2026-10-30T01:00:00Z")
+    model_tags = {r["title"]: cascade.classify(r["title"], r["body_text"]).interest_ids for r in raws}
+    force_unsure(monkeypatch)
     calls = []
 
     def broken_gemma(title, text):
@@ -91,36 +99,34 @@ def test_run_kakao_publishes_with_model_tags_and_gemma_fallback(tmp_path):
         assert schema_errors("notice", n) == []
         assert n["source_url"] is None
     ai = next(n for n in sink.public.values() if "AI" in n["title"])
-    assert "ai_data" in ai["interest_tags"]
     assert ai["application_deadline"]["date"] == "2026-11-13" and ai["lifecycle_status"] == "open"
     # 애매해서 Gemma를 불렀지만 실패한 공고는 내 모델 결과로 게시하고, 다음 배치 때 다시 분석되도록 버전을 다르게 남긴다
-    if calls:
-        assert analyzer.decided_by["model_gemma_failed"] == len(calls)
-        assert any(n["analysis_version"].endswith("-nogemma") for n in sink.public.values())
+    assert len(calls) == 2 and analyzer.decided_by["model_gemma_failed"] == 2
+    for n in sink.public.values():
+        assert n["analysis_version"].endswith("-nogemma")
+        if n["category"] != "admin_notice":
+            assert n["interest_tags"] == model_tags[n["title"]]
 
     # 같은 내보내기를 다시 넣으면 수정본으로 보지 않는다
     again = run_kakao(raws, store=store, sink=sink, notices=notices, today=date(2026, 10, 30), analyzer=KakaoAnalyzer())
     assert again.outcomes["unchanged"] == 2
 
 
-def test_gemma_answer_replaces_interest_when_unsure(tmp_path):
+def test_gemma_answer_replaces_interest_when_unsure(tmp_path, monkeypatch):
     raws = to_raw_notices(export_dir(tmp_path), collected_at="2026-10-30T01:00:00Z")
+    alone = [KakaoAnalyzer().analyze(r, source_config("mjc_kakao")) for r in raws]
+    force_unsure(monkeypatch)
     gemma = lambda title, text: {"interest_ids": ["global_language"], "category": "global", "for_all_students": False, "reason": ""}
     analyzer = KakaoAnalyzer(gemma=gemma)
     fields = [analyzer.analyze(r, source_config("mjc_kakao")) for r in raws]
-    alone = [KakaoAnalyzer().analyze(r, source_config("mjc_kakao")) for r in raws]
     sources = analyzer.decided_by
-    assert sources["gemma"] >= 1 and "model_gemma_failed" not in sources  # 두 합성 공고 모두 꼬리표 확률이 문턱 근처
+    assert sources["gemma"] == 2 and "model_gemma_failed" not in sources
     for f in fields:
         assert "_analysis_version" not in f  # 정상 경로는 분석기 버전 그대로
     # Gemma는 관심사만 바꾸고 종류는 내 모델 답 그대로 (D-035). 행정 공지는 꼬리표 없이 게시
-    for r, f, a in zip(raws, fields, alone):
+    for f, a in zip(fields, alone):
         assert f["category"] == a["category"]
-        unsure = bool(cascade.classify(r["title"], r["body_text"]).unsure)
-        if f["category"] == "admin_notice":
-            assert f["interest_tags"] == []
-        else:
-            assert f["interest_tags"] == (["global_language"] if unsure else a["interest_tags"])
+        assert f["interest_tags"] == ([] if f["category"] == "admin_notice" else ["global_language"])
 
 
 # ---------- 연도 없는 날짜, 지난 공고, 제목 (D-019) ----------
