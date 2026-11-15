@@ -159,11 +159,15 @@ def best_threshold(probs, ids, answer, tags):
 # ---------- 학습 한 번 ----------
 
 def fit(target, unit, arch, tr_ids, val_ids, notices, gemma, min_count=5, epochs=60, board_set=frozenset(),
-        board_weight=1.0):
+        board_weight=1.0, per_tag_threshold=False, balance_classes=False):
     """학습 세트로 정답 코드·단어장을 정하고 학습한 뒤, 관심사는 검증 세트로 문턱값을 정한다.
 
     시험(채점) 공지는 받지 않는다. 단어장·조기 종료·문턱값 어디에도 시험 공지가 들어가지 않게 하려는 것.
     난수 씨앗은 부르는 쪽에서 tf.keras.utils.set_random_seed로 정한다.
+
+    오류 사례 실험 (2주차, D-037)
+      per_tag_threshold  관심사: 꼬리표마다 검증 세트에서 문턱을 따로 정한다 (기본은 꼬리표 전체에 문턱 하나)
+      balance_classes    종류: 학습 공지 수가 적은 종류일수록 손실 가중치를 크게 (전체 / (종류 수 × 그 종류 수))
     """
     multi = target == "interest"
     key = "interest_ids" if multi else "category"
@@ -199,6 +203,9 @@ def fit(target, unit, arch, tr_ids, val_ids, notices, gemma, min_count=5, epochs
     model = build_model(tokenizer.vocabulary_size(), len(classes) + (1 if multi else 0), arch, multi)
     # 게시판 공고는 알림톡과 꼬리표 분포가 달라 손실에 board_weight만큼만 반영할 수 있다
     weights = np.array([board_weight if i in board_set else 1.0 for i in tr_ids], dtype="float32")
+    if balance_classes and not multi:
+        balance = {c: len(tr_ids) / (len(classes) * n) for c, n in counts.items()}
+        weights *= np.array([balance[gemma[i][key]] for i in tr_ids], dtype="float32")
     model.fit(
         x_tr, to_y(tr_ids), sample_weight=weights, validation_data=(x_val, to_y(val_ids)), epochs=epochs,
         batch_size=16, verbose=0,
@@ -208,14 +215,25 @@ def fit(target, unit, arch, tr_ids, val_ids, notices, gemma, min_count=5, epochs
     # 6. 관심사 문턱값: 검증 세트에서 F1이 가장 높은 값
     n_tags = len(classes)
     threshold = other_threshold = None
+    thresholds = []
     if multi:
         val_probs = model.predict(x_val, verbose=0)
-        threshold = best_threshold(val_probs[:, :n_tags], val_ids, {i: gemma[i][key] for i in val_ids}, classes)
+        val_answer = {i: gemma[i][key] for i in val_ids}
+        threshold = best_threshold(val_probs[:, :n_tags], val_ids, val_answer, classes)
+        if per_tag_threshold:
+            # 꼬리표 하나씩 따로: 검증 세트에 그 꼬리표가 하나도 없으면 공통 문턱을 쓴다
+            thresholds = [
+                best_threshold(val_probs[:, k : k + 1], val_ids, val_answer, [t])
+                if any(t in val_answer[i] for i in val_ids) else threshold
+                for k, t in enumerate(classes)
+            ]
+        else:
+            thresholds = [threshold] * n_tags
         # '기타'도 확률이 낮게 나오므로 같은 방식으로 검증 세트에서 문턱을 정한다
         val_other = {i: [OTHER] if any(t not in classes for t in gemma[i][key]) else [] for i in val_ids}
         other_threshold = best_threshold(val_probs[:, n_tags:], val_ids, val_other, [OTHER])
     return SimpleNamespace(model=model, tokenizer=tokenizer, to_x=to_x, counts=counts, classes=classes,
-                           dropped=dropped, threshold=threshold, other_threshold=other_threshold)
+                           dropped=dropped, threshold=threshold, thresholds=thresholds, other_threshold=other_threshold)
 
 
 # ---------- 실험 하나 ----------
@@ -451,7 +469,7 @@ def cv_seed_metrics(rows, target, all_tags, learned):
 
 
 def run_cv(target, unit, arch, min_count=5, epochs=60, board=False, board_weight=1.0, labels_path=HUMAN_LABELS,
-           train_labels="gemma"):
+           train_labels="gemma", per_tag_threshold=False, balance_classes=False):
     if not os.path.exists(labels_path):
         sys.exit(f"사람 정답 {labels_path}가 없어 교차 검증을 하지 않습니다.\n"
                  "make_label_sheet.py → 두 사람이 표 채우기 → label_agreement.py --merge 순서로 만든 뒤, "
@@ -462,7 +480,8 @@ def run_cv(target, unit, arch, min_count=5, epochs=60, board=False, board_weight
     human = {r["id"]: r for r in map(json.loads, filter(str.strip, raw.decode("utf-8").splitlines()))}
     multi = target == "interest"
     key = "interest_ids" if multi else "category"
-    name = f"cv_{target}_{unit}_{arch}" + ("_board" if board else "") + ("_human" if train_labels == "human" else "")
+    name = (f"cv_{target}_{unit}_{arch}" + ("_board" if board else "") + ("_human" if train_labels == "human" else "")
+            + ("_ptt" if per_tag_threshold else "") + ("_bal" if balance_classes else ""))
 
     notices = read_jsonl("notices.jsonl")
     gemma = read_jsonl("labels_gemma.jsonl")
@@ -499,7 +518,7 @@ def run_cv(target, unit, arch, min_count=5, epochs=60, board=False, board_weight
 
             tf.keras.utils.set_random_seed(seed * CV_FOLDS + fold)
             main_fit = fit(target, unit, arch, tr_ids + board_ids, val_ids, all_notices, all_labels, min_count, epochs,
-                           frozenset(board_ids), board_weight)
+                           frozenset(board_ids), board_weight, per_tag_threshold, balance_classes)
             probs = main_fit.model.predict(main_fit.to_x(test_ids), verbose=0)
             # 캐스케이드의 '애매'는 운영과 같이 관심사 모델이 판단한다 (종류를 채점할 때도 관심사 모델을 따로 학습)
             if multi:
@@ -513,9 +532,10 @@ def run_cv(target, unit, arch, min_count=5, epochs=60, board=False, board_weight
 
             for k, i in enumerate(test_ids):
                 tag_p, other_p = inter_probs[k, :n_tags], float(inter_probs[k, n_tags])
-                unsure = bool(other_p >= inter.other_threshold or (np.abs(tag_p - inter.threshold) < CV_BAND).any())
+                unsure = bool(other_p >= inter.other_threshold
+                              or (np.abs(tag_p - np.array(inter.thresholds)) < CV_BAND).any())
                 if multi:
-                    mine = [t for t, p in zip(inter.classes, tag_p) if p >= inter.threshold]
+                    mine = [t for t, p, th in zip(inter.classes, tag_p, inter.thresholds) if p >= th]
                     p_out = {**{t: round(float(p), 4) for t, p in zip(inter.classes, tag_p)}, OTHER: round(other_p, 4)}
                 else:
                     mine = main_fit.classes[int(np.argmax(probs[k]))]
@@ -526,7 +546,7 @@ def run_cv(target, unit, arch, min_count=5, epochs=60, board=False, board_weight
             folds_info.append({
                 "seed": seed, "fold": fold, "train": len(tr_ids), "board": len(board_ids), "val": len(val_ids),
                 "test": len(test_ids), "배운_꼬리표": inter.classes, "뺀_꼬리표": inter.dropped,
-                "threshold": inter.threshold, "other_threshold": inter.other_threshold,
+                "threshold": inter.threshold, "thresholds": inter.thresholds, "other_threshold": inter.other_threshold,
                 **({} if multi else {"종류_코드": main_fit.classes}),
             })
 
@@ -585,7 +605,8 @@ def print_cv_report(info):
 # 따로 떼어 둘 시험 세트가 없다(성능은 교차 검증 값으로 말한다). 학습 공지의 15%만 조기 종료·문턱값용 검증 세트로 뗀다.
 # 출력은 run()과 같은 모양(.keras, _vocab.json, .json)이라 export_weights.py로 그대로 꺼낼 수 있다.
 
-def run_final(target, unit, arch, min_count=5, epochs=60, board=False, board_weight=1.0, labels_path=HUMAN_LABELS):
+def run_final(target, unit, arch, min_count=5, epochs=60, board=False, board_weight=1.0, labels_path=HUMAN_LABELS,
+              balance_classes=False):
     if not os.path.exists(labels_path):
         sys.exit(f"사람 정답 {labels_path}가 없습니다.")
     with open(labels_path, "rb") as f:
@@ -609,7 +630,7 @@ def run_final(target, unit, arch, min_count=5, epochs=60, board=False, board_wei
         all_notices, all_labels = {**notices, **board_notices}, {**human, **board_labels}
 
     fitted = fit(target, unit, arch, tr_ids + board_ids, val_ids, all_notices, all_labels, min_count, epochs,
-                 frozenset(board_ids), board_weight)
+                 frozenset(board_ids), board_weight, balance_classes=balance_classes)
     os.makedirs(OUT, exist_ok=True)
     model_path = os.path.join(OUT, f"{name}.keras")
     fitted.model.save(model_path)
@@ -617,7 +638,7 @@ def run_final(target, unit, arch, min_count=5, epochs=60, board=False, board_wei
         json.dump({"unit": unit, "seq_len": SEQ_LEN[unit], "classes": fitted.classes, "threshold": fitted.threshold,
                    "other_threshold": fitted.other_threshold, "vocab": fitted.tokenizer.get_vocabulary()},
                   f, ensure_ascii=False)
-    info = {"name": name, "train_labels": "human", "labels_sha256": sha256, "train": len(tr_ids), "board": len(board_ids),
+    info = {"name": name, "train_labels": "human", "balance_classes": balance_classes, "labels_sha256": sha256, "train": len(tr_ids), "board": len(board_ids),
             "val": len(val_ids), "classes": fitted.classes, "dropped": fitted.dropped, "threshold": fitted.threshold,
             "other_threshold": fitted.other_threshold, "params": fitted.model.count_params(),
             "size_kb": round(os.path.getsize(model_path) / 1024)}
@@ -700,20 +721,24 @@ def main():
                     help="--cv의 학습 정답: Gemma 라벨(기본) 또는 사람 정답(채점 겹 제외)")
     ap.add_argument("--compare", nargs=2, metavar=("CV_A", "CV_B"),
                     help="두 교차 검증 결과(models/cv_*.json)의 자체 모델을 같은 공지·씨앗끼리 비교")
+    ap.add_argument("--per-tag-threshold", action="store_true", help="--cv 관심사: 꼬리표마다 문턱을 따로 (오류 사례 실험)")
+    ap.add_argument("--balance-classes", action="store_true",
+                    help="종류: 드문 종류의 손실 가중치를 크게 (--cv 실험, --final 앱 배치 모델, D-037)")
     ap.add_argument("--final", action="store_true",
                     help="사람 정답 전부로 앱 배치용 모델을 학습해 models/<이름>_human.keras로 저장 (시험 세트 없음)")
     args = ap.parse_args()
     board = args.board
 
     if args.final:
-        run_final(args.target, args.unit, args.arch, args.min_count, args.epochs, board, args.board_weight, args.labels)
+        run_final(args.target, args.unit, args.arch, args.min_count, args.epochs, board, args.board_weight, args.labels,
+                  args.balance_classes)
         return
     if args.compare:
         compare_cv(*args.compare)
         return
     if args.cv:
         run_cv(args.target, args.unit, args.arch, args.min_count, args.epochs, board, args.board_weight, args.labels,
-               args.train_labels)
+               args.train_labels, args.per_tag_threshold, args.balance_classes)
         return
     if not args.all:
         run(args.target, args.unit, args.arch, args.min_count, args.epochs, board, board_weight=args.board_weight)

@@ -494,6 +494,14 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
   - 평일 학교 알림 1건이 폰 → 받은편지함 → 정기 배치 → 앱까지 가는지, 알림 본문이 잘려 오는지 확인(폰 연결 후 `adb pull` → `tools/compare_notif_probe.py`)
   - 수집기 재빌드 방법: `GWITTIM_PROBE=1 flutter build apk --release -t tool/notif_probe/main.dart --dart-define=GWITTIM_INGEST_URL=<API>/v1/ingest/kakao --dart-define=GWITTIM_INGEST_TOKEN=<data/local/ingest_token.txt>` → `adb install -r --user 0`
 
+## 알림톡 종류 모델 보강 (2026-11-15, D-037)
+
+- 브랜치 `feat/error-case-experiments`. 사람 정답 6건 정정(새 SHA `45b9e7bd…`), 종류 모델 드문 종류 가중치로 재학습, `MODEL_VERSION` `kakao-0.3`.
+- 교차 검증 종류 정확도 0.782 → 0.831. 관심사 꼬리표별 문턱은 효과 없어 안 씀.
+- 남은 일 (병합 뒤)
+  - `Gwittim-batch` 갱신. 다음 정기 배치가 알림톡을 다시 분석한다(모두 자체 모델이라 20분 안팎)
+  - 폰 수집기 다시 빌드·설치(폰 분류는 `kakao-0.2` 모델로 남아 있음. 서버 배치가 다시 분류하므로 게시에는 영향 없음)
+
 ## 미결·차단 사항
 
 - 앱 화면 확인 (2026-10-18): 실기기·에뮬레이터 대신 임시 웹 빌드로 피드·상세·저장·프로필을 확인했습니다. 웹 빌드는 저장소에 넣지 않았습니다. 웹에서는 한글 글꼴이 늦게 로드되는 현상이 있었고, 이는 웹 전용입니다.
