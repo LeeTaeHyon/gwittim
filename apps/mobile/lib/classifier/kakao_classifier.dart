@@ -2,13 +2,14 @@
 //
 // backend/classifier/cascade.py의 classify에서 Gemma 호출을 뺀 것과 같다.
 // 기기에는 Gemma가 없으므로 애매한 공지는 [Classification.unsure]로만 알린다.
+// 애매함은 '기타' 확률이 기타 문턱 이상일 때 하나다(배운 꼬리표 밖의 분야일 수 있음, D-035).
 import 'dart:typed_data';
 
 import 'text_model.dart';
 
-const String interestModelName = 'interest_char_avg';
-const String categoryModelName = 'category_char_avg_board';
-const double band = 0.05; // 꼬리표 확률이 문턱 ± band 안이면 애매하다고 본다
+// 둘 다 사람 정답으로 학습한 모델 (D-035)
+const String interestModelName = 'interest_char_avg_human';
+const String categoryModelName = 'category_char_avg_board_human';
 
 class Classification {
   const Classification({
@@ -23,7 +24,7 @@ class Classification {
   final List<String> interestIds;
   final String category;
 
-  /// 서버라면 Gemma에 넘겼을 공지인지 (기타 확률이 높거나 꼬리표 확률이 문턱 근처)
+  /// 서버라면 관심사를 Gemma에 넘겼을 공지인지 (기타 확률이 기타 문턱 이상)
   final bool unsure;
   final Map<String, double> interestProbs;
   final double otherProb;
@@ -53,14 +54,13 @@ class KakaoClassifier {
     final threshold = interest.threshold!, otherThreshold = interest.otherThreshold!;
     final otherProb = ip[n]; // 마지막 칸은 '기타'
 
-    var unsure = otherProb >= otherThreshold;
+    final unsure = otherProb >= otherThreshold;
     final ids = <String>[];
     final tagProbs = <String, double>{};
     for (var i = 0; i < n; i++) {
       final p = ip[i];
       tagProbs[interest.classes[i]] = p;
       if (p >= threshold) ids.add(interest.classes[i]);
-      if ((p - threshold).abs() < band) unsure = true;
     }
     var best = 0;
     for (var k = 1; k < cp.length; k++) {

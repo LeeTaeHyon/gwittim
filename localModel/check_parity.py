@@ -5,8 +5,8 @@ notices.jsonl 전체에 돌려 모델별 판정 일치 수와 최대 확률 차�
 기대: 관심사 287/287(최대 차 1e-6 미만), 종류 287/287.
 
 사용 (.venv의 파이썬 3.12)
-  .venv/Scripts/python check_parity.py                 기본: interest_char_avg, category_char_avg_board
-  .venv/Scripts/python check_parity.py --models interest_char_avg
+  .venv/Scripts/python check_parity.py                 기본: interest_char_avg_human, category_char_avg_board_human
+  .venv/Scripts/python check_parity.py --models interest_char_avg_human
 """
 import argparse
 import json

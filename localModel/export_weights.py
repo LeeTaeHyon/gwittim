@@ -7,8 +7,8 @@
 내보낸 뒤 모든 알림톡으로 Keras 원본과 결과를 비교해 출력한다.
 
 사용 (.venv의 파이썬 3.12)
-  .venv/Scripts/python export_weights.py                 기본: interest_char_avg, category_char_avg_board
-  .venv/Scripts/python export_weights.py --models interest_char_avg
+  .venv/Scripts/python export_weights.py                 기본: interest_char_avg_human, category_char_avg_board_human
+  .venv/Scripts/python export_weights.py --models interest_char_avg_human
 """
 import argparse
 import json
@@ -26,7 +26,7 @@ sys.path.insert(0, ROOT)
 from backend.classifier.text_model import MODEL_DIR, TextModel, text_of  # noqa: E402
 from train_keras import DATA, OUT  # noqa: E402
 
-DEFAULT_MODELS = ["interest_char_avg", "category_char_avg_board"]
+DEFAULT_MODELS = ["interest_char_avg_human", "category_char_avg_board_human"]  # 둘 다 사람 정답 학습 (D-035)
 # 실제 공지가 아니라 직접 쓴 점검용 문장. 파일에 Keras 확률을 같이 저장하고 테스트가 같은 값을 내는지 본다
 CHECK_TEXTS = [
     "2026 교내 AI 데이터 분석 경진대회 참가팀 모집\n파이썬에 관심 있는 재학생 누구나 신청 가능",

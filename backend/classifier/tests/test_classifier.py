@@ -36,21 +36,23 @@ def test_cascade_calls_gemma_only_when_unsure(monkeypatch):
 
     texts = ["[합성] 도서관 독서 감상문 공모전 안내", "[합성] 2026 AI 데이터 분석 특강 수강생 모집 파이썬 머신러닝 실습"]
     results = [cascade.classify(t, t, gemma) for t in texts]
-    for r in results:
+    alone = [cascade.classify(t, t, None) for t in texts]
+    for r, a in zip(results, alone):
         if r.unsure:
             assert r.source == "gemma" and r.interest_ids == ["culture_arts"]
         else:
             assert r.source == "model"
+        # 종류는 Gemma를 불러도 내 모델 답 (D-035)
+        assert r.category == a.category
     assert len(calls) == sum(bool(r.unsure) for r in results)
 
-    # 애매함 기준: 기타 확률이 문턱 이상이거나 꼬리표 확률이 문턱 ± BAND 안
+    # 애매함 기준: '기타' 확률이 기타 문턱 이상일 때 하나 (D-035)
     interest = TextModel.load(cascade.INTEREST_MODEL)
     for r in results:
-        near = any(abs(p - interest.threshold) < cascade.BAND for p in r.interest_probs.values())
-        assert bool(r.unsure) == (near or r.other_prob >= interest.other_threshold)
+        assert bool(r.unsure) == (r.other_prob >= interest.other_threshold)
 
 
 def test_model_only_without_gemma():
     r = cascade.classify("[합성] 영어 회화 어학 프로그램", "TOEIC 대비반", None)
     assert r.source == "model"
-    assert set(r.interest_ids) <= {"ai_data", "global_language", "media_content"}
+    assert set(r.interest_ids) <= {"ai_data", "global_language", "media_content", "volunteering"}
