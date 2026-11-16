@@ -611,6 +611,48 @@ void main() {
     expect(opened, isEmpty);
   });
 
+  testWidgets('폰 알림으로만 받은 알림톡: 본문 일부만 보일 수 있다는 안내 (D-040)', (tester) async {
+    final base = notice();
+    Notice kakao({required bool preview}) => Notice(
+      summary: NoticeSummary(
+        noticeId: 'n',
+        noticeVersion: 1,
+        title: '[합성 샘플] 겨울방학 영어 회화 프로그램 안내',
+        category: 'global',
+        sourceUrl: null,
+        published: null,
+        applicationDeadline: null,
+        deadlineNote: null,
+        lifecycleStatus: 'unknown',
+      ),
+      description: null,
+      applicationStart: null,
+      activityPeriod: null,
+      eligibility: base.eligibility,
+      lastVerifiedAt: null,
+      sourceId: 'mjc_kakao',
+      bodyPreview: preview,
+    );
+    const hint = '카카오톡 알림 미리보기로 받은 내용이라 본문 일부만 보일 수 있습니다. 전체 내용은 학교 카카오톡 채널에서 확인해 주십시오.';
+    for (final preview in [true, false]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: gwittimTheme(),
+          home: ReportScreen(
+            key: ValueKey(preview),
+            repository: OneNoticeRepository(kakao(preview: preview)),
+            noticeId: 'n',
+            openUrl: (_) async => true,
+            today: today,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(findText(hint), preview ? findsOneWidget : findsNothing);
+      expect(findText('카카오톡 알림톡으로 받은 공지라 원문 링크가 없습니다.'), findsOneWidget);
+    }
+  });
+
   testWidgets('알림톡 공고: 본문의 신청 사이트 버튼, 관련 학교 공지로 이동 (D-025)', (tester) async {
     final base = notice();
     final kakao = Notice(

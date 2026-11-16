@@ -45,6 +45,8 @@ class KakaoAnalyzer:
         else:
             fields["interest_tags"] = c.interest_ids
         fields["apply_url"] = apply_url(raw["body_text"])  # 본문에 적힌 학교 사이트 (D-025)
+        if raw["source_fields"].get("phone_preview"):  # 폰 알림으로만 받아 본문이 잘렸을 수 있음 (D-040)
+            fields["body_preview"] = True
         # 기존 분석기가 LLM 실패로 규칙 결과를 냈거나 애매한데 Gemma를 못 불렀으면 다른 버전으로 기록한다.
         # 분석기 버전과 달라서 다음 배치 때 다시 분석된다 (build_notice의 재사용 조건)
         version = f"{base_version}+{MODEL_VERSION}+{DATES_VERSION}+{MATCH_VERSION}" + ("-nogemma" if c.source == "model_gemma_failed" else "")

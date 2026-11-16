@@ -37,6 +37,7 @@
     "source_url": { "type": ["string", "null"], "format": "uri", "description": "원문 링크. 웹 원문이 없는 출처(카카오톡 알림톡, D-019)는 null." },
     "title": { "type": "string", "minLength": 1 },
     "apply_url": { "type": ["string", "null"], "format": "uri", "description": "알림톡 본문에 적힌 학교 사이트(신청·안내). 게시판 공고에는 없음. D-025." },
+    "body_preview": { "type": "boolean", "description": "폰 알림으로만 받은 알림톡. 카카오톡 알림 본문 한도(200자)로 뒷부분이 빠졌을 수 있음. 내보내기 파일이 들어오면 전체 본문으로 바뀜. D-040." },
     "related_notices": {
       "description": "알림톡과 같은 행사를 안내하는 게시판 공고(최대 3개). 게시판 공고에는 없음. D-025.",
       "type": "array",

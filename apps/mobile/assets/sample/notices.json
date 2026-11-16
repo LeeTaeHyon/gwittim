@@ -329,6 +329,46 @@
   "last_verified_at": "2026-10-30T03:00:00Z",
   "changed_fields": []
  },
+ "n_synthetic_kakao_0002": {
+  "schema_version": "1.0",
+  "notice_id": "n_synthetic_kakao_0002",
+  "source_id": "mjc_kakao",
+  "source_url": null,
+  "body_preview": true,
+  "title": "[합성 샘플] 겨울방학 해외 봉사 프로그램 참가자 모집",
+  "summary": "재학생 대상 겨울방학 해외 봉사 프로그램. 알림 미리보기라 뒷부분은 빠져 있음.",
+  "category": "global",
+  "interest_tags": [
+   "global_language"
+  ],
+  "related_majors": [],
+  "related_roles": [],
+  "published": {
+   "date": "2026-10-30",
+   "time": "09:10",
+   "timezone": "Asia/Seoul",
+   "precision": "minute",
+   "evidence": "카카오톡 수신 2026-10-30 09:10"
+  },
+  "application_start": null,
+  "application_deadline": null,
+  "deadline_note": null,
+  "activity_period": null,
+  "eligibility": {
+   "conditions": [],
+   "unresolved_conditions": [],
+   "extraction_complete": false,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "lifecycle_status": "unknown",
+  "publication_status": "published",
+  "notice_version": 1,
+  "analysis_version": "rule-0.6+kakao-0.1",
+  "last_collected_at": "2026-10-30T03:00:00Z",
+  "last_verified_at": "2026-10-30T03:00:00Z",
+  "changed_fields": []
+ },
  "n_synthetic_0004": {
   "schema_version": "1.0",
   "notice_id": "n_synthetic_0004",
