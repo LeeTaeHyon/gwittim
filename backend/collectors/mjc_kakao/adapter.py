@@ -37,6 +37,7 @@ def to_raw_notices(paths: Iterable[str], collected_at: str | None = None, inbox:
         폰으로 먼저 게시한 공지에 나중에 PC 내보내기가 들어와도 ID가 그대로다.
       · 폰 메시지가 그보다 늦음: 예전 공지의 재발송이다. 이미 게시한 내보내기 기준 ID를 그대로 쓴다.
     본문·제목·종류는 내보내기 메시지가 있으면 그것을 쓴다(폰 알림 본문은 잘려 올 수 있음).
+    내보내기 메시지가 없는 묶음은 source_fields.phone_preview=true (D-040). 내보내기가 있으면 키를 넣지 않는다.
     """
     _, groups = read_exports(paths, [to_message(d) for d in inbox])
     collected_at = collected_at or _now()
@@ -71,6 +72,8 @@ def to_raw_notices(paths: Iterable[str], collected_at: str | None = None, inbox:
             "source_fields": {"channel": body["room"]},
             "attachments": [],
         }
+        if not exported:  # 폰 알림으로만 받음. 알림 본문은 200자로 잘려 올 수 있다 (D-040)
+            raw["source_fields"]["phone_preview"] = True
         raw["content_hash"] = content_hash(raw)
         raws.append(raw)
     return raws

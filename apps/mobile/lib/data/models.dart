@@ -153,6 +153,7 @@ class Notice {
     this.sourceId,
     this.applyUrl,
     this.relatedNotices = const [],
+    this.bodyPreview = false,
   });
 
   final NoticeSummary summary;
@@ -173,6 +174,9 @@ class Notice {
   /// 알림톡과 같은 행사를 안내하는 게시판 공고 (D-025).
   final List<({String noticeId, String title})> relatedNotices;
 
+  /// 폰 알림으로만 받은 알림톡이라 본문 뒷부분이 빠졌을 수 있음 (D-040).
+  final bool bodyPreview;
+
   factory Notice.fromJson(Map<String, dynamic> m) => Notice(
     summary: NoticeSummary.fromJson(m),
     description: m['summary'] as String?,
@@ -186,6 +190,7 @@ class Notice {
       for (final r in (m['related_notices'] as List?) ?? const [])
         (noticeId: r['notice_id'] as String, title: r['title'] as String),
     ],
+    bodyPreview: m['body_preview'] as bool? ?? false,
   );
 }
 

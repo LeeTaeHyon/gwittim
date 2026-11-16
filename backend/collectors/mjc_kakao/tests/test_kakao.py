@@ -324,3 +324,33 @@ def test_phone_resend_of_published_notice_keeps_export_id(tmp_path):
 
 def test_export_only_raws_unchanged_by_empty_inbox(tmp_path):
     assert to_raw_notices(export_dir(tmp_path), collected_at="x") == to_raw_notices(export_dir(tmp_path), collected_at="x", inbox=[])
+
+
+
+def test_phone_preview_flag_only_for_phone_only_group(tmp_path):
+    (alone,) = to_raw_notices([], collected_at="2026-10-20T06:00:00Z", inbox=[phone_doc()])
+    assert alone["source_fields"]["phone_preview"] is True
+    assert schema_errors("raw_notice", alone) == []
+    # 내보내기와 합쳐지면 키 자체가 없다 (내보내기만 있을 때와 content_hash도 같다)
+    cut = AI_TEXT[:45]
+    joined = to_raw_notices(export_dir(tmp_path), collected_at="x", inbox=[phone_doc(cut, "2026-10-20T14:06:00+09:00")])
+    assert all("phone_preview" not in r["source_fields"] for r in joined)
+    only_export = to_raw_notices(export_dir(tmp_path), collected_at="x")
+    # 내보내기만 있던 다른 공고의 content_hash는 그대로다
+    rest = lambda raws: {r["content_hash"] for r in raws if "AI" not in r["title"]}
+    assert rest(joined) == rest(only_export)
+
+
+def test_phone_preview_becomes_body_preview_on_notice():
+    (raw,) = to_raw_notices([], collected_at="2026-10-20T06:00:00Z", inbox=[phone_doc()])
+    notices = {}
+    run_kakao([raw], store=InMemoryStore(), sink=InMemorySink(), notices=notices, today=date(2026, 10, 21), analyzer=KakaoAnalyzer())
+    (notice,) = notices.values()
+    assert notice["body_preview"] is True and schema_errors("notice", notice) == []
+
+
+def test_exported_notice_has_no_body_preview(tmp_path):
+    notices = {}
+    run_kakao(to_raw_notices(export_dir(tmp_path)), store=InMemoryStore(), sink=InMemorySink(), notices=notices,
+              today=date(2026, 10, 30), analyzer=KakaoAnalyzer())
+    assert notices and all("body_preview" not in n for n in notices.values())

@@ -379,44 +379,58 @@ class _ReportScreenState extends State<ReportScreen> {
           top: false,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-            child: Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (_saved != null) ...[
-                  SizedBox(
-                    width: 56,
-                    height: 56,
-                    child: IconButton(
-                      tooltip: _saved! ? '저장 취소' : '저장',
-                      style: IconButton.styleFrom(backgroundColor: c.chip, foregroundColor: c.onChip),
-                      icon: GwIcon(GwGlyph.saved, filled: _saved!, color: c.onChip),
-                      onPressed: _toggleSave,
-                    ),
+                // D-040: 폰 알림으로만 받은 알림톡은 알림 본문 한도로 뒷부분이 빠졌을 수 있다
+                if (notice.bodyPreview) ...[
+                  Text(
+                    keepAll('카카오톡 알림 미리보기로 받은 내용이라 본문 일부만 보일 수 있습니다. 전체 내용은 학교 카카오톡 채널에서 확인해 주십시오.'),
+                    textAlign: TextAlign.center,
+                    style: captionStyle(context),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(height: 10),
                 ],
-                Expanded(
-                  child: switch (notice.summary.sourceUrl) {
-                    final url? => FilledButton.icon(
-                      onPressed: () => _open(url),
-                      iconAlignment: IconAlignment.end,
-                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                      label: Text(rec?.eligibilityStatus == 'needs_check' ? '학교 공지에서 확인하기' : '학교 공지에서 보기'),
+              Row(
+                children: [
+                  if (_saved != null) ...[
+                    SizedBox(
+                      width: 56,
+                      height: 56,
+                      child: IconButton(
+                        tooltip: _saved! ? '저장 취소' : '저장',
+                        style: IconButton.styleFrom(backgroundColor: c.chip, foregroundColor: c.onChip),
+                        icon: GwIcon(GwGlyph.saved, filled: _saved!, color: c.onChip),
+                        onPressed: _toggleSave,
+                      ),
                     ),
-                    // D-025: 알림톡 본문에 적힌 학교 사이트(스마트케어 등). 사이트는 수집하지 않고 열기만 한다
-                    null when notice.applyUrl != null => FilledButton.icon(
-                      onPressed: () => _open(notice.applyUrl!),
-                      iconAlignment: IconAlignment.end,
-                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                      label: const Text('신청 사이트 열기'),
-                    ),
-                    // D-019: 알림톡은 열 수 있는 웹 원문이 없다. 받은 카톡 메시지가 원문이다
-                    null => Text(
-                      keepAll('카카오톡 알림톡으로 받은 공지라 원문 링크가 없습니다.'),
-                      textAlign: TextAlign.center,
-                      style: captionStyle(context),
-                    ),
-                  },
-                ),
+                    const SizedBox(width: 10),
+                  ],
+                  Expanded(
+                    child: switch (notice.summary.sourceUrl) {
+                      final url? => FilledButton.icon(
+                        onPressed: () => _open(url),
+                        iconAlignment: IconAlignment.end,
+                        icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                        label: Text(rec?.eligibilityStatus == 'needs_check' ? '학교 공지에서 확인하기' : '학교 공지에서 보기'),
+                      ),
+                      // D-025: 알림톡 본문에 적힌 학교 사이트(스마트케어 등). 사이트는 수집하지 않고 열기만 한다
+                      null when notice.applyUrl != null => FilledButton.icon(
+                        onPressed: () => _open(notice.applyUrl!),
+                        iconAlignment: IconAlignment.end,
+                        icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                        label: const Text('신청 사이트 열기'),
+                      ),
+                      // D-019: 알림톡은 열 수 있는 웹 원문이 없다. 받은 카톡 메시지가 원문이다
+                      null => Text(
+                        keepAll('카카오톡 알림톡으로 받은 공지라 원문 링크가 없습니다.'),
+                        textAlign: TextAlign.center,
+                        style: captionStyle(context),
+                      ),
+                    },
+                  ),
+                ],
+              ),
               ],
             ),
           ),

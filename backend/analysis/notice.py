@@ -160,6 +160,8 @@ def build_notice(
     }
     if "apply_url" in fields:  # 알림톡만 (D-025)
         notice["apply_url"] = fields["apply_url"]
+    if fields.get("body_preview"):  # 폰 알림으로만 받은 알림톡 (D-040)
+        notice["body_preview"] = True
     notice["lifecycle_status"] = "removed" if record.removed else _lifecycle(notice, today)
     if previous:
         notice["changed_fields"] = [
