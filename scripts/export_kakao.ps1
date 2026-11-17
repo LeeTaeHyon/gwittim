@@ -10,6 +10,7 @@
 #     도중에 키보드·마우스 입력이 생기면 멈춘다. 끝난 뒤 메시지 입력칸 글자가 바뀌었으면 멈추고 방 창을 열어 둔다.
 #   - 화면이 잠겼거나 방 창을 맨 앞으로 가져오지 못하면 그 회차는 건너뛴다(키를 보내지 않음).
 #   - 사람이 미리 열어 둔 방 창은 닫지 않는다.
+#   - 카톡이 꺼져 있으면 Windows 시작 때와 같은 방식으로 켠다(-NoLaunch로 끔). 로그인 화면에서 멈추면 건너뛴다.
 #
 # 출력: 마지막 줄에 JSON 한 줄 {"kakao_export": {...}}. 종료 코드 0(저장함 또는 건너뜀), 1(오류)
 # 사용: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\export_kakao.ps1 -OutDir <폴더>
@@ -21,7 +22,10 @@ param(
         '명지전문대학 상담센터', '명지전문대학 스마트케어', '명지전문대학 글로벌교육센터'
     ),
     [int]$MinIdleSeconds = 120,
-    [int]$WaitIdleMinutes = 0   # PC 사용 중이면 이 시간까지 쉬는 틈을 기다린다
+    [int]$WaitIdleMinutes = 0,  # PC 사용 중이면 이 시간까지 쉬는 틈을 기다린다
+    [string]$KakaoExe = (Join-Path $env:ProgramFiles 'Kakao\KakaoTalk\KakaoTalk.exe'),
+    [int]$LaunchWaitSeconds = 90,
+    [switch]$NoLaunch           # 카톡이 꺼져 있어도 켜지 않는다
 )
 $ErrorActionPreference = 'Stop'
 
@@ -85,7 +89,7 @@ public class KakaoUi {
 
 $WM_SETTEXT = 0x000C; $WM_KEYDOWN = 0x0100; $WM_KEYUP = 0x0101; $WM_CLOSE = 0x0010; $BM_CLICK = 0x00F5; $VK_RETURN = 0x0D
 $started = Get-Date
-$result = [ordered]@{ status = 'ok'; reason = $null; rooms = [ordered]@{}; seconds = 0 }
+$result = [ordered]@{ status = 'ok'; reason = $null; launched = $false; rooms = [ordered]@{}; seconds = 0 }
 
 function Finish([string]$status, [string]$reason, [int]$code) {
     $result.status = $status
@@ -105,16 +109,7 @@ function Wait-For([scriptblock]$probe, [int]$ms) {
     return $null
 }
 
-$proc = Get-Process KakaoTalk -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $proc) { Finish 'skipped' '카카오톡이 실행 중이 아님' 0 }
-$kpid = [uint32]$proc.Id
-
-$main = [KakaoUi]::Tops($kpid, $false) | Where-Object { [KakaoUi]::Title($_) -eq '카카오톡' } | Select-Object -First 1
-if (-not $main) { Finish 'skipped' '카카오톡 메인 창 없음 (로그인 전일 수 있음)' 0 }
-$list = [KakaoUi]::Kids($main) | Where-Object { [KakaoUi]::Title($_) -like 'ChatRoomListView*' } | Select-Object -First 1
-$search = if ($list) { [KakaoUi]::Kids($list) | Where-Object { [KakaoUi]::Cls($_) -eq 'Edit' } | Select-Object -First 1 }
-if (-not $search) { Finish 'skipped' '채팅 목록 검색칸 없음 (카톡 잠금 모드일 수 있음)' 0 }
-
+# 사람이 PC를 쓰는 중이면 카톡을 띄우지도 않는다
 $waitUntil = (Get-Date).AddMinutes($WaitIdleMinutes)
 while ($true) {
     $idle = ([KakaoUi]::Now() - [KakaoUi]::LastInputTick()) / 1000
@@ -122,6 +117,33 @@ while ($true) {
     if ((Get-Date) -ge $waitUntil) { Finish 'skipped' ("PC 사용 중 (마지막 입력 {0:N0}초 전)" -f $idle) 0 }
     Start-Sleep -Seconds 15
 }
+
+# 카톡이 꺼져 있으면 Windows 시작 때와 같은 방식(-bystartup, 트레이로 시작)으로 켠다.
+# 자동 로그인이 켜져 있으면 채팅 목록이 생길 때까지 기다리고, 로그인 화면에서 멈추면 건너뛴다
+function Find-ChatSearch([uint32]$procId) {
+    $m = [KakaoUi]::Tops($procId, $false) | Where-Object { [KakaoUi]::Title($_) -eq '카카오톡' } | Select-Object -First 1
+    if (-not $m) { return $null }
+    $l = [KakaoUi]::Kids($m) | Where-Object { [KakaoUi]::Title($_) -like 'ChatRoomListView*' } | Select-Object -First 1
+    if (-not $l) { return $null }
+    return [KakaoUi]::Kids($l) | Where-Object { [KakaoUi]::Cls($_) -eq 'Edit' } | Select-Object -First 1
+}
+$proc = Get-Process KakaoTalk -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $proc) {
+    if ($NoLaunch) { Finish 'skipped' '카카오톡이 실행 중이 아님' 0 }
+    if (-not (Test-Path -LiteralPath $KakaoExe)) { Finish 'skipped' "카카오톡 실행 파일 없음: $KakaoExe" 0 }
+    Start-Process -FilePath $KakaoExe -ArgumentList '-bystartup' | Out-Null
+    $result.launched = $true
+    $proc = Wait-For { Get-Process KakaoTalk -ErrorAction SilentlyContinue | Select-Object -First 1 } 20000
+    if (-not $proc) { Finish 'skipped' '카카오톡을 켰지만 실행되지 않음' 0 }
+    $search = Wait-For { Find-ChatSearch ([uint32]$proc.Id) } ($LaunchWaitSeconds * 1000)
+    if (-not $search) { Finish 'skipped' "카카오톡을 켰지만 $LaunchWaitSeconds초 안에 채팅 목록이 없음 (로그인 필요일 수 있음)" 0 }
+    Start-Sleep -Seconds 5   # 시작 직후 받은 메시지·창 정리를 기다린다
+    # 켜는 사이 사람이 PC를 만졌으면 그만둔다
+    if ((([KakaoUi]::Now() - [KakaoUi]::LastInputTick()) / 1000) -lt 5) { Finish 'skipped' 'PC 사용 중 (카톡을 켜는 사이 입력)' 0 }
+}
+$kpid = [uint32]$proc.Id
+$search = Find-ChatSearch $kpid
+if (-not $search) { Finish 'skipped' '채팅 목록 검색칸 없음 (로그인 전이거나 카톡 잠금 모드일 수 있음)' 0 }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 # 우리가 보낸 키 입력 말고 다른 입력이 생겼는지 볼 기준 (사람이 PC를 만지면 멈춘다)

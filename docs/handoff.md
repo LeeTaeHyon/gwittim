@@ -510,6 +510,7 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 - 남은 일
   - 병합 뒤 `Gwittim-batch` 갱신. 다음 정기 배치 로그(`batch.log`)의 `kakao_export` 줄 확인
   - PC 화면 잠금 상태에서 건너뛰는지 확인(잠금이면 skipped여야 함)
+  - PC 카톡이 꺼져 있으면 스크립트가 켠다(`feat/kakao-export-autostart`). 꺼진 상태에서 켜는 경로는 아직 실제로 돌려 보지 않았다
   - PC 카톡이 로그아웃·업데이트되면 건너뛴다. 완료 알림에 "카톡 내보내기 skipped"가 반복되면 PC 카톡 확인
 
 ## 미결·차단 사항
