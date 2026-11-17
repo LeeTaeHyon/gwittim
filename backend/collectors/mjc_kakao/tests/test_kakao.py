@@ -354,3 +354,24 @@ def test_exported_notice_has_no_body_preview(tmp_path):
     run_kakao(to_raw_notices(export_dir(tmp_path)), store=InMemoryStore(), sink=InMemorySink(), notices=notices,
               today=date(2026, 10, 30), analyzer=KakaoAnalyzer())
     assert notices and all("body_preview" not in n for n in notices.values())
+
+
+def test_latest_exports_picks_newest_file_per_room(tmp_path):
+    from backend.collectors.mjc_kakao.__main__ import latest_exports
+
+    base, auto = tmp_path / "base", tmp_path / "auto"
+    base.mkdir()
+    auto.mkdir()
+    names = {
+        base: ["KakaoTalk_20261029_1935_53_981_명지전문대학 공지사항.txt", "KakaoTalk_20261029_1936_49_009_명지전문대학 상담센터.txt"],
+        auto: ["KakaoTalk_20261118_0543_00_909_명지전문대학 공지사항.txt", "KakaoTalk_20261117_0900_00_000_명지전문대학 공지사항.txt"],
+    }
+    for d, files in names.items():
+        for f in files:
+            (d / f).write_text("x", encoding="utf-8")
+    got = [p.replace("\\", "/").rsplit("/", 2)[-2:] for p in latest_exports([base, auto])]
+    assert sorted(got) == [
+        ["auto", "KakaoTalk_20261118_0543_00_909_명지전문대학 공지사항.txt"],
+        ["base", "KakaoTalk_20261029_1936_49_009_명지전문대학 상담센터.txt"],  # 자동 내보내기에 없는 방은 기준 파일
+    ]
+    assert latest_exports([base]) == sorted(str(base / f) for f in names[base])
