@@ -39,6 +39,15 @@ object ProbeStore {
 
     fun appendClassified(context: Context, json: JSONObject) = append(context, "classified.jsonl", json)
 
+    private fun prefs(context: Context) = context.getSharedPreferences("notif_probe", Context.MODE_PRIVATE)
+
+    /** 이 방에서 마지막으로 처리한 메시지 시각(밀리초). 처음이면 0. */
+    fun lastMessageTime(context: Context, room: String): Long = prefs(context).getLong("last_time:$room", 0L)
+
+    fun setLastMessageTime(context: Context, room: String, millis: Long) {
+        prefs(context).edit().putLong("last_time:$room", millis).apply()
+    }
+
     fun appendBody(context: Context, body: String) = append(context, "bodies.jsonl", JSONObject().put("body", body))
 
     /** 최근 학교 채널 알림 본문. 받는 사람 이름은 두 번 이상 나온 '○○○님'이라 이전 알림이 필요하다 (parser.detect_names). */

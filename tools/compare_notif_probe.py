@@ -53,13 +53,16 @@ def field(record: dict, name: str) -> str | None:
 
 
 def body_of(record: dict) -> tuple[str, str] | None:
-    """실제 기능이 분류할 본문과 출처: 펼친 본문 > 가장 긴 메시지 > 본문 (측정 앱과 같은 규칙)."""
+    """분류한 본문과 출처: 펼친 본문 > 가장 새 메시지 > 본문 (측정 앱과 같은 규칙).
+
+    측정 앱은 묶인 메시지를 하나씩 따로 올리고, 기록 id는 가장 새 메시지에 붙인다.
+    """
     big = field(record, "big_text")
     if big and big.strip():
         return big, "big_text"
     messages = [m["text"] for m in record.get("messages") or [] if m.get("text", "").strip()]
     if messages:
-        return max(messages, key=len), "messages"
+        return messages[-1], "messages"  # 알림의 메시지 묶음은 시간 순
     text = field(record, "text")
     if text and text.strip():
         return text, "text"

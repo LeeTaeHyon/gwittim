@@ -29,12 +29,13 @@ def notice(nid, text, at="2026-11-20T10:00:00+09:00", room=ROOM):
     return {"id": nid, "room": room, "sent_at": at, "title": text.split("\n")[0], "text": text}
 
 
-def test_body_prefers_big_text_then_messages():
+def test_body_prefers_big_text_then_newest_message():
     r = record("a", "k", "짧은 본문", big="펼친 본문")
     assert cmp.body_of(r) == ("펼친 본문", "big_text")
     r = record("a", "k", "짧은 본문")
-    r["messages"] = [{"text": "메시지 하나"}, {"text": "가장 긴 메시지 본문"}]
-    assert cmp.body_of(r) == ("가장 긴 메시지 본문", "messages")
+    # 안 읽은 예전 메시지가 더 길어도 가장 새 메시지 (2026-11-17 10:06)
+    r["messages"] = [{"text": "예전에 온 더 긴 메시지 본문"}, {"text": "새 메시지"}, {"text": " "}]
+    assert cmp.body_of(r) == ("새 메시지", "messages")
     assert cmp.body_of(record("a", "k")) is None
 
 

@@ -492,6 +492,7 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
   - 이미 게시한 끝난 알림톡 6건은 예전 분류로 남았다 → 배치가 공개본이 있는 끝난 공고도 분석과 맞추도록 고침(`fix/kakao-past-resync`). 병합 뒤 `Gwittim-batch` 다시 갱신
 - 남은 일
   - 평일 학교 알림 1건이 폰 → 받은편지함 → 정기 배치 → 앱까지 가는지, 알림 본문이 잘려 오는지 확인(폰 연결 후 `adb pull` → `tools/compare_notif_probe.py`)
+  - 수집기가 안 읽은 메시지 묶음에서 가장 긴 메시지를 알림 시각으로 올리던 문제를 고침(`fix/collector-newest-message`, 2026-11-17 10:06에 예전 공지가 새 발송처럼 올라감). 메시지마다 자기 시각으로, 방별 마지막 처리 시각 이후만 올린다. 폰에 다시 설치해야 반영된다
   - 수집기 재빌드 방법: `GWITTIM_PROBE=1 flutter build apk --release -t tool/notif_probe/main.dart --dart-define=GWITTIM_INGEST_URL=<API>/v1/ingest/kakao --dart-define=GWITTIM_INGEST_TOKEN=<data/local/ingest_token.txt>` → `adb install -r --user 0`
 
 ## 알림톡 종류 모델 보강 (2026-11-15, D-037)
