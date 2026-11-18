@@ -14,6 +14,7 @@ from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from backend.analysis.extract_model import MODEL_SUBDIR, load_if_present
 from backend.analysis.llm import OllamaAnalyzer
 from backend.batch import run_batch
 from backend.collectors.common import JsonFileStore
@@ -31,7 +32,9 @@ def main() -> None:
     ap.add_argument("--delay", type=float, default=1.0)
     ap.add_argument("--data-dir", type=Path, default=Path("data/local"))
     ap.add_argument("--ollama-model", default="gemma4:12b", help="로컬 Ollama 보강 분석 모델 (D-007)")
-    ap.add_argument("--no-llm", action="store_true", help="규칙 분석만 사용")
+    ap.add_argument("--no-llm", action="store_true", help="Gemma를 쓰지 않음 (요약 없음)")
+    ap.add_argument("--extract-model", type=Path, default=None, help="자체 공고 줄 분류 모델 폴더 (D-042). 기본 <data-dir>/models/extract-v1. 없으면 Gemma가 추출 보강")
+    ap.add_argument("--no-extract-model", action="store_true", help="자체 모델을 쓰지 않음")
     args = ap.parse_args()
 
     store = JsonFileStore(args.data_dir / "pipeline")
@@ -47,7 +50,12 @@ def main() -> None:
         sink = InMemorySink()
 
     started = datetime.now(KST)
-    analyzer = None if args.no_llm else OllamaAnalyzer(args.ollama_model)  # Ollama가 없으면 규칙 분석으로 자동 폴백
+    # 자체 모델이 있으면 마감·조건 추출을 맡고 Gemma는 요약만 (D-042). Ollama가 없으면 요약 없이 진행
+    extract = None if args.no_extract_model else load_if_present(args.extract_model or args.data_dir / MODEL_SUBDIR)
+    if args.no_llm:
+        analyzer = extract
+    else:
+        analyzer = OllamaAnalyzer(args.ollama_model, base=extract, extract=extract is None)
     report = run_batch(
         (b for b in BOARDS.values() if b.active),
         store=store,
@@ -60,19 +68,25 @@ def main() -> None:
         delay=args.delay,
     )
     notices_path.write_text(json.dumps(notices, ensure_ascii=False, indent=1), encoding="utf-8")
-    used_llm = bool(analyzer and (analyzer.llm_analyzed or analyzer.llm_failed))
-    unloaded = analyzer.unload() if used_llm else False  # GPU를 바로 비운다
+    llm = analyzer if isinstance(analyzer, OllamaAnalyzer) else None
+    used_llm = bool(llm and (llm.llm_analyzed or llm.llm_failed))
+    unloaded = llm.unload() if used_llm else False  # GPU를 바로 비운다
     finished = datetime.now(KST)
     summary = {
         "started_at": started.isoformat(timespec="seconds"),
         "finished_at": finished.isoformat(timespec="seconds"),
         "seconds": round((finished - started).total_seconds()),
         "llm": {
-            "model": None if analyzer is None else analyzer.model,
+            "model": None if llm is None else llm.model,
             "used": used_llm,
-            "analyzed": 0 if analyzer is None else analyzer.llm_analyzed,
-            "fallback_rule_only": 0 if analyzer is None else analyzer.llm_failed,
+            "analyzed": 0 if llm is None else llm.llm_analyzed,
+            "fallback_rule_only": 0 if llm is None else llm.llm_failed,
             "unloaded": unloaded,
+        },
+        "extract_model": {
+            "version": None if extract is None else extract.version,
+            "analyzed": 0 if extract is None else extract.model_analyzed,
+            "fallback_rule_only": 0 if extract is None else extract.model_failed,
         },
     }
     summary |= asdict(report)

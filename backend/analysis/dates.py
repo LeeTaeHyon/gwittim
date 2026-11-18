@@ -1,6 +1,6 @@
 """본문 날짜의 결정적 파싱 (SPEC §6 수집·분석 4).
 
-- 연도가 있는 날짜만 단독으로 인정한다. 두 자리 연도(26.12.30(수))는 요일이 달력과 맞을 때만 인정한다. 연도 없는 날짜는 같은 줄의 범위 끝(A ~ B)일 때만 A의 연도를 따르고, A보다 앞서면 다음 해로 본다.
+- 연도가 있는 날짜만 단독으로 인정한다. 두 자리 연도(26.12.30(수))는 괄호가 붙고, 요일이 있으면 달력과 맞을 때만 인정한다. 연도 없는 날짜는 같은 줄의 범위 끝(A ~ B, A부터 B)일 때만 A의 연도를 따르고, A보다 앞서면 다음 해로 본다. 일만 쓴 범위 끝(~ 20.(금))은 요일이 맞을 때만 A의 달로 읽는다.
 - 시각이 없으면 precision=date, time=null. 임의 마감시각(23:59)을 넣지 않는다.
 - 시간대는 시각이 있고 출처 설정에 근거가 있을 때만 넣는다.
 - evidence는 원문 줄 그대로다.
@@ -13,22 +13,29 @@ from datetime import date
 
 _SEP = r"\s*[.\-/년]\s*"
 _CLOCK = r"(?:(?P<h>\d{1,2})\s*:\s*(?P<mi>\d{2})|(?P<kh>\d{1,2})\s*시(?:\s*(?P<kmi>\d{1,2})\s*분)?)"
+# 요일: '(금)', 요일이 빠진 '()' (채용 게시판 양식), '금요일'
+_WD = r"(?:(?P<paren>\(\s*(?P<wd>[월화수목금토일])?\s*\))|(?P<wdw>[월화수목금토일])요일)?"
 _FULL = re.compile(
     r"(?P<y>20\d{2})" + _SEP + r"(?P<m>\d{1,2})\s*[.\-/월]\s*(?P<d>\d{1,2})\s*[.일]?\s*"
-    r"(?:\((?P<wd>[월화수목금토일])\))?\s*(?:" + _CLOCK + r")?"
+    + _WD + r"\s*(?:" + _CLOCK + r")?"
 )
 _SHORT = re.compile(
-    r"(?P<m>\d{1,2})\s*[.\-/월]\s*(?P<d>\d{1,2})\s*[.일]?\s*(?:\((?P<wd>[월화수목금토일])\))?\s*"
+    r"(?P<m>\d{1,2})\s*[.\-/월]\s*(?P<d>\d{1,2})\s*[.일]?\s*" + _WD + r"\s*"
     r"(?:" + _CLOCK + r")?"
 )
-# 두 자리 연도 '26.12.30(수)' (채용 포스터 대체텍스트에 흔함, D-014). 오인을 막으려고 요일이 붙고 달력과 맞을 때만 인정한다.
+# 두 자리 연도 '26.12.30(수)' (채용 포스터 대체텍스트에 흔함, D-014). 오인을 막으려고 괄호가 붙을 때만 인정하고,
+# 요일이 있으면 달력과 맞아야 한다. 빈 괄호 '26.10.16.()'는 요일이 빠진 채용 게시판 양식이다.
 _YY = re.compile(
-    r"(?<![\d.])(?P<y>2\d)\.\s*(?P<m>\d{1,2})\.\s*(?P<d>\d{1,2})\s*\.?\s*\((?P<wd>[월화수목금토일])\)\s*"
+    r"(?<![\d.])(?P<y>2\d)\.\s*(?P<m>\d{1,2})\.\s*(?P<d>\d{1,2})\s*\.?\s*\(\s*(?P<wd>[월화수목금토일])?\s*\)\s*"
     r"(?:" + _CLOCK + r")?"
 )
+# 범위 끝에 일만 쓴 경우 '2024. 9. 2.(월) ~ 20.(금)'. 시작과 같은 달이고 요일이 달력과 맞을 때만 인정한다.
+_DAY_ONLY = re.compile(r"(?P<d>\d{1,2})\s*[.일]?\s*\(\s*(?P<wd>[월화수목금토일])\s*\)\s*(?:" + _CLOCK + r")?")
 _WEEKDAYS = "월화수목금토일"
 _TIME = re.compile(_CLOCK)
-_RANGE_SEP = re.compile(r"\s*[~∼～\-–]\s*")
+# '~', 마크다운에서 옮겨 온 '\~', 문장 속 '9시부터 6월 22일 …까지'
+_RANGE_SEP = re.compile(r"\s*(?:\\?[~∼～\-–]|부터)\s*")
+_YEAR_MARK = "'’‘"  # '25. 12. 26.(금) 의 생략 부호
 
 
 @dataclass(frozen=True)
@@ -59,12 +66,22 @@ def _clock(m: re.Match) -> str | None | bool:
     return f"{h:02d}:{mi:02d}" if h <= 23 and mi <= 59 else False
 
 
+def _weekday(m: re.Match) -> str | None:
+    groups = m.re.groupindex
+    return m["wd"] or ("wdw" in groups and m["wdw"]) or None
+
+
+def _weekday_ok(point: Point | None, m: re.Match) -> bool:
+    wd = _weekday(m)
+    return point is not None and (wd is None or _WEEKDAYS[point.day.weekday()] == wd)
+
+
 def _dated_point(m: re.Match) -> Point | None:
-    """연도가 있는 날짜(_FULL 또는 _YY). 두 자리 연도는 요일이 실제 달력과 다르면 버린다."""
+    """연도가 있는 날짜(_FULL 또는 _YY). 두 자리 연도는 요일이 적혀 있으면 실제 달력과 맞아야 한다."""
     if len(m["y"]) == 4:
         return _point(m, int(m["y"]))
     point = _point(m, 2000 + int(m["y"]))
-    return point if point and _WEEKDAYS[point.day.weekday()] == m["wd"] else None
+    return point if _weekday_ok(point, m) else None
 
 
 def parse_line(line: str) -> tuple[Point | None, Point | None]:
@@ -79,15 +96,25 @@ def parse_line(line: str) -> tuple[Point | None, Point | None]:
     sep = _RANGE_SEP.match(rest)
     if not sep:
         return start, None
-    tail = rest[sep.end():]
+    tail = rest[sep.end():].lstrip(_YEAR_MARK)
     for pattern in (_FULL, _YY, _SHORT):
         m = pattern.match(tail)
-        if m and (pattern is not _SHORT or m["wd"] or tail[m.end(): m.end() + 1] in ("", " ", ".", ",", ")", "까")):
+        if m and (pattern is not _SHORT or m["paren"] or m["wdw"]
+                  or tail[m.end(): m.end() + 1] in ("", " ", ".", ",", "(", ")", "까")):
             end = _dated_point(m) if pattern is not _SHORT else _point(m, start.day.year)
             if end and pattern is _SHORT and end.day < start.day:  # 12.30 ~ 01.05: 다음 해
                 end = _point(m, start.day.year + 1)
             if end:
                 return start, end
+    m = _DAY_ONLY.match(tail)
+    if m:
+        try:
+            end = Point(date(start.day.year, start.day.month, int(m["d"])), None)
+        except ValueError:
+            end = None
+        clock = _clock(m)
+        if end and clock is not False and end.day >= start.day and _weekday_ok(end, m):
+            return start, Point(end.day, clock)
     m = _TIME.match(tail)
     if m and start.time:  # 같은 날 시각 범위: 15:00 ~ 17:00
         return start, _point_time(start.day, m)

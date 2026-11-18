@@ -36,7 +36,8 @@ class KakaoAnalyzer:
         fields = self.base.analyze(raw, source)
         base_version = fields.pop("_analysis_version", self.base.version)
         if raw.get("published"):
-            fill_dates(fields, raw, source.timezone)
+            # 자체 모델 분석기(D-042)가 마감을 정했으면 마감 칸은 미상이어도 날짜 규칙으로 다시 메우지 않는다
+            fill_dates(fields, raw, source.timezone, deadline=not _decides_deadline(self.base))
         c = classify(raw["title"], raw["body_text"], self.gemma)
         self.decided_by[c.source] += 1
         fields["category"] = c.category
@@ -55,8 +56,20 @@ class KakaoAnalyzer:
         return fields
 
 
-def fill_dates(fields: dict, raw: dict, timezone: str | None) -> None:
-    """기존 분석기가 비워 둔 신청 마감·활동 기간을 발송일 기준 날짜로 채운다. 근거는 원문 줄 그대로."""
+def _decides_deadline(analyzer) -> bool:
+    """분석기(또는 그 아래 base 분석기)가 마감을 스스로 정하는지 (자체 모델 분석기, D-042)."""
+    while analyzer is not None:
+        if getattr(analyzer, "decides_deadline", False):
+            return True
+        analyzer = getattr(analyzer, "base", None)
+    return False
+
+
+def fill_dates(fields: dict, raw: dict, timezone: str | None, deadline: bool = True) -> None:
+    """기존 분석기가 비워 둔 신청 마감·활동 기간을 발송일 기준 날짜로 채운다. 근거는 원문 줄 그대로.
+
+    deadline=False면 활동 기간만 채운다.
+    """
     anchor = date.fromisoformat(raw["published"]["date"])
     deadlines, events = [], []
     for line in [raw["title"], *raw["body_text"].splitlines()]:
@@ -67,7 +80,7 @@ def fill_dates(fields: dict, raw: dict, timezone: str | None) -> None:
             deadlines.append((max(points, key=lambda p: p.day), line))  # 범위면 끝 날짜
         else:
             events += [(p, line) for p in points]
-    if fields["application_deadline"] is None and deadlines:
+    if deadline and fields["application_deadline"] is None and deadlines:
         point, line = max(deadlines, key=lambda d: d[0].day)
         fields["application_deadline"] = date_info(point, line, timezone)
     if fields["activity_period"] is None and events:

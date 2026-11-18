@@ -47,7 +47,7 @@ $env:GWITTIM_FIREBASE_PROJECT_ID = $ProjectId
 $env:PYTHONIOENCODING = "utf-8"
 Push-Location $code
 try {
-    $lines = & $Uv run --frozen python -m backend.collectors.mjc_www --data-dir $DataDir 2>&1 | ForEach-Object { "$_" }
+    $lines = & $Uv run --frozen --group extract python -m backend.collectors.mjc_www --data-dir $DataDir 2>&1 | ForEach-Object { "$_" }
     $exit = $LASTEXITCODE
 } finally {
     Pop-Location
@@ -79,7 +79,7 @@ if ($exit -eq 0 -and (Test-Path $KakaoDir)) {
     if (Test-Path $autoDir) { $exportDirs += $autoDir }
     Push-Location $code
     try {
-        $klines = & $Uv run --frozen python -m backend.collectors.mjc_kakao --export-dir $exportDirs --data-dir $DataDir 2>&1 | ForEach-Object { "$_" }
+        $klines = & $Uv run --frozen --group extract python -m backend.collectors.mjc_kakao --export-dir $exportDirs --data-dir $DataDir 2>&1 | ForEach-Object { "$_" }
         $kexit = $LASTEXITCODE
     } finally {
         Pop-Location
