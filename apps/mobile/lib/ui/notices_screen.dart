@@ -386,13 +386,25 @@ class _SearchRow extends StatelessWidget {
 /// - 오른쪽 칩은 하나: 7일 안 마감이면 D-day, 아니면 조건 상태(리포트와 같은 색)
 /// - 마지막 줄: 추천 이유만. 조건 상태는 칩에만 둔다(체크 표시를 이유 앞에 두면 관련도로 읽힌다)
 /// - 카카오톡 알림톡 공고는 말풍선 카드에 첫 줄 앞 말풍선 아이콘. 열어 보지 않아도 게시판 공고와 구분된다 (2026-11-03 팀장 요청)
+///
+/// [home]이면 홈 모양: 왼쪽에 분류 아이콘(알림톡 공고는 없음), 조건 상태는 글자 칩 대신 원 아이콘,
+/// 7일 안 마감이면 D-day 칩 옆에 상태 원을 나란히 두고 이유 줄에는 '조건 확인 필요'를 붙이지 않는다.
+/// 공고 탭·저장함은 [home] 없이 글자 칩 그대로.
 class NoticeCard extends StatelessWidget {
-  const NoticeCard({super.key, required this.entry, required this.category, required this.today, required this.onTap});
+  const NoticeCard({
+    super.key,
+    required this.entry,
+    required this.category,
+    required this.today,
+    required this.onTap,
+    this.home = false,
+  });
 
   final RecommendationEntry entry;
   final String category;
   final DateTime today;
   final VoidCallback onTap;
+  final bool home;
 
   @override
   Widget build(BuildContext context) {
@@ -403,7 +415,14 @@ class NoticeCard extends StatelessWidget {
     final soon = left != null && left <= urgentDays;
     final status = r.eligibilityStatus;
     // 리포트 체크리스트 배지와 같은 연한 칩: 충족 네이비, 확인 필요 주황, 미충족 빨강 (2026-11-01 팀장 요청)
-    final chip = soon
+    final Widget? chip = home
+        ? (soon
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [?ddayPill(n, today), const SizedBox(width: 6), EligibilityDot(status)],
+                )
+              : EligibilityDot(status))
+        : soon
         ? ddayPill(n, today)
         : switch (status) {
             'met' => const Pill('조건 충족'),
@@ -415,78 +434,114 @@ class NoticeCard extends StatelessWidget {
         : '';
     final deadline = n.applicationDeadline;
     final meta = TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c.muted);
+    final showIcon = home && !n.isKakao;
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    if (n.isKakao)
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 5),
+                          child: GwIcon(GwGlyph.today, size: 16, color: c.muted, semanticLabel: '카카오톡 알림톡'),
+                        ),
+                      ),
+                    TextSpan(text: category),
+                    const TextSpan(text: ' · '),
+                    if (deadline != null) ...[
+                      TextSpan(
+                        // 한 줄에 들어가게 요일은 빼고(리포트에 있음), 시각은 남긴다
+                        text:
+                            '${deadline.day.month}월 ${deadline.day.day}일${deadline.hasTime ? ' ${deadline.time}' : ''} 마감',
+                        style: TextStyle(fontWeight: FontWeight.w600, color: soon ? c.urgent : c.body),
+                      ),
+                      if (left != null && !soon) TextSpan(text: ' · ${left == 0 ? '오늘' : 'D-$left'}'),
+                    ] else
+                      TextSpan(text: n.deadlineNote ?? '마감일 없음'),
+                  ],
+                ),
+                style: meta,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            ?chip,
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          keepAll(n.title),
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: c.ink, height: 1.45),
+        ),
+        if (reason.isNotEmpty || (!home && soon && status != 'met')) ...[
+          const SizedBox(height: 6),
+          Text.rich(
+            TextSpan(
+              children: [
+                if (reason.isNotEmpty)
+                  TextSpan(
+                    text: reason,
+                    style: TextStyle(fontWeight: FontWeight.w500, color: c.accent),
+                  ),
+                // 칩 자리를 D-day가 차지하면 조건 상태는 여기에 둔다.
+                if (!home && soon && status != 'met')
+                  TextSpan(
+                    text: '${reason.isEmpty ? '' : ' · '}${status == 'not_met' ? '조건 미충족' : '조건 확인 필요'}',
+                    style: TextStyle(color: c.muted),
+                  ),
+              ],
+            ),
+            style: const TextStyle(fontSize: 14),
+          ),
+        ],
+      ],
+    );
     return GwCard(
       onTap: onTap,
       bubble: n.isKakao,
       padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    children: [
-                      if (n.isKakao)
-                        WidgetSpan(
-                          alignment: PlaceholderAlignment.middle,
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 5),
-                            child: GwIcon(GwGlyph.today, size: 16, color: c.muted, semanticLabel: '카카오톡 알림톡'),
-                          ),
-                        ),
-                      TextSpan(text: category),
-                      const TextSpan(text: ' · '),
-                      if (deadline != null) ...[
-                        TextSpan(
-                          // 한 줄에 들어가게 요일은 빼고(리포트에 있음), 시각은 남긴다
-                          text:
-                              '${deadline.day.month}월 ${deadline.day.day}일${deadline.hasTime ? ' ${deadline.time}' : ''} 마감',
-                          style: TextStyle(fontWeight: FontWeight.w600, color: soon ? c.urgent : c.body),
-                        ),
-                        if (left != null && !soon) TextSpan(text: ' · ${left == 0 ? '오늘' : 'D-$left'}'),
-                      ] else
-                        TextSpan(text: n.deadlineNote ?? '마감일 없음'),
-                    ],
+      child: showIcon
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 28,
+                  child: Icon(
+                    categoryIcon(n.category),
+                    size: 26,
+                    color: c.category(n.category),
+                    semanticLabel: category,
                   ),
-                  style: meta,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              const SizedBox(width: 8),
-              ?chip,
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            keepAll(n.title),
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: c.ink, height: 1.45),
-          ),
-          if (reason.isNotEmpty || (soon && status != 'met')) ...[
-            const SizedBox(height: 6),
-            Text.rich(
-              TextSpan(
-                children: [
-                  if (reason.isNotEmpty)
-                    TextSpan(
-                      text: reason,
-                      style: TextStyle(fontWeight: FontWeight.w500, color: c.accent),
-                    ),
-                  // 칩 자리를 D-day가 차지하면 조건 상태는 여기에 둔다.
-                  if (soon && status != 'met')
-                    TextSpan(
-                      text: '${reason.isEmpty ? '' : ' · '}${status == 'not_met' ? '조건 미충족' : '조건 확인 필요'}',
-                      style: TextStyle(color: c.muted),
-                    ),
-                ],
-              ),
-              style: const TextStyle(fontSize: 14),
-            ),
-          ],
-        ],
-      ),
+                const SizedBox(width: 12),
+                Expanded(child: body),
+              ],
+            )
+          : body,
     );
   }
 }
+
+/// 홈 공고 카드의 분류 아이콘 (채운 모양, `_rounded`). 색은 [GwColors.category]. 모르는 분류는 '기타'.
+IconData categoryIcon(String id) => switch (id) {
+  'contest' => Icons.emoji_events_rounded,
+  'scholarship' => Icons.savings_rounded,
+  'job' => Icons.work_rounded,
+  'internship' => Icons.badge_rounded,
+  'education_program' => Icons.menu_book_rounded,
+  'extracurricular' => Icons.trending_up_rounded,
+  'global' => Icons.flight_takeoff_rounded,
+  'startup' => Icons.rocket_launch_rounded,
+  'volunteer' => Icons.volunteer_activism_rounded,
+  'event' => Icons.celebration_rounded,
+  'academic' => Icons.school_rounded,
+  'admin_notice' => Icons.campaign_rounded,
+  _ => Icons.more_horiz_rounded,
+};
