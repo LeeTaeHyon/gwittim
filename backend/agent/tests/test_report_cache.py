@@ -37,9 +37,9 @@ def test_korean_values_stable():
     assert cache_key("n1", {"m": ["컴퓨터"]}) == cache_key("n1", {"m": ["컴퓨터"]})
 
 
-def test_deadline_plus_30_days_end_of_day_kst():
+def test_deadline_plus_30_days_from_start_of_day_kst():
     exp = report_expires_at(date(2026, 11, 19), datetime(2026, 11, 1, tzinfo=KST))
-    assert exp == datetime(2026, 12, 20, 0, 0, tzinfo=KST)
+    assert exp == datetime(2026, 12, 19, 0, 0, tzinfo=KST)
 
 
 def test_deadline_none_plus_60_days():
@@ -50,9 +50,9 @@ def test_deadline_none_plus_60_days():
 
 def test_month_and_year_boundaries():
     created = datetime(2026, 1, 1, tzinfo=KST)
-    assert report_expires_at(date(2026, 1, 31), created) == datetime(2026, 3, 3, tzinfo=KST)
-    assert report_expires_at(date(2026, 12, 31), created) == datetime(2027, 1, 31, tzinfo=KST)
-    assert report_expires_at(date(2028, 2, 10), created) == datetime(2028, 3, 12, tzinfo=KST)  # 윤년
+    assert report_expires_at(date(2026, 1, 31), created) == datetime(2026, 3, 2, tzinfo=KST)
+    assert report_expires_at(date(2026, 12, 31), created) == datetime(2027, 1, 30, tzinfo=KST)
+    assert report_expires_at(date(2028, 2, 10), created) == datetime(2028, 3, 11, tzinfo=KST)  # 윤년
 
 
 def test_deadline_datetime_used_as_is():

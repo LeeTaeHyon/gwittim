@@ -43,15 +43,15 @@ def _aware(dt: datetime) -> datetime:
 def report_expires_at(deadline: date | datetime | None, created_at: datetime) -> datetime:
     """저장본 만료 시각. 마감일이 있으면 마감일 + 30일, None(미상)이면 생성 시각 + 60일.
 
-    마감 시각이 없는 날짜(date)는 그 날 끝(다음 날 00:00 KST)으로 본다. 늦게 지우는 쪽이 보수적이다.
+    마감 시각이 없는 날짜(date)는 그 날 0시(00:00 KST)를 기준으로 30일을 더한다.
     마감 시각이 있는 datetime이면 그 시각 + 30일.
     """
     if deadline is None:
         return _aware(created_at) + timedelta(days=NO_DEADLINE_RETENTION_DAYS)
     if isinstance(deadline, datetime):
         return _aware(deadline) + timedelta(days=DEADLINE_RETENTION_DAYS)
-    end_of_day = datetime.combine(deadline + timedelta(days=1), time.min, tzinfo=KST)
-    return end_of_day + timedelta(days=DEADLINE_RETENTION_DAYS)
+    start_of_day = datetime.combine(deadline, time.min, tzinfo=KST)
+    return start_of_day + timedelta(days=DEADLINE_RETENTION_DAYS)
 
 
 def is_expired(expires_at: datetime, now: datetime) -> bool:
