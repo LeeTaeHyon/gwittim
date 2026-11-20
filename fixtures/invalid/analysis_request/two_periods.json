@@ -1,0 +1,16 @@
+{
+  "_expect": {
+    "keyword": "type",
+    "path": "chips/period"
+  },
+  "data": {
+    "notice_id": "synthetic-notice-001",
+    "request_id": "synthetic-req-0001",
+    "chips": {
+      "period": [
+        "semester",
+        "vacation"
+      ]
+    }
+  }
+}
