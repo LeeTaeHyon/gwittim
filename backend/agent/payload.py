@@ -42,6 +42,7 @@ REGION_CHIPS: dict[str, str] = {
     "online_only": "온라인만",
     "any": "상관없음",
 }
+REGION_ANY = "any"  # 단독 선택. 다른 칩과 함께 오면 서로 어긋나므로 regions를 통째로 버린다.
 
 ENROLLMENT_STATUSES = frozenset({"enrolled", "on_leave", "graduated"})
 MAX_SELECTIONS = 5  # SPEC §5: 관심사·직무 각 최대 5개
@@ -80,6 +81,7 @@ def build_payload(profile: Mapping | None, chips: Mapping | None = None) -> dict
     - experience, regions: 여러 개. 사전 안 값만 순서 유지·중복 제거로 담는다.
     - experience의 none_yet(아직 없음)은 단독 선택. 다른 칩과 함께 오면 어느 쪽이 맞는지
       알 수 없으므로 experience를 통째로 버린다(앱은 화면에서 미리 막는다).
+    - regions의 any(상관없음)도 같은 규칙: 다른 칩과 함께 오면 regions를 통째로 버린다.
     - period: 하나만. 유효값이 정확히 하나일 때만 담고, 여러 개(유효하지 않은 값이 섞여
       원소 수가 달라도 포함)가 오면 고르지 않고 통째로 버린다(보수적 규칙, 추정 없음).
     - 유효값이 없으면 키를 뺀다.
@@ -120,6 +122,8 @@ def build_payload(profile: Mapping | None, chips: Mapping | None = None) -> dict
     if period:
         result["period"] = period
     regions = _code_list(chips.get("regions"), REGION_CHIPS)
+    if REGION_ANY in regions and len(regions) > 1:
+        regions = []
     if regions:
         result["regions"] = regions
     return result
