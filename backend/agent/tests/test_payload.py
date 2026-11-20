@@ -69,3 +69,14 @@ def test_result_keys_subset_of_allowlist():
     out = build_payload(PROFILE, {"experience": ["python"], "period": "any", "regions": ["any"]})
     assert set(out) <= ALLOWED_KEYS
     assert "updated_at" not in out
+
+
+def test_experience_none_yet_is_exclusive():
+    assert build_payload({}, {"experience": ["none_yet"]}) == {"experience": ["none_yet"]}
+    assert build_payload({}, {"experience": "none_yet"}) == {"experience": ["none_yet"]}
+    # 다른 칩과 함께 오면 어긋난 입력이라 experience를 통째로 버린다
+    assert build_payload({}, {"experience": ["python", "none_yet"]}) == {}
+    assert build_payload({}, {"experience": ["none_yet", "python"], "period": "any"}) == {"period": "any"}
+    # 사전 밖 값과 함께면 버려진 값은 세지 않는다
+    assert build_payload({}, {"experience": ["none_yet", "unknown_chip"]}) == {"experience": ["none_yet"]}
+    assert build_payload({}, {"experience": ["none_yet", "none_yet"]}) == {"experience": ["none_yet"]}

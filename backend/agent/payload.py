@@ -30,6 +30,7 @@ EXPERIENCE_CHIPS: dict[str, str] = {
     "internship": "현장실습·인턴",
     "none_yet": "아직 없음",
 }
+EXPERIENCE_NONE = "none_yet"  # 단독 선택. 다른 칩과 함께 오면 서로 어긋나므로 experience를 통째로 버린다.
 PERIOD_CHIPS: dict[str, str] = {
     "semester": "학기 중",
     "vacation": "방학",
@@ -77,6 +78,8 @@ def build_payload(profile: Mapping | None, chips: Mapping | None = None) -> dict
 
     칩 처리 규칙:
     - experience, regions: 여러 개. 사전 안 값만 순서 유지·중복 제거로 담는다.
+    - experience의 none_yet(아직 없음)은 단독 선택. 다른 칩과 함께 오면 어느 쪽이 맞는지
+      알 수 없으므로 experience를 통째로 버린다(앱은 화면에서 미리 막는다).
     - period: 하나만. 유효값이 정확히 하나일 때만 담고, 여러 개(유효하지 않은 값이 섞여
       원소 수가 달라도 포함)가 오면 고르지 않고 통째로 버린다(보수적 규칙, 추정 없음).
     - 유효값이 없으면 키를 뺀다.
@@ -105,6 +108,8 @@ def build_payload(profile: Mapping | None, chips: Mapping | None = None) -> dict
         result["target_role_ids"] = roles
 
     experience = _code_list(chips.get("experience"), EXPERIENCE_CHIPS)
+    if EXPERIENCE_NONE in experience and len(experience) > 1:
+        experience = []
     if experience:
         result["experience"] = experience
     raw_period = chips.get("period")
