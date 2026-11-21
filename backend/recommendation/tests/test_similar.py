@@ -114,3 +114,11 @@ def test_excludes_stale_unknown_deadline():
     edge = n("edge", deadline=None, lifecycle="unknown", published="2026-09-20")  # 60일
     no_pub = n("nopub", deadline=None, lifecycle="unknown", published=None)  # 게시일 미상은 판단 안 함
     assert ids(similar_notices(TARGET, [stale, edge, no_pub], TODAY)) == ["edge", "nopub"]
+
+
+def test_other_category_gets_no_bonus():
+    target = n("t3", category="other", title="식당 휴무 안내")
+    assert similarity_score(target, n("o", category="other", title="주차장 공사")) == 0
+    # 기타끼리라도 꼬리표·키워드가 겹치면 그만큼은 점수가 남는다
+    assert similarity_score(target, n("o2", category="other", title="식당 메뉴")) == 1
+    assert ids(similar_notices(target, [n("o", category="other", title="주차장 공사")], TODAY)) == []

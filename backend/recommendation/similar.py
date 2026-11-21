@@ -4,6 +4,7 @@
 
 가중치 근거 (큰 순서):
 - CATEGORY_WEIGHT(10): 같은 분류는 공고 종류가 같다는 가장 강한 신호다. 꼬리표·키워드 몇 개보다 위에 둔다.
+  단 기타(other)끼리는 가점 없음(NO_CATEGORY_BONUS).
 - TAG_WEIGHT(3): 공통 사전 코드라 의미가 정확하지만 한 공고에 여러 개 붙을 수 있어 분류보다 약하다.
 - KEYWORD_WEIGHT(1): 제목 문자열 겹침은 우연이 많아 가장 약하다. 키워드만으로 분류 일치를 넘지 않도록
   MAX_KEYWORD_HITS(3)개까지만 센다.
@@ -22,6 +23,9 @@ TAG_WEIGHT = 3
 KEYWORD_WEIGHT = 1
 MAX_KEYWORD_HITS = 3
 DEFAULT_LIMIT = 3
+
+# 분류가 같아도 가점을 주지 않는 분류. 기타(other)는 '어느 분류에도 맞지 않음'이라 같아도 종류가 같다는 뜻이 아니다.
+NO_CATEGORY_BONUS = frozenset({"other"})
 
 # 흔한 말. 이것만 겹치면 유사하다고 보지 않는다.
 STOPWORDS = frozenset(
@@ -47,7 +51,8 @@ def _tags(notice: dict) -> set[str]:
 
 def similarity_score(target: dict, candidate: dict) -> int:
     score = 0
-    if target.get("category") and target.get("category") == candidate.get("category"):
+    category = target.get("category")
+    if category and category not in NO_CATEGORY_BONUS and category == candidate.get("category"):
         score += CATEGORY_WEIGHT
     score += TAG_WEIGHT * len(_tags(target) & _tags(candidate))
     hits = len(title_keywords(target.get("title")) & title_keywords(candidate.get("title")))
