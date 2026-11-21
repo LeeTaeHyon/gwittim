@@ -40,12 +40,32 @@ def _aware(dt: datetime) -> datetime:
     return dt.replace(tzinfo=KST) if dt.tzinfo is None else dt
 
 
-def report_expires_at(deadline: date | datetime | None, created_at: datetime) -> datetime:
+def deadline_from_date_info(info: dict | None) -> date | datetime | None:
+    """공고 계약의 마감일(date_info: date, time, timezone, precision)을 만료 계산용 값으로 바꾼다.
+
+    - None → None(마감 미상)
+    - precision=minute이고 시간대가 Asia/Seoul 또는 UTC → 그 시각(datetime)
+    - 그 밖(precision=date, 시간대 미상·그 밖의 시간대) → 날짜만(date). 시간대를 임의로 정하지 않고
+      그 날 0시 KST 기준으로 계산한다(실제 마감보다 늦게 지우는 일은 없음)
+    """
+    if info is None:
+        return None
+    day = date.fromisoformat(info["date"])
+    clock, zone = info.get("time"), info.get("timezone")
+    if info.get("precision") == "minute" and clock and zone in ("Asia/Seoul", "UTC"):
+        tz = KST if zone == "Asia/Seoul" else timezone.utc
+        return datetime.combine(day, time.fromisoformat(clock), tzinfo=tz)
+    return day
+
+
+def report_expires_at(deadline: dict | date | datetime | None, created_at: datetime) -> datetime:
     """저장본 만료 시각. 마감일이 있으면 마감일 + 30일, None(미상)이면 생성 시각 + 60일.
 
     마감 시각이 없는 날짜(date)는 그 날 0시(00:00 KST)를 기준으로 30일을 더한다.
-    마감 시각이 있는 datetime이면 그 시각 + 30일.
+    마감 시각이 있는 datetime이면 그 시각 + 30일. 공고의 date_info(dict)를 그대로 넘겨도 된다.
     """
+    if isinstance(deadline, dict):
+        deadline = deadline_from_date_info(deadline)
     if deadline is None:
         return _aware(created_at) + timedelta(days=NO_DEADLINE_RETENTION_DAYS)
     if isinstance(deadline, datetime):
