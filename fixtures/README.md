@@ -16,6 +16,7 @@
 | 내용 변경·버전 | `valid/notice/minute_precision_changed_deadline` |
 | review_pending·closed | `valid/notice/closed_review_pending` |
 | 웹 원문 없는 출처 (카카오톡 알림톡, D-019) | `valid/raw_notice/kakao_no_url`, `valid/notice/kakao_no_url`, `invalid/raw_notice/no_url_no_id` |
+| 교외 공모전 출처 (D-038, 학교 없음·게시일 null·시간대 null) | `valid/raw_notice/external_contest`, `valid/notice/external_contest` |
 | 개인화 불가 (latest) | `valid/recommendation_list_response/latest_no_profile` |
 | 저장 후 마감 변경 | `valid/saved_notice_list_response/deadline_changed_after_save` |
 | 학과만 입력 → 학과 통계 보조 점수(D-020) | `valid/user_profile/major_only`, `valid/recommendation_list_response/major_only` |
