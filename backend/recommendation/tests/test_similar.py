@@ -5,7 +5,10 @@ from backend.recommendation.similar import similar_notices, similarity_score, ti
 TODAY = date(2026, 11, 19)
 
 
-def n(nid, category="contest", title="", tags=(), roles=(), deadline="2026-12-01"):
+def n(
+    nid, category="contest", title="", tags=(), roles=(), deadline="2026-12-01",
+    lifecycle="open", publication="published", published="2026-11-10",
+):
     return {
         "notice_id": nid,
         "category": category,
@@ -13,6 +16,9 @@ def n(nid, category="contest", title="", tags=(), roles=(), deadline="2026-12-01
         "interest_tags": list(tags),
         "related_roles": list(roles),
         "application_deadline": None if deadline is None else {"date": deadline},
+        "lifecycle_status": lifecycle,
+        "publication_status": publication,
+        "published": None if published is None else {"date": published},
     }
 
 
@@ -33,7 +39,7 @@ def test_excludes_past_deadline_keeps_today():
 
 
 def test_deadline_none_included():
-    assert ids(similar_notices(TARGET, [n("u", deadline=None)], TODAY)) == ["u"]
+    assert ids(similar_notices(TARGET, [n("u", deadline=None, lifecycle="unknown")], TODAY)) == ["u"]
 
 
 def test_more_shared_tags_ranks_higher():
@@ -80,3 +86,31 @@ def test_stopwords_only_overlap_is_zero():
 
 def test_missing_fields_treated_empty():
     assert similar_notices({"notice_id": "t"}, [{"notice_id": "x"}], TODAY) == []
+    # 상태 칸이 없으면 게시 여부를 알 수 없어 점수가 있어도 뺀다
+    bare = {k: v for k, v in n("bare").items() if k not in ("lifecycle_status", "publication_status")}
+    assert similar_notices(TARGET, [bare, n("ok")], TODAY) == [n("ok")]
+
+
+def test_excludes_closed_and_removed_even_without_deadline():
+    # 선착순 마감처럼 마감일 없이 끝난 공고
+    cands = [n("closed", deadline=None, lifecycle="closed"), n("removed", lifecycle="removed"), n("ok")]
+    assert ids(similar_notices(TARGET, cands, TODAY)) == ["ok"]
+
+
+def test_excludes_review_pending():
+    cands = [n("pending", publication="review_pending"), n("ok")]
+    assert ids(similar_notices(TARGET, cands, TODAY)) == ["ok"]
+
+
+def test_excludes_admin_notice():
+    target = n("t2", category="admin_notice", title="등록금 납부 안내")
+    cands = [n("admin", category="admin_notice", title="등록금 납부 안내"), n("ok", title="등록금 장학 안내")]
+    assert ids(similar_notices(target, cands, TODAY)) == ["ok"]
+
+
+def test_excludes_stale_unknown_deadline():
+    # 마감 미상인 채 게시 후 60일이 지나면 기본 추천처럼 뺀다(D-013). 60일째는 남는다
+    stale = n("stale", deadline=None, lifecycle="unknown", published="2026-09-19")  # 61일
+    edge = n("edge", deadline=None, lifecycle="unknown", published="2026-09-20")  # 60일
+    no_pub = n("nopub", deadline=None, lifecycle="unknown", published=None)  # 게시일 미상은 판단 안 함
+    assert ids(similar_notices(TARGET, [stale, edge, no_pub], TODAY)) == ["edge", "nopub"]

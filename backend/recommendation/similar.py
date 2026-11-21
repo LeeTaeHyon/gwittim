@@ -7,12 +7,15 @@
 - TAG_WEIGHT(3): 공통 사전 코드라 의미가 정확하지만 한 공고에 여러 개 붙을 수 있어 분류보다 약하다.
 - KEYWORD_WEIGHT(1): 제목 문자열 겹침은 우연이 많아 가장 약하다. 키워드만으로 분류 일치를 넘지 않도록
   MAX_KEYWORD_HITS(3)개까지만 센다.
-필드가 없거나 None이면 빈 것으로 본다. 마감 미상(None)은 지난 것으로 추정하지 않는다.
+필드가 없거나 None이면 빈 것으로 본다(상태 칸은 예외: 없으면 제외). 마감 미상(None)은 지난 것으로 추정하지 않는다.
 """
 from __future__ import annotations
 
 import re
 from datetime import date
+
+from .config import EXCLUDED_CATEGORIES, EXCLUDED_LIFECYCLE, EXCLUDED_PUBLICATION
+from .ranking import is_stale
 
 CATEGORY_WEIGHT = 10
 TAG_WEIGHT = 3
@@ -56,16 +59,36 @@ def _deadline(notice: dict) -> date | None:
     return date.fromisoformat(deadline["date"]) if deadline else None
 
 
+def is_excluded(notice: dict, today: date) -> bool:
+    """기본 추천(ranking.recommend)이 빼는 공고는 유사 공고에서도 뺀다.
+
+    끝났거나 내려간 공고(closed·removed), 게시 전(review_pending), 행정 공지(admin_notice),
+    마감 미상인 채 오래된 공고(is_stale).
+    상태 칸(lifecycle_status·publication_status)이 없으면 게시 여부를 알 수 없으므로 뺀다.
+    """
+    lifecycle = notice.get("lifecycle_status")
+    publication = notice.get("publication_status")
+    if lifecycle is None or publication is None:
+        return True
+    return (
+        lifecycle in EXCLUDED_LIFECYCLE
+        or publication in EXCLUDED_PUBLICATION
+        or notice.get("category") in EXCLUDED_CATEGORIES
+        or is_stale({"lifecycle_status": lifecycle, "published": notice.get("published")}, today)
+    )
+
+
 def similar_notices(target: dict, candidates: list[dict], today: date, limit: int = DEFAULT_LIMIT) -> list[dict]:
     """target과 비슷한 공고를 점수 내림차순으로 최대 limit개.
 
-    제외: 같은 notice_id, 마감 날짜가 today(Asia/Seoul 기준, 호출자가 넘김)보다 앞선 공고, 점수 0.
+    제외: 같은 notice_id, is_excluded(기본 추천과 같은 제외 규칙), 마감 날짜가 today(Asia/Seoul 기준,
+    호출자가 넘김)보다 앞선 공고, 점수 0.
     마감일이 today 당일이면 아직 지나지 않았으므로 포함한다. 마감 미상은 포함하되 동점에서 맨 뒤.
     동점: 마감 가까운 순, 그다음 notice_id.
     """
     ranked = []
     for cand in candidates:
-        if cand.get("notice_id") == target.get("notice_id"):
+        if cand.get("notice_id") == target.get("notice_id") or is_excluded(cand, today):
             continue
         deadline = _deadline(cand)
         if deadline is not None and deadline < today:
