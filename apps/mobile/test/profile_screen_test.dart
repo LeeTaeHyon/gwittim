@@ -75,6 +75,8 @@ void main() {
     double top(String text) => tester.getTopLeft(find.text(text)).dy;
     expect(top('입력한 정보 없음'), lessThan(top('입력한 정보는 추천에만 사용')));
     await tester.scrollUntilVisible(find.text('라이트'), 200, scrollable: profileList());
+    await tester.ensureVisible(find.text('다크')); // 이용 칸이 늘어 가장자리에 걸치지 않게
+    await tester.pumpAndSettle();
     expect(top('설정'), lessThan(top('화면')));
     expect(find.text('계정'), findsNothing); // 로그인 모드가 아니면 계정 칸이 없다
   });
@@ -290,6 +292,8 @@ void main() {
     await openProfile(tester);
     final thumb = find.byKey(const ValueKey('segment-thumb'));
     await tester.scrollUntilVisible(find.text('라이트'), 200, scrollable: profileList());
+    await tester.ensureVisible(find.text('다크')); // 이용 칸이 늘어 가장자리에 걸치지 않게
+    await tester.pumpAndSettle();
     await tester.pumpAndSettle();
     double x() => tester.getCenter(thumb).dx;
     double center(String label) => tester.getCenter(find.text(label)).dx;
@@ -308,6 +312,8 @@ void main() {
 
     // 고치기의 학년: 고른 칸을 다시 누르면 바탕이 그 자리에서 흐려진다
     await tester.scrollUntilVisible(find.text('입력하기'), -200, scrollable: profileList());
+    await tester.ensureVisible(find.text('입력하기'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('입력하기'));
     await tester.pumpAndSettle();
     final grade = find.descendant(
@@ -330,6 +336,8 @@ void main() {
     addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
     await openProfile(tester);
     await tester.scrollUntilVisible(find.text('라이트'), 200, scrollable: profileList());
+    await tester.ensureVisible(find.text('다크')); // 이용 칸이 늘어 가장자리에 걸치지 않게
+    await tester.pumpAndSettle();
     await tester.tap(find.text('다크'));
     await tester.pump();
     await tester.pump();

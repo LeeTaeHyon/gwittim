@@ -45,7 +45,7 @@ def main() -> None:
     write("notices.json", {n["notice_id"]: n for n in notices})
     write("recommendations_personalized.json", personalized)
     write("recommendations_latest.json", latest)
-    for name in ("categories", "majors", "interests", "roles", "universities"):
+    for name in ("categories", "majors", "interests", "roles", "universities", "experience_chips", "period_chips", "region_chips"):
         write(f"{name}.json", load(ROOT / f"contracts/dictionaries/{name}.json"), DICT_OUT)  # 앱 공통(샘플·실제)
     write("major_prior.json", load(ROOT / "contracts/stats/major_prior.json"), STATS_OUT)  # 프로필 화면 추천 칩
     write("profile.json", profile)

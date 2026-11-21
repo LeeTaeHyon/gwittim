@@ -16,6 +16,9 @@ String errorMessage(Object error) {
       RepositoryErrorKind.unauthenticated => '다시 로그인해 주세요.',
       RepositoryErrorKind.permissionDenied => '조회 권한이 없습니다.',
       RepositoryErrorKind.notFound => '공고를 찾을 수 없습니다.',
+      RepositoryErrorKind.insufficientCredits => '크레딧이 부족합니다.',
+      RepositoryErrorKind.requestInProgress => '같은 분석이 진행 중입니다.',
+      RepositoryErrorKind.consentRequired => 'AI 전송 동의가 필요합니다.',
       _ => '잠시 후 다시 시도해 주세요.',
     };
   }

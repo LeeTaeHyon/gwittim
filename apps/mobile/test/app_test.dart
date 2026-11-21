@@ -55,6 +55,18 @@ class FailingRepository implements NoticeRepository {
 
   @override
   Future<void> deleteSaved(String noticeId) async {}
+  @override
+  Future<AnalysisResponse> requestAnalysis({
+    required String noticeId,
+    required String requestId,
+    AnalysisChips chips = const AnalysisChips(),
+  }) => throw UnimplementedError();
+
+  @override
+  Future<AnalysisResponse?> getAnalysis(String noticeId) async => null;
+
+  @override
+  Future<Credits> getCredits() => throw const RepositoryException(RepositoryErrorKind.unavailable);
 }
 
 /// 처음엔 정상, offline을 켜면 목록 요청이 연결 오류로 실패한다 (비행기 모드 새로고침).

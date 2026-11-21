@@ -85,6 +85,18 @@ class SavedRepository implements NoticeRepository {
 
   @override
   Future<Map<String, List<String>>> majorInterests() async => {};
+  @override
+  Future<AnalysisResponse> requestAnalysis({
+    required String noticeId,
+    required String requestId,
+    AnalysisChips chips = const AnalysisChips(),
+  }) => throw UnimplementedError();
+
+  @override
+  Future<AnalysisResponse?> getAnalysis(String noticeId) async => null;
+
+  @override
+  Future<Credits> getCredits() => throw const RepositoryException(RepositoryErrorKind.unavailable);
 }
 
 void main() {

@@ -94,6 +94,20 @@ class CachedNoticeRepository implements NoticeRepository {
     }
   }
 
+  // 상세 분석·크레딧은 잔액과 저장본이 바뀌므로 저장해 두지 않는다.
+  @override
+  Future<AnalysisResponse> requestAnalysis({
+    required String noticeId,
+    required String requestId,
+    AnalysisChips chips = const AnalysisChips(),
+  }) => _inner.requestAnalysis(noticeId: noticeId, requestId: requestId, chips: chips);
+
+  @override
+  Future<AnalysisResponse?> getAnalysis(String noticeId) => _inner.getAnalysis(noticeId);
+
+  @override
+  Future<Credits> getCredits() => _inner.getCredits();
+
   // 사전·통계는 앱에 든 파일이라 안쪽 저장소가 이미 한 번만 읽는다.
   @override
   Future<Map<String, String>> categoryNames() => _inner.categoryNames();
