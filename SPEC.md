@@ -152,6 +152,7 @@ university_id, major_id, grade, enrollment_status, interest_ids, target_role_ids
 - 성적·소득·주민등록번호·학생증은 수집하지 않는다.
 - 사용자 ID는 인증 정보에서 얻는다. 요청 본문의 사용자 ID를 신뢰하지 않는다.
 - agent_consent(선택): `{version, agreed_at}`. AI 상세 분석의 외부 AI 전송 첫 사용 동의 기록이다. 없으면 동의하지 않은 것이다. 동의 문구가 바뀌면 version을 올리고 다시 묻는다. 탈퇴 때까지 프로필과 함께 보관한다(`docs/agent-privacy-spec.md` §4·§5.1).
+- 동의 철회는 `PUT /v1/profile`에서 agent_consent를 빼서 보내는 것이다. 이전 프로필에 있던 agent_consent가 새 프로필에 없으면 철회로 보고 그 사용자의 리포트 저장본을 모두 지운다. agreed_at은 서버가 정한다(새 동의나 version 변경이면 서버 시각, 그대로면 이전 값).
 
 ### RecommendationItem — 추천 출력
 
@@ -266,7 +267,7 @@ balance(0~5), next_refill_at(다음 충전 시각, 최대 보유면 `null`), ent
 
 인증 실패·권한 없음·입력 오류·미존재·일시 장애를 구분한다. 오류 응답은 `{error: {code, message}}`이고 code는 unauthenticated / permission_denied / invalid_argument / not_found / unavailable이고, 상세 분석 경로에서는 insufficient_credits / request_in_progress / consent_required도 쓴다. 목록 응답은 items, next_cursor(불투명 문자열 또는 null), generated_at을 가지며 limit은 최대 50이다. 앱에 스택 추적·비밀키를 반환하지 않는다. 추천 페이지 이동 중 중복·누락을 줄이도록 초기에는 소량 결과를 한 번에 받아 표시해도 된다.
 
-상세 분석·크레딧의 HTTP 경로 제안(미확정, 기존 `/v1/...` 이름 규칙): `POST /v1/analysis`(request_detail_analysis), `GET /v1/analysis/{notice_id}`(get_detail_analysis), `GET /v1/credits`(get_credits). 동의 기록은 `PUT /v1/profile`의 agent_consent로 보낸다.
+상세 분석·크레딧의 HTTP 경로(확정, D-039): `POST /v1/analysis`(request_detail_analysis), `GET /v1/analysis/{notice_id}`(get_detail_analysis), `GET /v1/credits`(get_credits). 동의 기록은 `PUT /v1/profile`의 agent_consent로 보낸다. 오류 HTTP 상태는 insufficient_credits 402, request_in_progress 409, consent_required 403이다.
 
 앱 데이터 접근은 Repository 인터페이스로 감싼다. 샘플 구현과 실제 구현을 교체할 수 있어야 한다. UI에 추천 점수 계산을 중복 구현하지 않는다.
 

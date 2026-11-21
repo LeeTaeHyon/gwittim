@@ -1,9 +1,13 @@
 """API가 쓰는 외부 경계: 토큰 검증, 저장소, 시계. 실제 구현(Firebase Admin·Firestore)은 Firebase 프로젝트 생성 후 추가한다."""
 from __future__ import annotations
 
+import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from typing import Protocol
+from typing import Any, Protocol
+
+from backend.agent.credits import CreditState
 
 KST = timezone(timedelta(hours=9), "Asia/Seoul")
 
@@ -31,6 +35,32 @@ class SavedStore(Protocol):
     def put(self, uid: str, saved: dict) -> None: ...
     def delete(self, uid: str, notice_id: str) -> None: ...
     def delete_all(self, uid: str) -> None: ...
+
+
+class CreditStore(Protocol):
+    def update(self, uid: str, fn: Callable[[CreditState | None], tuple[CreditState, Any]]) -> Any:
+        """uid의 크레딧 상태를 읽고 → fn으로 계산하고 → 쓰는 일을 한 번에 한다(동시 요청 차단).
+
+        fn은 (이전 상태 또는 None) -> (새 상태, 결과). 저장소가 재시도할 수 있으므로 fn은 부작용이 없어야 한다.
+        """
+        ...
+
+    def delete(self, uid: str) -> None: ...
+
+
+class ReportStore(Protocol):
+    """AI 상세 분석 리포트 저장본. 문서 칸: notice_id, key, report, created_at, expires_at, request_id."""
+
+    def put(self, uid: str, doc: dict) -> None: ...
+    def get_by_key(self, uid: str, key: str) -> dict | None: ...
+    def latest_for_notice(self, uid: str, notice_id: str, now: datetime) -> dict | None:
+        """만료되지 않은 저장본 중 created_at이 가장 늦은 것."""
+        ...
+
+    def delete_all(self, uid: str) -> None: ...
+    def delete_expired(self, now: datetime) -> int:
+        """expires_at이 지난 저장본을 모든 사용자에 걸쳐 지우고 지운 개수를 돌려준다."""
+        ...
 
 
 class KakaoInbox(Protocol):
@@ -130,6 +160,48 @@ class InMemorySaved:
 
 
 @dataclass
+class InMemoryCredits:
+    states: dict[str, CreditState] = field(default_factory=dict)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def update(self, uid, fn):
+        with self._lock:
+            new_state, result = fn(self.states.get(uid))
+            self.states[uid] = new_state
+            return result
+
+    def delete(self, uid):
+        with self._lock:
+            self.states.pop(uid, None)
+
+
+@dataclass
+class InMemoryReports:
+    docs: dict[str, dict[str, dict]] = field(default_factory=dict)  # uid -> key -> doc
+
+    def put(self, uid, doc):
+        self.docs.setdefault(uid, {})[doc["key"]] = doc
+
+    def get_by_key(self, uid, key):
+        return self.docs.get(uid, {}).get(key)
+
+    def latest_for_notice(self, uid, notice_id, now):
+        live = [d for d in self.docs.get(uid, {}).values() if d["notice_id"] == notice_id and d["expires_at"] > now]
+        return max(live, key=lambda d: d["created_at"], default=None)
+
+    def delete_all(self, uid):
+        self.docs.pop(uid, None)
+
+    def delete_expired(self, now):
+        removed = 0
+        for uid, by_key in self.docs.items():
+            for key in [k for k, d in by_key.items() if d["expires_at"] <= now]:
+                del by_key[key]
+                removed += 1
+        return removed
+
+
+@dataclass
 class Deps:
     verifier: TokenVerifier
     notices: NoticeReader
@@ -139,6 +211,10 @@ class Deps:
     # 팀장 폰 수집기 (D-036). 둘 다 있어야 /v1/ingest/kakao가 열린다
     kakao_inbox: KakaoInbox | None = None
     ingest_token: str | None = None
+    # AI 상세 분석(P7a). 제공자가 없으면 요청 때마다 GWITTIM_LLM_PROVIDER(기본 fake)로 만든다
+    credits: CreditStore = field(default_factory=InMemoryCredits)
+    reports: ReportStore = field(default_factory=InMemoryReports)
+    llm: Any = None
 
     def today_kst(self) -> date:
         return self.clock.now().astimezone(KST).date()
