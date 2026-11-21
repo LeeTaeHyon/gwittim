@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "source_id": "wevity_contest",
+  "source_notice_id": "999990001",
+  "source_url": "https://www.wevity.com/?c=find&s=1&gub=1&gbn=viewok&ix=999990001",
+  "title": "[합성 샘플] 대학생 아이디어 공모전",
+  "body_text": "응모대상: 대학생, 기타\n주최/주관: 합성주최\n접수기간: 2026-12-01 ~ 2026-12-31\n총 상금: 500만원",
+  "published": null,
+  "collected_at": "2026-11-21T03:00:00Z",
+  "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000003",
+  "source_fields": {
+    "audience": "대학생, 기타",
+    "organizer": "합성주최",
+    "application_period": "2026-12-01 ~ 2026-12-31",
+    "official_url": "https://example.invalid/contest/1"
+  },
+  "attachments": []
+}
