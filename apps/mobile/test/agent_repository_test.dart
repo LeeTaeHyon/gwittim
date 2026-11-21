@@ -10,8 +10,13 @@ import 'package:http/testing.dart';
 final _base = Uri.parse('https://api.example.invalid/');
 final _headers = {'content-type': 'application/json; charset=utf-8'};
 
-http.Response _error(int status, String code) =>
-    http.Response(jsonEncode({'error': {'code': code, 'message': '오류'}}), status, headers: _headers);
+http.Response _error(int status, String code) => http.Response(
+  jsonEncode({
+    'error': {'code': code, 'message': '오류'},
+  }),
+  status,
+  headers: _headers,
+);
 
 const _report = {
   'notice_id': 'n1',
@@ -96,7 +101,9 @@ void main() {
 
   test('받은 분석 조회는 없으면 null, 크레딧은 잔액·내역을 읽는다', () async {
     final repo = _repo((req) {
-      if (req.url.path == '/v1/analysis/n1') return http.Response(jsonEncode({..._report, 'from_cache': true}), 200, headers: _headers);
+      if (req.url.path == '/v1/analysis/n1') {
+        return http.Response(jsonEncode({..._report, 'from_cache': true}), 200, headers: _headers);
+      }
       if (req.url.path == '/v1/credits') {
         return http.Response(
           jsonEncode({
@@ -125,7 +132,9 @@ void main() {
   });
 
   test('최대 보유면 다음 충전 시각이 null', () async {
-    final repo = _repo((_) => http.Response(jsonEncode({'balance': 5, 'next_refill_at': null, 'entries': []}), 200, headers: _headers));
+    final repo = _repo(
+      (_) => http.Response(jsonEncode({'balance': 5, 'next_refill_at': null, 'entries': []}), 200, headers: _headers),
+    );
     expect((await repo.getCredits()).nextRefillAt, isNull);
   });
 
@@ -177,7 +186,9 @@ void main() {
   });
 
   test('동의 버전이 다르면 동의한 것으로 보지 않는다', () {
-    final old = UserProfile(agentConsent: AgentConsent(version: '2000-01-01', agreedAt: DateTime.utc(2026)));
+    final old = UserProfile(
+      agentConsent: AgentConsent(version: '2000-01-01', agreedAt: DateTime.utc(2026)),
+    );
     expect(old.hasAgentConsent, isFalse);
     expect(const UserProfile().hasAgentConsent, isFalse);
     expect((null as UserProfile?).hasAgentConsent, isFalse);
