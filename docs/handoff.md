@@ -155,7 +155,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 작업 이름 | Windows 작업 스케줄러 `Gwittim 수집 배치 (하루 2회)`: 매일 09:00·18:00 (D-006 보완) |
+| 작업 이름 | Windows 작업 스케줄러 `Gwittim 수집 배치 (하루 2회)`: 매일 09:00·18:00 (D-006 보완). 2026-11-17부터 `scripts\run_batch.ps1`(게시판 + 알림톡) 실행 |
 | 실행 조건 | 팀장 계정으로 로그인해 있을 때만 (비밀번호 저장 안 함, ADC 로그인 사용). 놓친 실행은 가능할 때 바로 실행, 겹치면 건너뜀, 1시간 제한 |
 | 코드 | `Code_Project\Gwittim-batch` (main 고정 worktree). 메인 체크아웃의 브랜치 작업과 무관 |
 | 데이터 | `Gwittim\data\local` (파이프라인 기록·notices.json, 커밋 안 됨) |
@@ -495,6 +495,14 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
   - 수집기가 안 읽은 메시지 묶음에서 가장 긴 메시지를 알림 시각으로 올리던 문제를 고침(`fix/collector-newest-message`, 2026-11-17 10:06에 예전 공지가 새 발송처럼 올라감). 메시지마다 자기 시각으로, 방별 마지막 처리 시각 이후만 올린다. 폰에 다시 설치해야 반영된다
   - 수집기 재빌드 방법: `GWITTIM_PROBE=1 flutter build apk --release -t tool/notif_probe/main.dart --dart-define=GWITTIM_INGEST_URL=<API>/v1/ingest/kakao --dart-define=GWITTIM_INGEST_TOKEN=<data/local/ingest_token.txt>` → `adb install -r --user 0`
 
+- 실제 알림 확인 (2026-11-17)
+  - 11/16 학교 알림 2건이 폰 → `kakao_inbox`까지 15초 안에 도착, 폰 분류 `kakao-0.3`
+  - 본문이 200자에서 잘림. 폰 기록으로 확인: 알림의 모든 본문 칸(`text`, `messages`)이 200자, `big_text` 없음 → 카카오톡 알림 한도. 수집기 쪽 문제 아님
+  - 예약 작업이 `mjc_www`만 불러 알림톡 단계가 돌지 않았음 → 실행 명령을 `scripts\run_batch.ps1`로 교체(이전 명령은 `%TEMP%\gwittim_task_action_backup.txt`)
+  - 11/16 18:00 배치는 1시간 제한에 걸려 강제 종료(원인 미확인)
+  - 바꾼 뒤 수동 실행(11/17 02:34, 13분, 결과 0): 받은편지함 2건 중 보건실 안내는 게시, AI 특강은 같은 게시판 공고가 있어 알림톡 게시 안 함(D-025)
+- 미리보기 안내(D-040): #100 병합(`e582675`), `Gwittim-batch` 갱신. 다음 배치부터 폰으로만 받은 공고에 `body_preview`. 앱 안내 문구는 새 앱 빌드 필요
+
 ## 알림톡 종류 모델 보강 (2026-11-15, D-037)
 
 - 브랜치 `feat/error-case-experiments`. 사람 정답 6건 정정(새 SHA `45b9e7bd…`), 종류 모델 드문 종류 가중치로 재학습, `MODEL_VERSION` `kakao-0.3`.
@@ -502,6 +510,20 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 - 남은 일 (병합 뒤)
   - `Gwittim-batch` 갱신. 다음 정기 배치가 알림톡을 다시 분석한다(모두 자체 모델이라 20분 안팎)
   - 폰 수집기 다시 빌드·설치(폰 분류는 `kakao-0.2` 모델로 남아 있음. 서버 배치가 다시 분류하므로 게시에는 영향 없음)
+- 반영 (2026-11-15): #99 병합(`a3e9316`), `Gwittim-batch` → `a3e9316`. 수집기 APK `data/local/apk/gwittim-probe-a3e9316.apk` 빌드(안의 종류 모델 SHA-256이 저장소 파일과 같음). S25에 덮어 설치(23:38, `adb install -r --user 0`), 알림 읽기 권한 유지 확인
+
+## 교외 공고 출처 (2026-11-16, D-038)
+
+- 조사: [external-source-candidates.md](external-source-candidates.md). 12곳 robots·약관·API 확인
+- 결정: 이용자 전체에 걸린 약관 금지가 없으면 본문까지 수집(회원 조항은 세지 않음)
+  - 수집: 위비티, 콘테스트코리아, 올콘, 씽굿, 씽유, 링커리어. API로만: K-Startup. 제외: 캠퍼스픽, 요즘것들, 대티즌
+  - 에이전트가 후보를 찾고 주최 측 페이지까지 따라감(robots 준수, 3초 간격, 제외 사이트 안 엶). 판단은 로컬 Gemma
+- 맞춤 에이전트(D-039): 사용자가 공고에서 요청하면 공고 상세 분석·유사 공고·필요 기술·지원 가능성을 사용자 기준으로 안내. 외부 LLM 전제(D-004 일부 변경). 제공사·비용 상한·요청 한도 미정
+- 상태: 결정만, 구현 없음
+- 남은 일
+  - K-Startup API 활용신청(팀장 계정)
+  - 자동 수집·SPEC 범위 변경 PR
+  - 맞춤 에이전트: 제공사·월 비용 상한 결정, 처리방침 갱신
 
 ## PC 카톡 자동 내보내기 (2026-11-18, D-041)
 
