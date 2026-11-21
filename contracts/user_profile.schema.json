@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gwittim.invalid/contracts/user_profile.schema.json",
   "title": "UserProfile — 사용자 입력",
-  "description": "미입력은 null 또는 빈 배열. 관심사·직무는 각각 최대 5개(D-031). 사용자 ID는 인증 정보에서 얻으므로 이 문서에 넣지 않음. SPEC §5.",
+  "description": "미입력은 null 또는 빈 배열. 관심사·직무는 각각 최대 5개(D-031). 사용자 ID는 인증 정보에서 얻으므로 이 문서에 넣지 않음. agent_consent는 AI 상세 분석 첫 사용 동의 기록(선택, 없으면 동의하지 않은 것). SPEC §5.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -21,6 +21,16 @@
     "enrollment_status": { "oneOf": [{ "$ref": "common.schema.json#/$defs/enrollment_status" }, { "type": "null" }] },
     "interest_ids": { "$ref": "common.schema.json#/$defs/code_list", "maxItems": 5 },
     "target_role_ids": { "$ref": "common.schema.json#/$defs/code_list", "maxItems": 5 },
-    "updated_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" }
+    "updated_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" },
+    "agent_consent": {
+      "description": "외부 AI 전송 동의 기록(선택). 동의 문구가 바뀌면 version을 올리고 다시 동의를 받음.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "agreed_at"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "agreed_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" }
+      }
+    }
   }
 }

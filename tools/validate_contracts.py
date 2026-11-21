@@ -67,6 +67,10 @@ DICT_FIELDS = {
     "target_role_ids": "roles",
     "related_roles": "roles",
     "related_majors": "majors",
+    # 상세 분석 요청 칩 (analysis_request)
+    "experience": "experience_chips",
+    "period": "period_chips",
+    "regions": "region_chips",
 }
 
 

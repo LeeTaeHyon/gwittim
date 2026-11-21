@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "consent_required",
+    "message": "AI 전송 동의가 필요합니다."
+  }
+}

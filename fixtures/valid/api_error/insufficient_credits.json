@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "insufficient_credits",
+    "message": "크레딧이 부족합니다."
+  }
+}

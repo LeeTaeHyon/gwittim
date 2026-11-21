@@ -285,6 +285,7 @@ class UserProfile {
     this.enrollmentStatus,
     this.interestIds = const [],
     this.targetRoleIds = const [],
+    this.agentConsent,
   });
 
   final String? universityId;
@@ -296,6 +297,9 @@ class UserProfile {
   final List<String> interestIds;
   final List<String> targetRoleIds;
 
+  /// AI 상세 분석 첫 사용 동의 기록. 없으면 동의하지 않은 것이다.
+  final AgentConsent? agentConsent;
+
   /// 관심사·직무·전공 중 하나라도 있으면 맞춤 추천 대상 (서버 규칙과 같음)
   bool get hasPersonalInput => majorId != null || interestIds.isNotEmpty || targetRoleIds.isNotEmpty;
 
@@ -306,9 +310,24 @@ class UserProfile {
     enrollmentStatus: m['enrollment_status'] as String?,
     interestIds: [for (final i in m['interest_ids'] as List) i as String],
     targetRoleIds: [for (final r in m['target_role_ids'] as List) r as String],
+    agentConsent: m['agent_consent'] == null
+        ? null
+        : AgentConsent.fromJson(m['agent_consent'] as Map<String, dynamic>),
+  );
+
+  /// 동의 기록만 바꾼 사본. [consent]가 null이면 철회다.
+  UserProfile withAgentConsent(AgentConsent? consent) => UserProfile(
+    universityId: universityId,
+    majorId: majorId,
+    grade: grade,
+    enrollmentStatus: enrollmentStatus,
+    interestIds: interestIds,
+    targetRoleIds: targetRoleIds,
+    agentConsent: consent,
   );
 
   /// PUT /v1/profile 본문. updated_at은 서버가 정한다.
+  /// agent_consent는 있을 때만 보낸다. 빠지면 서버는 철회로 본다.
   Map<String, dynamic> toJson() => {
     'university_id': universityId,
     'major_id': majorId,
@@ -316,7 +335,163 @@ class UserProfile {
     'enrollment_status': enrollmentStatus,
     'interest_ids': interestIds,
     'target_role_ids': targetRoleIds,
+    'agent_consent': ?agentConsent?.toJson(),
   };
+}
+
+/// 외부 AI 전송 동의 기록 (user_profile.schema.json agent_consent).
+/// 문구가 바뀌어 [agentConsentVersion]이 오르면 이전 기록은 동의로 보지 않는다.
+class AgentConsent {
+  const AgentConsent({required this.version, required this.agreedAt});
+
+  final String version;
+  final DateTime agreedAt;
+
+  factory AgentConsent.fromJson(Map<String, dynamic> m) =>
+      AgentConsent(version: m['version'] as String, agreedAt: DateTime.parse(m['agreed_at'] as String));
+
+  /// agreed_at은 UTC 'Z' 형식. 서버가 서버 시각으로 덮어쓴다.
+  Map<String, dynamic> toJson() => {'version': version, 'agreed_at': agreedAt.toUtc().toIso8601String()};
+}
+
+/// 지금 동의 문구의 버전 (docs/agent-privacy-spec.md §5.1)
+const agentConsentVersion = '2026-11-19';
+
+extension UserProfileConsent on UserProfile? {
+  /// 지금 문구에 동의한 기록이 있는지
+  bool get hasAgentConsent => this?.agentConsent?.version == agentConsentVersion;
+}
+
+/// 상세 분석을 요청할 때만 묻는 선택 값 (analysis_request.schema.json chips). 모두 선택이다.
+class AnalysisChips {
+  const AnalysisChips({this.experience = const [], this.period, this.regions = const []});
+
+  /// 해 본 것 (여러 개). none_yet은 단독
+  final List<String> experience;
+
+  /// 가능한 시기 (하나)
+  final String? period;
+
+  /// 갈 수 있는 지역 (여러 개). any는 단독
+  final List<String> regions;
+
+  bool get isEmpty => experience.isEmpty && period == null && regions.isEmpty;
+
+  /// 비어 있는 질문은 키를 보내지 않는다. 모두 비면 빈 객체('건너뛰고 분석').
+  Map<String, dynamic> toJson() => {
+    if (experience.isNotEmpty) 'experience': experience,
+    'period': ?period,
+    if (regions.isNotEmpty) 'regions': regions,
+  };
+
+  factory AnalysisChips.fromJson(Map<String, dynamic> m) => AnalysisChips(
+    experience: [for (final e in (m['experience'] as List?) ?? const []) e as String],
+    period: m['period'] as String?,
+    regions: [for (final e in (m['regions'] as List?) ?? const []) e as String],
+  );
+}
+
+/// 상세 분석 리포트 네 칸. 서버가 준 글을 그대로 보인다 (analysis_response.schema.json).
+class AnalysisReport {
+  const AnalysisReport({required this.fit, required this.eligibility, required this.todo, required this.skills});
+
+  /// 나에게 맞는 점·안 맞는 점
+  final String fit;
+
+  /// 지원 자격
+  final String eligibility;
+
+  /// 지원 전 할 일
+  final String todo;
+
+  /// 필요한 역량
+  final String skills;
+
+  factory AnalysisReport.fromJson(Map<String, dynamic> m) => AnalysisReport(
+    fit: m['fit'] as String,
+    eligibility: m['eligibility'] as String,
+    todo: m['todo'] as String,
+    skills: m['skills'] as String,
+  );
+}
+
+class AnalysisResponse {
+  const AnalysisResponse({
+    required this.noticeId,
+    required this.report,
+    required this.expiresAt,
+    required this.fromCache,
+  });
+
+  final String noticeId;
+  final AnalysisReport report;
+
+  /// 저장본 삭제 기준 시각
+  final DateTime expiresAt;
+
+  /// true면 저장본이며 AI를 새로 부르지 않은 응답
+  final bool fromCache;
+
+  factory AnalysisResponse.fromJson(Map<String, dynamic> m) => AnalysisResponse(
+    noticeId: m['notice_id'] as String,
+    report: AnalysisReport.fromJson(m['report'] as Map<String, dynamic>),
+    expiresAt: DateTime.parse(m['expires_at'] as String),
+    fromCache: m['from_cache'] as bool,
+  );
+}
+
+/// 크레딧 사용 내역 한 줄 (credits.schema.json)
+class CreditEntry {
+  const CreditEntry({required this.kind, required this.amount, required this.at, required this.ref});
+
+  /// signup / daily / detail_analysis / external_search
+  final String kind;
+
+  /// 충전은 +, 사용은 −
+  final int amount;
+  final DateTime at;
+
+  /// 사용 내역이 가리키는 id (상세 분석은 공고 id). 충전은 null
+  final String? ref;
+
+  factory CreditEntry.fromJson(Map<String, dynamic> m) => CreditEntry(
+    kind: m['kind'] as String,
+    amount: m['amount'] as int,
+    at: DateTime.parse(m['at'] as String),
+    ref: m['ref'] as String?,
+  );
+}
+
+class Credits {
+  const Credits({required this.balance, required this.nextRefillAt, required this.entries});
+
+  /// 지금 쓸 수 있는 개수 (0~5)
+  final int balance;
+
+  /// 다음 충전 시각. 최대 보유면 null
+  final DateTime? nextRefillAt;
+
+  /// 최근 90일, 최신순
+  final List<CreditEntry> entries;
+
+  static const max = 5;
+
+  /// 이 공고의 상세 분석을 마지막으로 받은 시각. 내역에 없으면 null (90일이 지났거나 저장본만 있는 경우)
+  DateTime? analysisReceivedAt(String noticeId) {
+    DateTime? latest;
+    for (final e in entries) {
+      if (e.kind == 'detail_analysis' && e.ref == noticeId && (latest == null || e.at.isAfter(latest))) {
+        latest = e.at;
+      }
+    }
+    return latest;
+  }
+
+  factory Credits.fromJson(Map<String, dynamic> m) => Credits(
+    balance: m['balance'] as int,
+    nextRefillAt: m['next_refill_at'] == null ? null : DateTime.parse(m['next_refill_at'] as String),
+    entries: [for (final e in m['entries'] as List) CreditEntry.fromJson(e as Map<String, dynamic>)],
+  );
 }
 
 class SavedNotice {

@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "request_in_progress",
+    "message": "같은 요청을 처리하고 있습니다."
+  }
+}

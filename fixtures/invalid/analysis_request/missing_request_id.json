@@ -1,0 +1,10 @@
+{
+  "_expect": {
+    "keyword": "required",
+    "path": ""
+  },
+  "data": {
+    "notice_id": "synthetic-notice-001",
+    "chips": {}
+  }
+}
