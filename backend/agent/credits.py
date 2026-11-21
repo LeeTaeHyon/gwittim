@@ -32,6 +32,9 @@ COSTS = {DETAIL_ANALYSIS: 1, EXTERNAL_SEARCH: 2}
 # LLM 호출 제한 시간(120초)보다 넉넉하게 둔다.
 HOLD_TIMEOUT = timedelta(minutes=10)
 
+# 사용 내역·처리한 요청 id 보관 기간 (명세 §4 크레딧 내역 90일). 90일째가 되는 시각에 지운다.
+HISTORY_RETENTION = timedelta(days=90)
+
 # held 잡아 둠(AI 호출 가능) / duplicate 이미 확정한 요청 / in_progress 같은 요청이 진행 중
 # / insufficient 잔액 부족. held가 아니면 AI를 부르지 않는다.
 ReserveStatus = Literal["held", "duplicate", "in_progress", "insufficient"]
@@ -59,9 +62,13 @@ class Hold:
 class CreditState:
     balance: int  # 지금 쓸 수 있는 크레딧(잡아 둔 것은 이미 빠짐)
     last_charge_date: date  # KST 날짜
-    processed_request_ids: frozenset[str] = frozenset()
+    processed: tuple[tuple[str, datetime], ...] = ()  # (요청 id, 확정 시각)
     entries: tuple[LedgerEntry, ...] = field(default_factory=tuple)
     holds: tuple[Hold, ...] = ()
+
+    @property
+    def processed_request_ids(self) -> frozenset[str]:
+        return frozenset(rid for rid, _ in self.processed)
 
     @property
     def held(self) -> int:
@@ -130,6 +137,27 @@ def release_stale_holds(state: CreditState, now: datetime) -> CreditState:
     )
 
 
+def prune_history(state: CreditState, now: datetime) -> CreditState:
+    """HISTORY_RETENTION(90일)이 지난 내역과 처리한 요청 id를 지운다.
+
+    지운 요청 id로 다시 요청하면 새 요청으로 본다(90일 뒤 재시도는 다시 차감).
+    """
+    now = to_kst(now)
+    entries = tuple(e for e in state.entries if now - e.at < HISTORY_RETENTION)
+    processed = tuple(p for p in state.processed if now - p[1] < HISTORY_RETENTION)
+    if len(entries) == len(state.entries) and len(processed) == len(state.processed):
+        return state
+    return replace(state, entries=entries, processed=processed)
+
+
+def current_state(state: CreditState, now: datetime) -> CreditState:
+    """읽거나 쓸 때 쓰는 지금 상태: 충전 반영 → 10분 지난 잡아 두기 환불 → 90일 지난 내역 정리.
+
+    크레딧 페이지 조회, next_refill_at, reserve, settle 모두 이것을 거친다(명세 §10.3 '읽거나 쓸 때 계산').
+    """
+    return prune_history(release_stale_holds(apply_refill(state, now), now), now)
+
+
 def reserve(state: CreditState, kind: str, request_id: str, now: datetime) -> ReserveResult:
     """1단계: AI를 부르기 전에 크레딧을 잡아 둔다. held일 때만 AI를 부른다.
 
@@ -138,7 +166,7 @@ def reserve(state: CreditState, kind: str, request_id: str, now: datetime) -> Re
     """
     if kind not in COSTS:
         raise ValueError(f"알 수 없는 차감 종류: {kind}")
-    state = release_stale_holds(apply_refill(state, now), now)
+    state = current_state(state, now)
     if request_id in state.processed_request_ids:
         return ReserveResult(state, "duplicate")
     if any(h.request_id == request_id for h in state.holds):
@@ -161,8 +189,10 @@ def settle(
 
     - 성공: 차감 확정, 내역에 남기고 요청 id를 '처리함'으로 기록(같은 id 재요청은 duplicate).
     - 실패: 잡아 둔 크레딧을 돌려준다(최대 5). 내역·'처리함' 기록 없음(같은 id로 다시 잡아 둘 수 있다).
-    - 잡아 둔 것이 없으면 no_hold, 상태 그대로. 이 결과는 사용자에게 주지 않는다.
+    - 잡아 둔 것이 없으면 no_hold(이미 확정·환불했거나 10분이 지나 자동 환불됨). 이 결과는 사용자에게 주지 않는다.
+    - 먼저 current_state로 충전·만료 환불·오래된 내역 정리를 반영한다.
     """
+    state = current_state(state, now)
     hold = next((h for h in state.holds if h.request_id == request_id), None)
     if hold is None:
         return SettleResult(state, "no_hold")
@@ -175,7 +205,7 @@ def settle(
         replace(
             state,
             holds=holds,
-            processed_request_ids=state.processed_request_ids | {request_id},
+            processed=state.processed + ((request_id, to_kst(now)),),
             entries=state.entries + (entry,),
         ),
         "charged",
@@ -184,7 +214,7 @@ def settle(
 
 def next_refill_at(state: CreditState, now: datetime) -> datetime | None:
     """다음 충전 시각(다음 날 0시 KST). 최대 보유면 None."""
-    state = apply_refill(state, now)
+    state = current_state(state, now)
     if state.balance >= MAX_CREDITS:
         return None
     today = max(to_kst(now).date(), state.last_charge_date)

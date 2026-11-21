@@ -8,6 +8,7 @@ from backend.agent.credits import (
     SIGNUP,
     HOLD_TIMEOUT,
     apply_refill,
+    current_state,
     next_refill_at,
     reserve,
     settle,
@@ -228,3 +229,41 @@ def test_state_is_immutable():
     settle(r.state, "r1", True, T0)
     assert s.balance == 5 and not s.processed_request_ids and not s.holds
     assert r.state.balance == 4 and not r.state.processed_request_ids
+
+
+def test_current_state_refunds_stale_hold_on_read():
+    # 서버가 분석 중에 멈춘 뒤 사용자가 크레딧 페이지만 연 경우
+    r = reserve(signup(T0), EXTERNAL_SEARCH, "e1", T0)  # 3 + 잡아 둠 2
+    view = current_state(r.state, T0 + HOLD_TIMEOUT)
+    assert view.balance == 5 and view.held == 0
+    assert current_state(r.state, T0 + HOLD_TIMEOUT - timedelta(seconds=1)).balance == 3
+    assert next_refill_at(r.state, T0 + HOLD_TIMEOUT) is None  # 환불 뒤 최대 보유
+
+
+def test_settle_after_hold_expired_is_no_hold_and_refunded():
+    r = reserve(signup(T0), DETAIL_ANALYSIS, "r1", T0)
+    late = settle(r.state, "r1", True, T0 + HOLD_TIMEOUT)
+    assert late.status == "no_hold"
+    assert late.state.balance == 5 and late.state.held == 0  # 만료 환불, 차감 안 함
+    assert "r1" not in late.state.processed_request_ids
+    on_time = settle(r.state, "r1", True, T0 + HOLD_TIMEOUT - timedelta(seconds=1))
+    assert on_time.status == "charged" and on_time.state.balance == 4
+
+
+def test_history_pruned_after_90_days():
+    c = spend(signup(T0), DETAIL_ANALYSIS, "r1", T0)  # 내역: signup, detail_analysis
+    day89 = current_state(c.state, T0 + timedelta(days=89, hours=23))
+    assert [e.kind for e in day89.entries if e.kind != DAILY] == [SIGNUP, DETAIL_ANALYSIS]
+    assert "r1" in day89.processed_request_ids
+    day90 = current_state(c.state, T0 + timedelta(days=90))
+    assert all(e.kind == DAILY for e in day90.entries)  # 90일째 signup·차감 내역 삭제
+    assert "r1" not in day90.processed_request_ids
+    # 지운 요청 id는 새 요청으로 본다
+    assert reserve(c.state, DETAIL_ANALYSIS, "r1", T0 + timedelta(days=90)).status == "held"
+
+
+def test_prune_keeps_recent_daily_entries():
+    s = drained_to(0)
+    s = current_state(s, T0 + timedelta(days=100))
+    # 충전 5번(5일째에 가득) 내역도 90일이 지나 지워지고, 잔액은 그대로
+    assert s.balance == 5 and s.entries == ()
