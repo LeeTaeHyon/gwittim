@@ -1860,7 +1860,7 @@ SPEC 범위 변경 (AGENTS.md §3, SPEC 0.4)
 ## D-038. 교외 공고 출처 범위 (2단계 3주차) (2026-11-16)
 
 - 상태: **팀장 결정(팀원 확인 전)**
-- 근거: [external-source-candidates.md](external-source-candidates.md) 조사(2026-11-15), [stage2-prep-spec.md](stage2-prep-spec.md) §2.3 전제 A·B
+- 근거: `external-source-candidates.md`(저장소 미등록) 조사(2026-11-15), `stage2-prep-spec.md`(저장소 미등록) §2.3 전제 A·B
 
 ### 결정
 
@@ -2119,7 +2119,7 @@ SPEC 범위 변경 (AGENTS.md §3, SPEC 0.4)
   - 후: 교외 공고 자동 수집(D-038)과 맞춤 에이전트(D-039)를 **어느 학교 학생이든 쓰는 기본층**으로, 학교 공지는 그 위에 얹는 **학교 팩**으로
 - 학교 팩 = 게시판 수집 설정 + 학과 사전·학과 키워드 규칙 + 학과 통계(+ 선택: 알림톡 수집기 폰)
   - 학교 추가를 코드 작성이 아니라 설정 + 검증으로 줄이는 것을 목표로 한다
-- 첫 확인: 같은 대회 연합 대학(배화여대·숭의여대) 게시판의 robots·약관·구조 조사([school-expansion-review.md](school-expansion-review.md))
+- 첫 확인: 같은 대회 연합 대학(배화여대·숭의여대) 게시판의 robots·약관·구조 조사(`school-expansion-review.md`(저장소 미등록))
 
 ### 아직 안 정한 것
 

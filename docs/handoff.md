@@ -514,7 +514,7 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 
 ## 교외 공고 출처 (2026-11-16, D-038)
 
-- 조사: [external-source-candidates.md](external-source-candidates.md). 12곳 robots·약관·API 확인
+- 조사: `external-source-candidates.md`(저장소 미등록). 12곳 robots·약관·API 확인
 - 결정: 이용자 전체에 걸린 약관 금지가 없으면 본문까지 수집(회원 조항은 세지 않음)
   - 수집: 위비티, 콘테스트코리아, 올콘, 씽굿, 씽유, 링커리어. API로만: K-Startup. 제외: 캠퍼스픽, 요즘것들, 대티즌
   - 에이전트가 후보를 찾고 주최 측 페이지까지 따라감(robots 준수, 3초 간격, 제외 사이트 안 엶). 판단은 로컬 Gemma
