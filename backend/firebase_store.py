@@ -194,6 +194,29 @@ class FirestoreReports(_Base):
         return removed
 
 
+SPEND_COLLECTION = "ops"  # ops/llm_spend_YYYY-MM. 사용자 데이터와 분리한 운영용 문서(보안 규칙 기본값으로 클라이언트 접근 차단)
+
+
+def _spend_doc_id(month: str) -> str:
+    return f"llm_spend_{month}"
+
+
+class FirestoreSpend(_Base):
+    """월별 LLM 비용 누적(원). Increment로 더해 동시 호출에도 값이 유실되지 않는다."""
+
+    def _ref(self, month):
+        return self.db.collection(SPEND_COLLECTION).document(_spend_doc_id(month))
+
+    def add(self, month, krw):
+        self._ref(month).set({"month": month, "krw": firestore.Increment(krw)}, merge=True)
+
+    def get(self, month):
+        snap = self._ref(month).get()
+        data = snap.to_dict() if snap.exists else None
+        value = (data or {}).get("krw", 0)
+        return float(value) if isinstance(value, (int, float)) else 0.0
+
+
 class FirestoreSink(_Base):
     """NoticeSink: 공개 공고와 검토 대기."""
 

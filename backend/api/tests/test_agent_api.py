@@ -413,3 +413,169 @@ def test_firestore_credit_state_roundtrip():
     data = _credit_state_to_dict(held)
     json.dumps(data)  # Firestore에 넣는 값은 문자열·숫자·목록뿐
     assert _credit_state_from_dict(data) == held
+
+
+# ---------- 비용 상한(D-039)·Cloud Run fake ----------
+
+class CostProvider:
+    """호출마다 비용(원)이 정해진 가짜 제공자."""
+
+    name = "cost"
+
+    def __init__(self, krw=100.0, fail=False):
+        self.calls = 0
+        self.krw = krw
+        self.fail = fail
+
+    def generate(self, system, user, notice_id=None):
+        self.calls += 1
+        tokens = int(self.krw / 1400 * 1_000_000 / 0.5)  # 출력 토큰만으로 원하는 비용을 만든다
+        usage = llm.Usage("cost", 0.0, 0, tokens)
+        if self.fail:
+            exc = llm.ReportFormatError("잘림")
+            exc.usage = usage
+            raise exc
+        return llm.LLMResult(dict(llm.FAKE_REPORT), usage)
+
+
+def test_fake_on_cloud_run_answers_unavailable_and_keeps_credits(client, deps):
+    consent(client)
+    deps.llm = llm.get_provider("fake", env={"K_SERVICE": "gwittim-api"})
+    assert_error(analyze(client), 503, "unavailable")
+    assert balance(client) == 5
+    assert deps.reports.docs == {}
+
+
+def test_monthly_cap_blocks_new_analysis(client, deps, monkeypatch):
+    monkeypatch.setenv("GWITTIM_LLM_MONTHLY_CAP_KRW", "1000")
+    consent(client)
+    deps.llm = provider = CostProvider()
+    deps.spend.add(deps.month_kst(), 1000)
+    assert_error(analyze(client), 503, "unavailable")
+    assert provider.calls == 0 and balance(client) == 5
+
+
+def test_default_cap_is_30000(client, deps, monkeypatch):
+    monkeypatch.delenv("GWITTIM_LLM_MONTHLY_CAP_KRW", raising=False)
+    consent(client)
+    deps.llm = provider = CostProvider()
+    deps.spend.add(deps.month_kst(), 29999)
+    assert analyze(client, "r1").status_code == 200
+    assert_error(analyze(client, "r2", chips={"period": "vacation"}), 503, "unavailable")
+    assert provider.calls == 1
+
+
+def test_stored_report_reuse_allowed_over_cap(client, deps, monkeypatch):
+    monkeypatch.setenv("GWITTIM_LLM_MONTHLY_CAP_KRW", "1000")
+    consent(client)
+    deps.llm = provider = CostProvider()
+    assert analyze(client, "r1").status_code == 200
+    deps.spend.add(deps.month_kst(), 5000)
+    resp = analyze(client, "r2")
+    assert resp.status_code == 200 and resp.json()["from_cache"] is True
+    assert provider.calls == 1 and balance(client) == 3
+    assert client.get(f"/v1/analysis/{NOTICE}", headers=ALICE).status_code == 200  # 받은 리포트는 계속 보임
+
+
+def test_cost_is_accumulated_after_call(client, deps):
+    consent(client)
+    deps.llm = CostProvider(krw=100.0)
+    analyze(client, "r1")
+    assert deps.spend.get(deps.month_kst()) == pytest.approx(100.0, rel=0.01)
+    analyze(client, "r2", chips={"period": "vacation"})
+    assert deps.spend.get(deps.month_kst()) == pytest.approx(200.0, rel=0.01)
+
+
+def test_failed_call_with_usage_is_accumulated_and_refunded(client, deps):
+    consent(client)
+    deps.llm = CostProvider(krw=100.0, fail=True)
+    assert_error(analyze(client), 503, "unavailable")
+    assert deps.spend.get(deps.month_kst()) == pytest.approx(100.0, rel=0.01)
+    assert balance(client) == 5
+
+
+def test_failed_call_without_usage_adds_nothing(client, deps):
+    consent(client)
+    deps.llm = FailingProvider()
+    analyze(client)
+    assert deps.spend.get(deps.month_kst()) == 0
+
+
+def test_unknown_cost_counts_zero(client, deps):
+    consent(client)
+    assert analyze(client).status_code == 200  # fake: 토큰 수 모름
+    assert deps.spend.get(deps.month_kst()) == 0
+
+
+def test_new_month_kst_allows_again(client, deps, clock, monkeypatch):
+    monkeypatch.setenv("GWITTIM_LLM_MONTHLY_CAP_KRW", "1000")
+    consent(client)
+    deps.llm = provider = CostProvider()
+    clock.moment = datetime(2026, 10, 31, 14, 59, tzinfo=timezone.utc)  # KST 10/31 23:59
+    deps.spend.add("2026-10", 1000)
+    assert_error(analyze(client, "r1"), 503, "unavailable")
+    clock.moment = datetime(2026, 10, 31, 15, 0, tzinfo=timezone.utc)  # KST 11/01 00:00
+    assert deps.month_kst() == "2026-11"
+    assert analyze(client, "r2").status_code == 200
+    assert provider.calls == 1
+
+
+def test_in_memory_spend_is_serialized():
+    from backend.api.deps import InMemorySpend
+
+    store = InMemorySpend()
+    threads = [threading.Thread(target=lambda: [store.add("2026-11", 1.5) for _ in range(100)]) for _ in range(8)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert store.get("2026-11") == 1200.0 and store.get("2026-12") == 0.0
+
+
+class _FakeSnap:
+    def __init__(self, data):
+        self.exists = data is not None
+        self._data = data
+
+    def to_dict(self):
+        return self._data
+
+
+class _FakeRef:
+    def __init__(self, db, path):
+        self.db, self.path = db, path
+
+    def set(self, data, merge=False):
+        self.db.writes.append((self.path, data, merge))
+
+    def get(self):
+        return _FakeSnap(self.db.stored.get(self.path))
+
+
+class _FakeDb:
+    def __init__(self):
+        self.writes = []
+        self.stored = {}
+
+    def collection(self, name):
+        db = self
+
+        class Col:
+            def document(self, doc_id):
+                return _FakeRef(db, f"{name}/{doc_id}")
+
+        return Col()
+
+
+def test_firestore_spend_key_and_increment():
+    from firebase_admin import firestore
+
+    from backend.firebase_store import FirestoreSpend, _spend_doc_id
+
+    assert _spend_doc_id("2026-11") == "llm_spend_2026-11"
+    store = object.__new__(FirestoreSpend)
+    store.db = _FakeDb()
+    store.add("2026-11", 12.5)
+    (path, data, merge), = store.db.writes
+    assert path == "ops/llm_spend_2026-11" and merge is True and data["month"] == "2026-11"
+    assert isinstance(data["krw"], type(firestore.Increment(1)))  # 덮어쓰기가 아니라 증가 연산
+    store.db.stored["ops/llm_spend_2026-11"] = {"krw": 12.5}
+    assert store.get("2026-11") == 12.5 and store.get("2026-12") == 0.0

@@ -63,6 +63,16 @@ class ReportStore(Protocol):
         ...
 
 
+class SpendStore(Protocol):
+    """LLM 비용 누적(원). 월 단위(KST 'YYYY-MM'). 사용자와 무관한 운영용 값이다 (D-039 월 상한)."""
+
+    def add(self, month: str, krw: float) -> None:
+        """동시 호출에도 안전하게 더한다."""
+        ...
+
+    def get(self, month: str) -> float: ...
+
+
 class KakaoInbox(Protocol):
     def put(self, doc_id: str, doc: dict) -> bool: ...
     def list(self) -> list[dict]: ...
@@ -176,6 +186,20 @@ class InMemoryCredits:
 
 
 @dataclass
+class InMemorySpend:
+    months: dict[str, float] = field(default_factory=dict)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def add(self, month, krw):
+        with self._lock:
+            self.months[month] = self.months.get(month, 0.0) + krw
+
+    def get(self, month):
+        with self._lock:
+            return self.months.get(month, 0.0)
+
+
+@dataclass
 class InMemoryReports:
     docs: dict[str, dict[str, dict]] = field(default_factory=dict)  # uid -> key -> doc
 
@@ -215,9 +239,13 @@ class Deps:
     credits: CreditStore = field(default_factory=InMemoryCredits)
     reports: ReportStore = field(default_factory=InMemoryReports)
     llm: Any = None
+    spend: SpendStore = field(default_factory=InMemorySpend)
 
     def today_kst(self) -> date:
         return self.clock.now().astimezone(KST).date()
+
+    def month_kst(self) -> str:
+        return self.clock.now().astimezone(KST).strftime("%Y-%m")
 
     def now_iso(self) -> str:
         return self.clock.now().astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
