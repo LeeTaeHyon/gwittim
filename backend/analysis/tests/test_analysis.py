@@ -285,6 +285,16 @@ def test_change_tracking_and_analysis_reuse():
     assert second["changed_fields"] == ["application_deadline"]
 
 
+def test_unchanged_recollect_refreshes_verified_time():
+    """원문이 그대로여도 다시 확인한 시각으로 last_verified_at을 옮긴다 (D-006 오래된 정보 표시)."""
+    record, store = record_for(raw_notice(CONTEST))
+    first, _ = build_notice(record, today=TODAY)
+    ingest(raw_notice(CONTEST, collected_at="2026-10-19T00:00:00Z"), store)
+    again, _ = build_notice(store.records[record.key], today=TODAY, previous=first)
+    assert again["notice_version"] == 1 and again["changed_fields"] == []
+    assert again["last_verified_at"] == again["last_collected_at"] == "2026-10-19T00:00:00Z"
+
+
 def test_end_to_end_into_recommendation():
     """RawNotice → 파이프라인 → 분석 → 추천까지 연결된다 (합성 데이터)."""
     store = InMemoryStore()

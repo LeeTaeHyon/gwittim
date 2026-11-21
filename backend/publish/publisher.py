@@ -34,6 +34,7 @@ class NoticeSink(Protocol):
     def get_public(self, notice_id: str) -> dict | None: ...
     def put_public(self, notice: dict) -> None: ...
     def delete_public(self, notice_id: str) -> None: ...
+    def touch_public(self, notice_id: str, fields: dict) -> None: ...
     def put_review(self, notice: dict, issues: list[str]) -> None: ...
     def delete_review(self, notice_id: str) -> None: ...
 
@@ -51,6 +52,9 @@ class InMemorySink:
 
     def delete_public(self, notice_id):
         self.public.pop(notice_id, None)
+
+    def touch_public(self, notice_id, fields):
+        self.public[notice_id] = {**self.public[notice_id], **fields}
 
     def put_review(self, notice, issues):
         self.review[notice["notice_id"]] = {"notice": notice, "issues": issues}
@@ -73,10 +77,17 @@ def publish(notice: dict, issues: list[str], sink: NoticeSink) -> PublishOutcome
 
     current = sink.get_public(notice["notice_id"])
     if current and _same(current, notice):
+        # 내용은 그대로여도 원문을 다시 확인한 시각은 공개본에 남긴다. 안 그러면 앱에 계속 '오래된 정보'로 보인다 (D-006)
+        times = {k: notice[k] for k in _CHECK_TIMES if current.get(k) != notice[k]}
+        if times:
+            sink.touch_public(notice["notice_id"], times)
         return PublishOutcome.SKIPPED
     sink.put_public(notice)
     sink.delete_review(notice["notice_id"])
     return PublishOutcome.PUBLISHED
+
+
+_CHECK_TIMES = ("last_collected_at", "last_verified_at")
 
 
 def _same(a: dict, b: dict) -> bool:
