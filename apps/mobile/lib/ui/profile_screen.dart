@@ -522,6 +522,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       enrollmentStatus: _status,
       interestIds: _interests.toList()..sort(),
       targetRoleIds: _roles.toList()..sort(),
+      // 프로필 PUT은 통째로 바꾼다. 동의 기록을 빼면 철회가 되므로 그대로 이어 보낸다.
+      agentConsent: widget.profile?.agentConsent,
     );
     try {
       await widget.repository.updateProfile(profile);
