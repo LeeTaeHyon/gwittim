@@ -99,7 +99,8 @@ def signup(now: datetime) -> CreditState:
 def apply_refill(state: CreditState, now: datetime) -> CreditState:
     """마지막 충전 날짜 다음 날부터 오늘까지 하루 +1(최대 5). 시계가 거꾸로 가면 그대로.
 
-    최대 보유는 잡아 둔 크레딧까지 더해 센다. 그래야 환불 뒤에도 5를 넘지 않는다.
+    최대 보유는 지금 쓸 수 있는 잔액(balance)만으로 센다. 잡아 둔 크레딧은 세지 않으므로
+    자정을 넘긴 요청이 성공해도 그날 충전이 빠지지 않는다. 환불 때 5를 넘으면 5로 자른다.
     """
     today = to_kst(now).date()
     if today <= state.last_charge_date:
@@ -109,7 +110,7 @@ def apply_refill(state: CreditState, now: datetime) -> CreditState:
     day = state.last_charge_date
     while day < today:
         day += timedelta(days=1)
-        if balance + state.held >= MAX_CREDITS:
+        if balance >= MAX_CREDITS:
             continue  # 가득 차 못 채운 날은 내역 없음
         balance += DAILY_CHARGE
         entries.append(LedgerEntry(DAILY, DAILY_CHARGE, datetime.combine(day, time(0), tzinfo=KST)))
@@ -124,7 +125,7 @@ def release_stale_holds(state: CreditState, now: datetime) -> CreditState:
         return state
     return replace(
         state,
-        balance=state.balance + sum(h.cost for h in stale),
+        balance=min(state.balance + sum(h.cost for h in stale), MAX_CREDITS),
         holds=tuple(h for h in state.holds if h not in stale),
     )
 
@@ -159,7 +160,7 @@ def settle(
     """2단계: AI 결과에 따라 확정하거나 돌려준다.
 
     - 성공: 차감 확정, 내역에 남기고 요청 id를 '처리함'으로 기록(같은 id 재요청은 duplicate).
-    - 실패: 잡아 둔 크레딧을 돌려준다. 내역·'처리함' 기록 없음(같은 id로 다시 잡아 둘 수 있다).
+    - 실패: 잡아 둔 크레딧을 돌려준다(최대 5). 내역·'처리함' 기록 없음(같은 id로 다시 잡아 둘 수 있다).
     - 잡아 둔 것이 없으면 no_hold, 상태 그대로. 이 결과는 사용자에게 주지 않는다.
     """
     hold = next((h for h in state.holds if h.request_id == request_id), None)
@@ -167,7 +168,8 @@ def settle(
         return SettleResult(state, "no_hold")
     holds = tuple(h for h in state.holds if h is not hold)
     if not succeeded:
-        return SettleResult(replace(state, balance=state.balance + hold.cost, holds=holds), "refunded")
+        refunded = min(state.balance + hold.cost, MAX_CREDITS)
+        return SettleResult(replace(state, balance=refunded, holds=holds), "refunded")
     entry = LedgerEntry(hold.kind, -hold.cost, to_kst(now), ref if ref is not None else request_id)
     return SettleResult(
         replace(
@@ -183,7 +185,7 @@ def settle(
 def next_refill_at(state: CreditState, now: datetime) -> datetime | None:
     """다음 충전 시각(다음 날 0시 KST). 최대 보유면 None."""
     state = apply_refill(state, now)
-    if state.balance + state.held >= MAX_CREDITS:
+    if state.balance >= MAX_CREDITS:
         return None
     today = max(to_kst(now).date(), state.last_charge_date)
     return datetime.combine(today + timedelta(days=1), time(0), tzinfo=KST)

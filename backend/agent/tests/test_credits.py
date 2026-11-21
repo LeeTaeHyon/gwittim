@@ -152,13 +152,34 @@ def test_stale_hold_is_refunded_on_next_reserve():
     assert settle(late.state, "e1", True, T0 + HOLD_TIMEOUT).status == "no_hold"
 
 
-def test_refill_counts_holds_so_refund_never_exceeds_five():
+def test_success_across_midnight_keeps_daily_refill():
+    # 11-01 잔액 5, 23:59에 잡아 둠 → 자정 넘어 성공. 전날 1개 사용 + 오늘 1개 충전 = 5
+    s = signup(T0)
+    late = datetime(2026, 11, 1, 23, 59, tzinfo=KST)
+    r = reserve(s, DETAIL_ANALYSIS, "r1", late)
+    after = datetime(2026, 11, 2, 0, 0, 10, tzinfo=KST)
+    s2 = apply_refill(r.state, after)
+    assert s2.balance == 5 and s2.held == 1
+    c = settle(s2, "r1", True, after)
+    assert c.status == "charged" and c.state.balance == 5
+    assert [e.kind for e in c.state.entries[-2:]] == [DAILY, DETAIL_ANALYSIS]
+
+
+def test_refund_never_exceeds_five():
     r = reserve(signup(T0), DETAIL_ANALYSIS, "r1", T0)  # 4 + 잡아 둠 1
     next_day = T0 + timedelta(hours=20)
     s = apply_refill(r.state, next_day)
-    assert s.balance == 4  # 4 + 1(잡아 둠) = 5라 충전 없음
-    assert next_refill_at(r.state, T0) is None
-    assert settle(s, "r1", False, next_day).state.balance == 5
+    assert s.balance == 5  # 잡아 둔 것은 세지 않으므로 충전됨
+    assert next_refill_at(r.state, T0) == datetime(2026, 11, 2, 0, 0, tzinfo=KST)
+    assert settle(s, "r1", False, next_day).state.balance == 5  # 환불은 5에서 자름
+
+
+def test_stale_refund_never_exceeds_five():
+    r = reserve(signup(T0), EXTERNAL_SEARCH, "e1", T0)  # 3 + 잡아 둠 2
+    s = apply_refill(r.state, T0 + timedelta(days=2))  # 3 → 5
+    assert s.balance == 5
+    late = reserve(s, DETAIL_ANALYSIS, "x", T0 + timedelta(days=2))  # e1 만료 환불(5로 자름) 후 x 잡아 둠
+    assert late.status == "held" and late.state.balance == 4 and late.state.held == 1
 
 
 def test_insufficient_does_not_hold_or_record():
