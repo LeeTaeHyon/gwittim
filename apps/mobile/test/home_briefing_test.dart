@@ -366,4 +366,28 @@ void main() {
     expect(block, findsWidgets);
     expect(tester.getSize(find.ancestor(of: find.text('10월').first, matching: find.byType(Container)).last).width, 44);
   });
+
+  testWidgets('글꼴 2배에서 섹션 제목이 어절 중간에서 끊기지 않고 오른쪽 글이 아랫줄로 간다', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3; // 폭 360
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: gwittimTheme(),
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(360, 800), textScaler: TextScaler.linear(2)),
+          child: Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: SectionTitle('다가오는 마감', trailing: Text('맞춤 공고 · 앞으로 2주')),
+            ),
+          ),
+        ),
+      ),
+    );
+    final title = tester.getRect(find.text('다가오는 마감'));
+    final trailing = tester.getRect(find.text('맞춤 공고 · 앞으로 2주'));
+    expect(title.height, lessThan(19 * 2 * 1.6)); // 한 줄
+    expect(trailing.top, greaterThanOrEqualTo(title.bottom - 1)); // 아랫줄
+  });
 }

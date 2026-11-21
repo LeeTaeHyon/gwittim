@@ -531,7 +531,7 @@ class _BriefingCard extends StatelessWidget {
                       baseline: TextBaseline.alphabetic,
                       child: LimeFace(lead, style: title, animate: !opened, delay: const Duration(milliseconds: 500)),
                     ),
-                    TextSpan(text: rest),
+                    TextSpan(text: keepAll(rest)), // 큰 글꼴에서 '공/고 1건'처럼 어절 중간에서 끊기지 않게
                   ],
                 ),
               ),

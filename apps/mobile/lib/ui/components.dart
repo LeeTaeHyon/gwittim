@@ -278,16 +278,21 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: context.gw.ink, letterSpacing: -0.5),
-          ),
-        ),
-        ?trailing,
-      ],
+    final title = Text(
+      text,
+      style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: context.gw.ink, letterSpacing: -0.5),
+    );
+    if (trailing == null) return Row(children: [Expanded(child: title)]);
+    // 큰 글꼴에서 제목과 오른쪽 글이 한 줄에 안 들어가면 오른쪽 글을 아랫줄로 보낸다.
+    // Row + Expanded면 제목 칸이 좁아져 '다가오는 마/감'처럼 어절 중간에서 끊긴다.
+    return SizedBox(
+      width: double.infinity,
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        runSpacing: 2,
+        children: [title, trailing!],
+      ),
     );
   }
 }

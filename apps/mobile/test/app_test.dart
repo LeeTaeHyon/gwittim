@@ -544,7 +544,7 @@ void main() {
     expect(find.text('D-13'), findsNothing);
     expect(find.text('오늘 확인할'), findsOneWidget); // 라임 면 + ' 공고 N건'(겹치지 않는 수)
     expect(
-      find.byWidgetPredicate((w) => w is Text && RegExp(r'^￼ 공고 \d+건$').hasMatch(w.textSpan?.toPlainText() ?? '')),
+      find.byWidgetPredicate((w) => w is Text && RegExp(r'^￼ 공고 \d+건$').hasMatch((w.textSpan?.toPlainText() ?? '').replaceAll('\u2060', '').replaceAll('\u00A0', ' '))),
       findsOneWidget,
     );
     expect(find.text('브리핑 다시 보기'), findsOneWidget); // 이 장면의 저장소는 이미 열었다고 답한다
