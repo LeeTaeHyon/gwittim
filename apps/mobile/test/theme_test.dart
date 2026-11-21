@@ -88,6 +88,21 @@ void main() {
         expect(contrast(c.loginSub, c.loginBg), greaterThanOrEqualTo(4.5));
         expect(contrast(c.ink, c.loginCard), greaterThanOrEqualTo(4.5));
       });
+
+      test('$name: hero 위 마감 임박 색은 면 위에서도 4.5:1 이상, 분류 아이콘은 card 위 3:1 이상', () {
+        final tile = over(c.loginInk.withValues(alpha: 0.12), c.hero); // 숫자 칸 바탕(흰색 12%)
+        expect(contrast(c.heroUrgent, c.hero), greaterThanOrEqualTo(4.5), reason: 'heroUrgent on hero');
+        expect(contrast(c.heroUrgent, tile), greaterThanOrEqualTo(4.5), reason: 'heroUrgent on 숫자 칸');
+        expect(contrast(c.loginSub, tile), greaterThanOrEqualTo(4.5), reason: '칸 이름·아이콘');
+        expect(GwColors.categoryIds, hasLength(13));
+        for (final id in GwColors.categoryIds) {
+          expect(contrast(c.category(id), c.card), greaterThanOrEqualTo(3), reason: '$id on card');
+        }
+        // 상태 원: 연한 바탕 위 글리프
+        expect(contrast(c.onChip, c.chip), greaterThanOrEqualTo(3));
+        expect(contrast(c.check, c.checkSoft), greaterThanOrEqualTo(3));
+        expect(contrast(c.urgent, c.urgentSoft), greaterThanOrEqualTo(3));
+      });
     }
 
     test('다크에서 라임은 면으로만: 글자색 토큰에 라임이 없다', () {
@@ -98,6 +113,20 @@ void main() {
       expect(c.cta, c.lime);
       expect(c.point, c.lime);
       expect(c.marker.a, lessThan(1)); // 형광펜은 투명하게
+    });
+
+    test('분류색: 모르는 분류는 기타 색, 테마 전환 보간이 분류색까지 옮긴다', () {
+      const c = GwColors.light;
+      expect(c.category('mystery'), c.category('other'));
+      expect(c.category('academic'), c.onChip);
+      expect(GwColors.dark.category('academic'), GwColors.dark.onChip);
+      final mid = c.lerp(GwColors.dark, 1);
+      expect(mid.heroUrgent, GwColors.dark.heroUrgent);
+      expect(mid.hero, GwColors.dark.hero);
+      for (final id in GwColors.categoryIds) {
+        expect(mid.category(id), GwColors.dark.category(id), reason: id);
+        expect(c.lerp(GwColors.dark, 0).category(id), c.category(id), reason: id);
+      }
     });
 
     test('테마 두 벌이 토큰을 담는다', () {

@@ -5,6 +5,7 @@ import '../data/models.dart';
 import '../data/repository.dart';
 import 'briefing_data.dart';
 import 'briefing_screen.dart';
+import 'briefing_stats.dart';
 import 'common.dart';
 import 'components.dart';
 import 'format.dart';
@@ -72,6 +73,10 @@ class HomeScreenState extends State<HomeScreen> {
   Object? _error;
   bool _briefingChecked = false;
 
+  /// 오늘 브리핑을 이미 열었는지 (자동으로 띄운 경우도 연 것). 홈 카드의 '새 소식'과 버튼 문구가 이걸 따른다.
+  /// 기기 저장소를 못 읽으면 열었다고 보고 새 소식 표시를 하지 않는다.
+  bool _opened = true;
+
   /// 프로필을 읽었고 없다고 확인된 경우만 true (읽지 못하면 미상으로 보고 안내하지 않는다)
   bool _profileMissing = false;
   bool _setupChecked = false;
@@ -103,6 +108,11 @@ class HomeScreenState extends State<HomeScreen> {
       majors = {for (final m in await repo.dictionary('majors')) m.id: m.name};
     } catch (_) {
       // 프로필 줄만 빠진다.
+    }
+    try {
+      _opened = await widget.briefingStore.shownOn(_today);
+    } catch (_) {
+      _opened = true;
     }
     var picks = const MajorPickState();
     try {
@@ -199,11 +209,20 @@ class HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       return; // 기기 저장소를 못 쓰면 자동으로 띄우지 않는다 (홈 카드에서 열 수 있음)
     }
-    if (mounted) _openBriefing(briefing);
+    if (mounted) _openBriefing(briefing, arrival: true);
   }
 
-  void _openBriefing(Briefing briefing) {
-    Navigator.of(context).push(
+  /// [arrival]: 하루 첫 접속 때 자동으로 여는 경우만 '귀띔 도착' 장면을 보인다. 홈 카드에서 여는 경우는 장면 없음.
+  Future<void> _openBriefing(Briefing briefing, {bool arrival = false}) async {
+    if (!arrival) {
+      try {
+        await widget.briefingStore.markShown(_today); // 카드에서 연 것도 연 것으로 센다
+      } catch (_) {
+        // 기록하지 못해도 브리핑은 연다.
+      }
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push(
       gwRoute(
         context,
         (_) => BriefingScreen(
@@ -211,10 +230,12 @@ class HomeScreenState extends State<HomeScreen> {
           today: _today,
           onOpenNotice: _openNotice,
           onAnswerMajorPick: _answerMajorPick,
+          arrival: arrival,
         ),
         rise: true,
       ),
     );
+    if (mounted && !_opened) setState(() => _opened = true);
   }
 
   Future<void> _openNotice(NoticeSummary notice, Recommendation? recommendation) async {
@@ -274,11 +295,7 @@ class HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 16),
         if (!list.personalized) ...[_ProfilePrompt(onOpenProfile: widget.onOpenProfile), const SizedBox(height: 12)],
         if (!briefing.isEmpty) ...[
-          _BriefingCard(
-            briefing: briefing,
-            urgentCount: candidates.where((e) => (daysLeft(e.notice, _today) ?? 99) <= urgentDays).length,
-            onOpen: () => _openBriefing(briefing),
-          ),
+          _BriefingCard(briefing: briefing, today: _today, opened: _opened, onOpen: () => _openBriefing(briefing)),
           const SizedBox(height: 28),
         ],
         SectionTitle('다가오는 마감', trailing: Text(list.personalized ? '맞춤 공고 · 앞으로 2주' : '앞으로 2주', style: caption)),
@@ -344,6 +361,7 @@ class HomeScreenState extends State<HomeScreen> {
             entry: e,
             category: data.categories[e.notice.category] ?? e.notice.category,
             today: _today,
+            home: true,
             onTap: () => _openNotice(e.notice, e.recommendation),
           ),
           const SizedBox(height: 10),
@@ -460,102 +478,190 @@ class _ProfilePrompt extends StatelessWidget {
   }
 }
 
-/// 오늘의 귀띔: 숫자 요약만 보이고 공고 제목은 다시 쓰지 않는다 (2026-10-25 팀장 결정 Q3).
-/// 한 줄 제목과 작은 배지로 무슨 소식인지 바로 읽히게 하고, 0건인 배지는 보이지 않는다 (D-016 보완).
-/// 카드 전체를 누르면 브리핑이 열린다.
+/// 오늘의 귀띔 (2026-11-19 개편): 브리핑 머리와 같은 hero 면 카드. 공고 제목은 다시 쓰지 않고 숫자만 보인다(2026-10-25 Q3).
+/// 위: 배지·날짜(안 열었으면 '새 소식' 점) → 제목 '오늘 확인할 공고 N건' → 숫자 칸(최대 3, 0건 숨김) → 열기 버튼.
+/// 카드 전체를 눌러도 브리핑이 열린다.
 class _BriefingCard extends StatelessWidget {
-  const _BriefingCard({required this.briefing, required this.urgentCount, required this.onOpen});
+  const _BriefingCard({required this.briefing, required this.today, required this.opened, required this.onOpen});
 
   final Briefing briefing;
+  final DateTime today;
 
-  /// 7일 안에 마감되는 공고 수
-  final int urgentCount;
+  /// 오늘 브리핑을 이미 열었는지
+  final bool opened;
   final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
     final b = briefing;
-    final onlyChanged =
-        urgentCount == 0 && b.savedSoon.isEmpty && b.fresh.isEmpty && b.career.isEmpty && b.majorPick == null;
-    return GwCard(
-      bubble: true,
-      onTap: onOpen,
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '오늘의 귀띔',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.accent),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            onlyChanged ? '마감이 바뀐 저장 공고' : '오늘 확인할 공고',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.ink, height: 1.4),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+    final title = TextStyle(fontSize: 21, height: 1.45, fontWeight: FontWeight.w700, color: c.loginInk);
+    final lead = b.onlyChanged ? '마감이 바뀐' : '오늘 확인할';
+    final rest = b.onlyChanged ? ' 저장 공고' : ' 공고 ${distinctNoticeCount(b)}건';
+    return Material(
+      color: c.hero,
+      borderRadius: Gw.bubble,
+      child: InkWell(
+        borderRadius: Gw.bubble,
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (b.savedSoon.isNotEmpty)
-                _Badge(icon: Icons.bookmark_rounded, label: '저장 공고 곧 마감 ${b.savedSoon.length}건', urgent: true),
-              if (urgentCount > 0) _Badge(icon: Icons.schedule_rounded, label: '마감 임박 $urgentCount건', urgent: true),
-              if (b.fresh.isNotEmpty) _Badge(icon: Icons.fiber_new_rounded, label: '새 공고 ${b.fresh.length}건'),
-              if (b.career.isNotEmpty) _Badge(icon: Icons.explore_rounded, label: '진로 관련 ${b.career.length}건'),
-              if (b.majorPick != null) const _Badge(icon: Icons.school_rounded, label: '졸업생 진로 추천'),
-              if (b.changed.isNotEmpty) _Badge(icon: Icons.update_rounded, label: '마감 바뀐 저장 공고 ${b.changed.length}건'),
+              Row(
+                children: [
+                  const GwBadge(),
+                  const SizedBox(width: 8),
+                  Text(
+                    briefingDay(today),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.loginSub),
+                  ),
+                  const Spacer(),
+                  if (!opened) const _NewMark(),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text.rich(
+                TextSpan(
+                  style: title,
+                  children: [
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.baseline,
+                      baseline: TextBaseline.alphabetic,
+                      child: LimeFace(lead, style: title, animate: !opened, delay: const Duration(milliseconds: 500)),
+                    ),
+                    TextSpan(text: keepAll(rest)), // 큰 글꼴에서 '공/고 1건'처럼 어절 중간에서 끊기지 않게
+                  ],
+                ),
+              ),
+              if (briefingStats(b).isNotEmpty) ...[const SizedBox(height: 14), BriefingStatRow(briefing: b)],
+              const SizedBox(height: 14),
+              _OpenButton(opened: opened, onTap: onOpen),
             ],
           ),
-          const SizedBox(height: 14),
-          Divider(height: 1, thickness: 1, color: c.line),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '브리핑 자세히 보기',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.sub),
-                  ),
-                ),
-                Icon(Icons.arrow_forward_rounded, size: 18, color: c.muted),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-/// 오늘의 귀띔 배지. 마감 임박만 빨간색, 나머지는 칩 색.
-class _Badge extends StatelessWidget {
-  const _Badge({required this.icon, required this.label, this.urgent = false});
+/// 아래 열기 버튼 (높이 48 알약). 안 열었으면 라임 면, 열었으면 투명 + 흰 28% 테두리.
+class _OpenButton extends StatelessWidget {
+  const _OpenButton({required this.opened, required this.onTap});
 
-  final IconData icon;
-  final String label;
-  final bool urgent;
+  final bool opened;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
-    final fg = urgent ? c.urgent : c.onChip;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: urgent ? c.urgentSoft : c.chip, borderRadius: BorderRadius.circular(14)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: fg),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg),
+    final shape = StadiumBorder(side: opened ? BorderSide(color: c.loginInk.withValues(alpha: 0.28)) : BorderSide.none);
+    final fg = opened ? c.loginInk : c.limeInk;
+    return Material(
+      color: opened ? Colors.transparent : c.lime,
+      shape: shape,
+      child: InkWell(
+        customBorder: shape,
+        onTap: onTap,
+        child: SizedBox(
+          height: 48,
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  opened ? '브리핑 다시 보기' : '브리핑 열기',
+                  style: TextStyle(fontSize: 15, fontWeight: opened ? FontWeight.w600 : FontWeight.w700, color: fg),
+                ),
+                if (!opened) ...[const SizedBox(width: 6), Icon(Icons.arrow_forward_rounded, size: 18, color: fg)],
+              ],
+            ),
           ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+/// '새 소식': 지름 8 라임 점과 바깥 고리. 고리가 1.6초 동안 퍼지는 것을 3번 하고 멈춘다(애니메이션 줄이기면 정지).
+class _NewMark extends StatefulWidget {
+  const _NewMark();
+
+  @override
+  State<_NewMark> createState() => _NewMarkState();
+}
+
+class _NewMarkState extends State<_NewMark> with SingleTickerProviderStateMixin {
+  static const _rounds = 3;
+  late final AnimationController _ring = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600 * _rounds),
+  );
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_started && MediaQuery.maybeDisableAnimationsOf(context) != true) {
+      _started = true;
+      _ring.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ring.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: AnimatedBuilder(
+            animation: _ring,
+            builder: (_, _) {
+              final p = _ring.value >= 1 ? 1.0 : (_ring.value * _rounds) % 1;
+              final e = Curves.easeOut.transform(p);
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  Opacity(
+                    opacity: _started ? 0.9 * (1 - e) : 0,
+                    child: Transform.scale(
+                      scale: 0.4 + 1.0 * e,
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: c.lime, width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(color: c.lime, shape: BoxShape.circle),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: 2),
+        Text(
+          '새 소식',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.loginInk),
+        ),
+      ],
     );
   }
 }
@@ -592,19 +698,39 @@ class _UpcomingRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(color: urgent ? c.urgentSoft : c.chip, shape: BoxShape.circle),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(weekdayName(day), style: TextStyle(fontSize: 11, height: 1.1, color: fg)),
-                  Text(
-                    '${day.day}',
-                    style: TextStyle(fontSize: 16, height: 1.1, fontWeight: FontWeight.w700, color: fg),
-                  ),
-                ],
+            // 날짜 블록: 위 칸에 월, 아래에 큰 날짜. 7일 안이면 빨강. 줄 글자에 D-day가 있어 화면 읽기에서는 뺀다.
+            ExcludeSemantics(
+              child: Container(
+                width: 44,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(color: c.neutral, borderRadius: BorderRadius.circular(12)),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      color: urgent ? c.urgentSoft : c.chip,
+                      alignment: Alignment.center,
+                      child: Text(
+                        '${day.month}월',
+                        style: TextStyle(fontSize: 11, height: 1.3, fontWeight: FontWeight.w700, color: fg),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(
+                        '${day.day}',
+                        style: TextStyle(
+                          fontSize: 19,
+                          height: 1.2,
+                          fontWeight: FontWeight.w700,
+                          color: urgent ? c.urgent : c.ink,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(width: 12),

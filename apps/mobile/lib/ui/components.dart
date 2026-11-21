@@ -52,6 +52,31 @@ Widget? ddayPill(NoticeSummary n, DateTime today) {
   return Pill(label, tone: left <= 7 ? PillTone.urgent : PillTone.chip);
 }
 
+/// 홈 공고 카드의 조건 상태: 글자 칩 대신 지름 26 원 아이콘. 색은 [Pill]과 같은 톤
+/// (충족 chip·onChip, 확인 필요 checkSoft·check, 미충족 urgentSoft·urgent).
+class EligibilityDot extends StatelessWidget {
+  const EligibilityDot(this.status, {super.key});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final (background, foreground, icon, label) = switch (status) {
+      'met' => (c.chip, c.onChip, Icons.check_rounded, '조건 충족'),
+      'not_met' => (c.urgentSoft, c.urgent, Icons.close_rounded, '조건 미충족'),
+      _ => (c.checkSoft, c.check, Icons.question_mark_rounded, '확인 필요'),
+    };
+    return Container(
+      width: 26,
+      height: 26,
+      decoration: BoxDecoration(color: background, shape: BoxShape.circle),
+      alignment: Alignment.center,
+      child: Icon(icon, size: 17, weight: 700, color: foreground, semanticLabel: label),
+    );
+  }
+}
+
 /// 목록의 조건 상태 칩. 확인 필요는 대부분의 공고에 붙으므로 회색으로 차분하게 (D-009).
 Widget eligibilityPill(String status) => switch (status) {
   'met' => Pill(eligibilityShort(status)),
@@ -253,16 +278,21 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: context.gw.ink, letterSpacing: -0.5),
-          ),
-        ),
-        ?trailing,
-      ],
+    final title = Text(
+      text,
+      style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: context.gw.ink, letterSpacing: -0.5),
+    );
+    if (trailing == null) return Row(children: [Expanded(child: title)]);
+    // 큰 글꼴에서 제목과 오른쪽 글이 한 줄에 안 들어가면 오른쪽 글을 아랫줄로 보낸다.
+    // Row + Expanded면 제목 칸이 좁아져 '다가오는 마/감'처럼 어절 중간에서 끊긴다.
+    return SizedBox(
+      width: double.infinity,
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        runSpacing: 2,
+        children: [title, trailing!],
+      ),
     );
   }
 }

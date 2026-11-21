@@ -15,6 +15,7 @@ class Briefing {
     this.career = const [],
     this.changed = const [],
     this.majorPick,
+    this.urgentIds = const {},
   });
 
   /// 저장한 모집 중 공고 중 확정 마감이 이틀 안에 오는 것 (가까운 순)
@@ -35,6 +36,19 @@ class Briefing {
   /// 학과 통계로만 고른 7일 안 마감 공고 하나 (D-021). 고른 분야와 관련된 마감 임박과 따로, 안내 표시와 함께 보인다.
   final RecommendationEntry? majorPick;
 
+  /// 7일 안에 마감되는 후보 공고 ID (맞춤 추천이면 관련 공고 중에서). 홈 카드의 '마감 임박' 수가 이 크기다.
+  /// [urgent]는 이 중 가장 가까운 하나만 담는다.
+  final Set<String> urgentIds;
+
+  /// 저장 공고 마감 변경만 전할 소식인지 (홈 카드 제목이 달라진다)
+  bool get onlyChanged =>
+      changed.isNotEmpty &&
+      urgentIds.isEmpty &&
+      savedSoon.isEmpty &&
+      fresh.isEmpty &&
+      career.isEmpty &&
+      majorPick == null;
+
   int get count => [
     savedSoon.isNotEmpty,
     urgent != null,
@@ -47,6 +61,37 @@ class Briefing {
   /// 전할 소식이 없으면 브리핑을 띄우지 않는다.
   bool get isEmpty => count == 0;
 }
+
+/// 겹치지 않는 공고 수: 같은 공고가 여러 소식에 들어 있어도 한 건으로 센다.
+/// 저장 공고 곧 마감, 7일 안 마감 후보, 새 공고, 진로 관련, 졸업생 진로 추천, 마감 변경의 공고 ID 합집합.
+int distinctNoticeCount(Briefing b) => {
+  for (final s in b.savedSoon) s.notice.noticeId,
+  ...b.urgentIds,
+  for (final e in b.fresh) e.notice.noticeId,
+  for (final e in b.career) e.notice.noticeId,
+  if (b.majorPick case final m?) m.notice.noticeId,
+  for (final s in b.changed) s.notice.noticeId,
+}.length;
+
+/// 홈 카드·브리핑 머리의 숫자 칸 종류. 선언 순서가 우선순위다.
+enum BriefingStatKind { urgent, savedSoon, fresh, career, changed }
+
+/// 숫자 칸: 우선순위대로 0건이 아닌 것만 최대 [maxBriefingStats]칸. 졸업생 진로 추천은 칸에 넣지 않는다.
+List<({BriefingStatKind kind, int count})> briefingStats(Briefing b) {
+  final all = [
+    (kind: BriefingStatKind.urgent, count: b.urgentIds.length),
+    (kind: BriefingStatKind.savedSoon, count: b.savedSoon.length),
+    (kind: BriefingStatKind.fresh, count: b.fresh.length),
+    (kind: BriefingStatKind.career, count: b.career.length),
+    (kind: BriefingStatKind.changed, count: b.changed.length),
+  ];
+  return [
+    for (final s in all)
+      if (s.count > 0) s,
+  ].take(maxBriefingStats).toList();
+}
+
+const maxBriefingStats = 3;
 
 const urgentDays = 7;
 
@@ -103,7 +148,10 @@ Briefing buildBriefing(
 
   RecommendationEntry? urgent;
   int? nearest;
+  final urgentIds = <String>{};
   for (final e in deadlineCandidates(list)) {
+    final within = daysLeft(e.notice, today);
+    if (within != null && within <= urgentDays) urgentIds.add(e.notice.noticeId);
     if (soonIds.contains(e.notice.noticeId)) continue;
     final left = daysLeft(e.notice, today);
     if (left != null && left <= urgentDays && (nearest == null || left < nearest)) {
@@ -153,6 +201,7 @@ Briefing buildBriefing(
     fresh: fresh,
     career: career,
     majorPick: majorPick,
+    urgentIds: urgentIds,
     changed: [
       for (final s in saved)
         if (s.deadlineChanged && s.notice.lifecycleStatus == 'open') s,

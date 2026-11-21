@@ -542,8 +542,13 @@ void main() {
     expect(find.text('D-13 · 17:00 마감 · 행사'), findsOneWidget); // 다가오는 마감: 남은 날·시각이 앞
     expect(findText('행사 · 10월 30일 17:00 마감 · D-13'), findsOneWidget); // 카드 첫 줄: 분류 옆 마감, 7일 넘게 남으면 칩 없이
     expect(find.text('D-13'), findsNothing);
-    expect(find.text('오늘 확인할 공고'), findsOneWidget); // 소식 종류 수는 세지 않는다
-    expect(find.text('브리핑 자세히 보기'), findsOneWidget);
+    expect(find.text('오늘 확인할'), findsOneWidget); // 라임 면 + ' 공고 N건'(겹치지 않는 수)
+    expect(
+      find.byWidgetPredicate((w) => w is Text && RegExp(r'^￼ 공고 \d+건$').hasMatch((w.textSpan?.toPlainText() ?? '').replaceAll('\u2060', '').replaceAll('\u00A0', ' '))),
+      findsOneWidget,
+    );
+    expect(find.text('브리핑 다시 보기'), findsOneWidget); // 이 장면의 저장소는 이미 열었다고 답한다
+    expect(find.text('새 소식'), findsNothing);
     expect(find.text('맞춤 공고 7건'), findsNothing); // 홈 숫자를 다시 세는 배지는 없앴다 (D-018)
     expect(find.textContaining('0건'), findsNothing); // 0건인 칸은 숨긴다
     expect(find.text('맞춤 공고 · 앞으로 2주'), findsOneWidget);
@@ -808,7 +813,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('졸업생 진로 추천'), findsNWidgets(2)); // 머리 배지와 카드 표시
+    expect(find.text('졸업생 진로 추천'), findsOneWidget); // 카드 표시만 (머리 숫자 칸에는 넣지 않는다)
     expect(findTextContaining('같은 학과 졸업생이 많이 가는 분야'), findsOneWidget);
     // 아래 고정 버튼에 가리지 않게 끝까지 올린다
     await tester.drag(find.byType(ListView), const Offset(0, -2000));
@@ -834,7 +839,7 @@ void main() {
     await tester.tap(find.text('확인'));
     await tester.pumpAndSettle();
     expect(find.text('다가오는 마감'), findsOneWidget);
-    expect(find.text('오늘의 귀띔'), findsOneWidget);
+    expect(find.text('브리핑 다시 보기'), findsOneWidget); // 열었으니 카드는 '다시 보기'
 
     await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(
