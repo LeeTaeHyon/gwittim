@@ -146,3 +146,65 @@ def test_logs_have_no_prompt_or_key(monkeypatch, caplog):
     assert "provider=api" in text and "success=True" in text and "success=False" in text
     for secret in (SECRET_KEY, PROMPT, SYSTEM, "홍길동", REPORT["fit"]):
         assert secret not in text
+
+
+def test_cli_disables_tools_and_runs_in_empty_temp_dir(monkeypatch):
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        import os
+        seen.update(cmd=cmd, cwd=kw.get("cwd"), files=os.listdir(kw["cwd"]))
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(REPORT), stderr="")
+
+    monkeypatch.setattr(llm.shutil, "which", lambda n: "/bin/claude")
+    monkeypatch.setattr(llm.subprocess, "run", fake_run)
+    llm.get_provider("cli", env={}).generate(SYSTEM, PROMPT)
+    cmd = seen["cmd"]
+    i = cmd.index("--tools")
+    assert cmd[i + 1] == ""  # 도구 전부 끔
+    for flag in ("--strict-mcp-config", "--disable-slash-commands", "--no-session-persistence"):
+        assert flag in cmd
+    assert "gwittim-llm-" in seen["cwd"] and seen["files"] == []  # 빈 임시 폴더
+    import os
+    assert not os.path.exists(seen["cwd"])  # 끝나면 지움
+
+
+def test_cli_refused_when_k_service_present_even_empty():
+    with pytest.raises(llm.ProviderRefused):
+        llm.get_provider("cli", env={"K_SERVICE": ""})
+
+
+def test_check_startup_blocks_cli_on_cloud_run():
+    env = {"GWITTIM_LLM_PROVIDER": "cli", "K_SERVICE": "gwittim-api"}
+    with pytest.raises(llm.ProviderRefused):
+        llm.check_startup(env)
+    assert llm.check_startup({"GWITTIM_LLM_PROVIDER": "cli"}) == "cli"
+    assert llm.check_startup({}) == "fake"
+
+
+def test_log_has_spec_fields_notice_id_and_cost(monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
+    mock_urlopen(monkeypatch, json.dumps(REPORT, ensure_ascii=False))  # 토큰 11, 22
+    llm.generate_report(SYSTEM, PROMPT, api_provider(), notice_id="mjc.www.12345")
+    text = caplog.text
+    assert "notice_id=mjc.www.12345" in text
+    assert "requested_at=" in text and "+00:00" in text
+    assert "input_tokens=11 output_tokens=22" in text
+    assert f"cost_krw={llm.estimate_cost_krw(11, 22)}" in text and "success=True" in text
+
+
+def test_estimate_cost_krw():
+    # (1,000,000 x 0.10 + 1,000,000 x 0.50) / 1,000,000 USD x 1,400원
+    assert llm.estimate_cost_krw(1_000_000, 1_000_000) == 840.0
+    assert llm.estimate_cost_krw(None, 22) is None  # 토큰 수 모르면 추정하지 않음
+
+
+def test_api_incomplete_read_is_call_error(monkeypatch):
+    import http.client
+
+    def fake(req, timeout=None):
+        raise http.client.IncompleteRead(b"partial")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    with pytest.raises(llm.ProviderCallError):
+        api_provider().generate(SYSTEM, PROMPT)
