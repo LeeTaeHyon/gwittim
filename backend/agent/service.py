@@ -9,6 +9,7 @@ FastAPI와 분리한 순수 흐름이다. 실패는 AgentError(code)로 알리�
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -25,6 +26,27 @@ if TYPE_CHECKING:
     from backend.api.deps import Deps, ReportStore
 
 log = logging.getLogger("gwittim.agent.service")
+
+CAP_ENV = "GWITTIM_LLM_MONTHLY_CAP_KRW"
+DEFAULT_CAP_KRW = 30000.0  # D-039
+
+
+def monthly_cap_krw() -> float:
+    try:
+        cap = float(os.environ.get(CAP_ENV, ""))
+    except ValueError:
+        return DEFAULT_CAP_KRW
+    return cap if cap >= 0 else DEFAULT_CAP_KRW
+
+
+def _add_spend(deps: Deps, month: str, krw: float | None) -> None:
+    """비용을 모르면(None) 0. 누적 실패가 사용자 응답을 막지 않게 한다."""
+    if not krw or krw <= 0:
+        return
+    try:
+        deps.spend.add(month, krw)
+    except Exception as exc:
+        log.warning("spend add failed error=%s", type(exc).__name__)
 
 
 class AgentError(Exception):
@@ -68,6 +90,11 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
     key = cache_key(notice_id, payload)
     stored = _live(deps.reports.get_by_key(uid, key), now)
 
+    month = deps.month_kst()
+    # 월 상한: 새 LLM 호출이 필요할 때만 막는다. 저장본 재사용은 상한과 무관. 크레딧을 잡기 전에 본다
+    if stored is None and deps.spend.get(month) >= monthly_cap_krw():
+        raise AgentError("unavailable")
+
     def do_reserve(state):
         result = reserve(state or signup(now), DETAIL_ANALYSIS, request_id, now)
         return result.state, result.status
@@ -93,11 +120,14 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
         finish(True)
         return _response(stored, True)
 
+    spent = False
     try:
         system, user = build_messages(
             notice, payload, evaluate(notice["eligibility"], profile), deps.today_kst(),
         )
         result = generate_report(system, user, provider=deps.llm, notice_id=notice_id)
+        _add_spend(deps, month, result.usage.cost_krw)
+        spent = True
         doc = {
             "notice_id": notice_id,
             "key": key,
@@ -109,6 +139,9 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
         deps.reports.put(uid, doc)
     except Exception as exc:  # LLM 실패·저장 실패 모두 환불. 원문은 로그에 남기지 않는다
         log.warning("analysis failed notice_id=%s error=%s", notice_id, type(exc).__name__)
+        usage = getattr(exc, "usage", None)  # 실패한 호출도 토큰이 있으면 비용이 든 것으로 센다
+        if not spent and usage is not None:
+            _add_spend(deps, month, usage.cost_krw)
         finish(False)
         raise AgentError("unavailable") from None
     finish(True)
