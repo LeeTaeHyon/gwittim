@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/analysis_request.schema.json",
+  "title": "request_detail_analysis 요청 — 상세 분석",
+  "description": "칩 값은 요청이 끝나면 버리며 서버에 저장하지 않음. 자유 입력 글을 받는 칸은 없음. 코드는 experience_chips·period_chips·region_chips 사전의 값이며, 서버는 사전에 없는 값을 오류 없이 무시함(스키마는 코드 형식만 확인하고 사전 일치는 의미 검증). 사용자 ID는 인증 정보에서 얻음. docs/agent-privacy-spec.md §2.2·§5.2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "notice_id",
+    "request_id",
+    "chips"
+  ],
+  "properties": {
+    "notice_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "재시도 안전을 위한 요청 식별자. 같은 id로 두 번 차감하지 않음(§10.3)."
+    },
+    "chips": {
+      "description": "모두 선택. '건너뛰고 분석'은 빈 객체.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "experience": {
+          "description": "해 본 것(여러 개). none_yet는 단독 선택.",
+          "$ref": "common.schema.json#/$defs/code_list",
+          "if": {
+            "contains": {
+              "const": "none_yet"
+            }
+          },
+          "then": {
+            "maxItems": 1
+          }
+        },
+        "period": {
+          "description": "가능한 시기. 하나만 선택하므로 배열이 아닌 코드 하나.",
+          "$ref": "common.schema.json#/$defs/code"
+        },
+        "regions": {
+          "description": "갈 수 있는 지역(여러 개). any는 단독 선택.",
+          "$ref": "common.schema.json#/$defs/code_list",
+          "if": {
+            "contains": {
+              "const": "any"
+            }
+          },
+          "then": {
+            "maxItems": 1
+          }
+        }
+      }
+    }
+  }
+}

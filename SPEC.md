@@ -143,7 +143,7 @@ P0 자동 비교 지원 필드는 university_id, major_id, grade, enrollment_sta
 
 ### UserProfile — 사용자 입력
 
-university_id, major_id, grade, enrollment_status, interest_ids, target_role_ids, updated_at.
+university_id, major_id, grade, enrollment_status, interest_ids, target_role_ids, updated_at, 선택: agent_consent.
 
 - 학교·학과·상태·관심사·직무는 공통 선택 사전(`contracts/dictionaries/`)을 사용한다. 코드는 학교 접두사를 붙인 불투명 ID다(예: `mjc`, `mjc.computer_engineering`).
 - grade는 1~4 정수, enrollment_status는 enrolled / on_leave / graduated.
@@ -151,6 +151,7 @@ university_id, major_id, grade, enrollment_status, interest_ids, target_role_ids
 - 관심사·희망 직무는 각각 최대 5개까지 고른다. 앱은 3개를 넘으면 '3개 이하일 때 추천이 더 정확합니다.'라고 안내한다. 점수는 하나라도 겹치면 1이라 많이 고를수록 덜 원하는 분야 공고가 같은 점수로 섞인다(D-031).
 - 성적·소득·주민등록번호·학생증은 수집하지 않는다.
 - 사용자 ID는 인증 정보에서 얻는다. 요청 본문의 사용자 ID를 신뢰하지 않는다.
+- agent_consent(선택): `{version, agreed_at}`. AI 상세 분석의 외부 AI 전송 첫 사용 동의 기록이다. 없으면 동의하지 않은 것이다. 동의 문구가 바뀌면 version을 올리고 다시 묻는다. 탈퇴 때까지 프로필과 함께 보관한다(`docs/agent-privacy-spec.md` §4·§5.1).
 
 ### RecommendationItem — 추천 출력
 
@@ -167,6 +168,38 @@ notice_id, notice_version, score, eligibility_status, condition_results, reason_
 notice_id, saved_at, saved_notice_version, saved_deadline_snapshot(저장 당시 application_deadline 복사본 또는 null).
 
 저장 목록은 최신 Notice와 연결한다. 저장 당시 정보는 변경 안내용이며 최신 마감일을 덮어쓰는 근거가 아니다.
+
+### 상세 분석 칩 사전 — experience_chips, period_chips, region_chips
+
+요청 때만 묻는 세 질문의 선택지다(`docs/agent-privacy-spec.md` §2.2). 모두 선택 질문이며 자유 입력은 없다. 코드는 영어 snake_case, 이름은 한국어이며 `contracts/dictionaries/`에 `draft`로 둔다.
+
+- 해 본 것(experience_chips): 여러 개 선택. `none_yet`(아직 없음)은 단독 선택이다.
+- 가능한 시기(period_chips): 하나만 선택. `semester`, `vacation`, `any`.
+- 갈 수 있는 지역(region_chips): 여러 개 선택. `any`(상관없음)는 단독 선택이다.
+- 서버는 사전에 없는 값을 오류 없이 무시한다. 칩 값은 요청이 끝나면 버리며 서버에 저장하지 않는다.
+
+### AnalysisRequest — 상세 분석 요청
+
+notice_id, request_id, chips(experience, period, regions. 모두 선택, 건너뛰면 빈 객체).
+
+- request_id는 재시도 안전 식별자다. 같은 id로 두 번 차감하지 않는다.
+- 사용자 ID·이름·이메일·자유 입력 글을 받는 칸은 없다.
+
+### AnalysisResponse — 상세 분석 응답
+
+notice_id, report, expires_at, from_cache.
+
+- report는 fit(나에게 맞는 점·안 맞는 점), eligibility(지원 자격), todo(지원 전 할 일), skills(필요한 역량) 네 칸이며 모두 필수 문자열이다. 지원 자격은 이미 계산된 조건 판정과 다르게 말하지 않는다.
+- expires_at은 저장본 삭제 기준 시각이다(마감일 + 30일, 마감일 `null`이면 생성 후 60일).
+- from_cache가 true이면 저장본이며 LLM을 새로 부르지 않은 응답이다.
+
+### Credits — 크레딧 잔액·사용 내역
+
+balance(0~5), next_refill_at(다음 충전 시각, 최대 보유면 `null`), entries(kind, amount, at, ref).
+
+- kind는 signup(+5) / daily(+1) / detail_analysis(−1) / external_search(−2)이고 amount는 충전이 +, 사용이 −다. ref는 사용 내역이 가리키는 id(상세 분석은 공고 id)이며 충전 내역은 `null`이다.
+- 내역은 최근 90일, 최신순이다. 실패해서 차감하지 않은 요청은 넣지 않는다.
+- 잔액은 서버만 쓰고 앱은 읽기만 한다(`docs/agent-privacy-spec.md` §10).
 
 ## 6. 처리 규칙
 
@@ -226,9 +259,14 @@ notice_id, saved_at, saved_notice_version, saved_deadline_snapshot(저장 당시
 | delete_saved_notice | 인증 사용자, notice_id | 삭제 결과. 반복 요청 안전 |
 | list_saved_notices | 인증 사용자, cursor | SavedNotice + 최신 공고 상태 |
 | delete_account_data | 인증 사용자 | 삭제 결과. 프로필·저장을 지우고 공개 공고는 유지. 반복 요청 안전 (D-024) |
+| request_detail_analysis | 인증 사용자, AnalysisRequest | AnalysisResponse. 동의가 없으면 consent_required, 크레딧이 모자라면 insufficient_credits, 같은 요청 id가 진행 중이면 request_in_progress. 성공해야 차감하고 실패는 돌려준다 |
+| get_detail_analysis | 인증 사용자, notice_id | 받은 분석(AnalysisResponse, from_cache=true) 또는 not_found. 크레딧 차감 없음 |
+| get_credits | 인증 사용자 | Credits |
 | ingest_kakao | 수집 토큰(사용자 로그인과 별개), 방·발송 분·가린 본문·폰 분류 | 저장 여부. 공통 공지가 아니면 저장하지 않음. 같은 알림은 한 건. 토큰이 설정되지 않은 서버에서는 not_found (D-036) |
 
-인증 실패·권한 없음·입력 오류·미존재·일시 장애를 구분한다. 오류 응답은 `{error: {code, message}}`이고 code는 unauthenticated / permission_denied / invalid_argument / not_found / unavailable이다. 목록 응답은 items, next_cursor(불투명 문자열 또는 null), generated_at을 가지며 limit은 최대 50이다. 앱에 스택 추적·비밀키를 반환하지 않는다. 추천 페이지 이동 중 중복·누락을 줄이도록 초기에는 소량 결과를 한 번에 받아 표시해도 된다.
+인증 실패·권한 없음·입력 오류·미존재·일시 장애를 구분한다. 오류 응답은 `{error: {code, message}}`이고 code는 unauthenticated / permission_denied / invalid_argument / not_found / unavailable이고, 상세 분석 경로에서는 insufficient_credits / request_in_progress / consent_required도 쓴다. 목록 응답은 items, next_cursor(불투명 문자열 또는 null), generated_at을 가지며 limit은 최대 50이다. 앱에 스택 추적·비밀키를 반환하지 않는다. 추천 페이지 이동 중 중복·누락을 줄이도록 초기에는 소량 결과를 한 번에 받아 표시해도 된다.
+
+상세 분석·크레딧의 HTTP 경로 제안(미확정, 기존 `/v1/...` 이름 규칙): `POST /v1/analysis`(request_detail_analysis), `GET /v1/analysis/{notice_id}`(get_detail_analysis), `GET /v1/credits`(get_credits). 동의 기록은 `PUT /v1/profile`의 agent_consent로 보낸다.
 
 앱 데이터 접근은 Repository 인터페이스로 감싼다. 샘플 구현과 실제 구현을 교체할 수 있어야 한다. UI에 추천 점수 계산을 중복 구현하지 않는다.
 

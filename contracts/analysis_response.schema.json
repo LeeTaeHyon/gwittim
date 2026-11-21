@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/analysis_response.schema.json",
+  "title": "상세 분석 응답 — 리포트",
+  "description": "리포트 4칸(나에게 맞는 점·안 맞는 점 / 지원 자격 / 지원 전 할 일 / 필요한 역량)은 모두 필수 문자열. 지원 자격 칸은 이미 계산된 조건 판정과 다르게 말하지 않음(D-039). expires_at은 저장본 삭제 기준 시각. docs/agent-privacy-spec.md §4·§11.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "notice_id",
+    "report",
+    "expires_at",
+    "from_cache"
+  ],
+  "properties": {
+    "notice_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fit",
+        "eligibility",
+        "todo",
+        "skills"
+      ],
+      "properties": {
+        "fit": {
+          "type": "string",
+          "minLength": 1,
+          "description": "나에게 맞는 점·안 맞는 점"
+        },
+        "eligibility": {
+          "type": "string",
+          "minLength": 1,
+          "description": "지원 자격"
+        },
+        "todo": {
+          "type": "string",
+          "minLength": 1,
+          "description": "지원 전 할 일"
+        },
+        "skills": {
+          "type": "string",
+          "minLength": 1,
+          "description": "필요한 역량"
+        }
+      }
+    },
+    "expires_at": {
+      "$ref": "common.schema.json#/$defs/utc_timestamp"
+    },
+    "from_cache": {
+      "type": "boolean",
+      "description": "true면 저장본이며 LLM을 새로 부르지 않은 응답."
+    }
+  }
+}

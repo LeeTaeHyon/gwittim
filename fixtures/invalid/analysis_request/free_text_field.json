@@ -1,0 +1,13 @@
+{
+  "_expect": {
+    "keyword": "additionalProperties",
+    "path": "chips"
+  },
+  "data": {
+    "notice_id": "synthetic-notice-001",
+    "request_id": "synthetic-req-0001",
+    "chips": {
+      "free_text": "합성 자기소개"
+    }
+  }
+}

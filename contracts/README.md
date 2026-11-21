@@ -7,12 +7,15 @@ SPEC §5·§7의 필드 의미를 JSON Schema(Draft 2020-12)로 고정합니다.
 | `common.schema.json` | 날짜 객체, 조건, eligibility, 첨부, 공고 요약 등 공통 정의 |
 | `raw_notice.schema.json` | 수집기 출력 |
 | `notice.schema.json` | 앱이 사용하는 공고 |
-| `user_profile.schema.json` | 사용자 프로필 |
+| `user_profile.schema.json` | 사용자 프로필 (선택 필드 `agent_consent`: AI 전송 동의 기록) |
 | `recommendation_item.schema.json` | 추천 항목 |
 | `recommendation_list_response.schema.json` | `list_recommendations` 응답 (`mode`) |
 | `saved_notice.schema.json`, `saved_notice_list_response.schema.json` | 저장, 저장 목록 응답 |
+| `analysis_request.schema.json` | 상세 분석 요청 (칩) |
+| `analysis_response.schema.json` | 상세 분석 응답 (리포트 4칸) |
+| `credits.schema.json` | 크레딧 잔액·사용 내역 |
 | `api_error.schema.json` | API 오류 응답 |
-| `dictionary.schema.json`, `dictionaries/*.json` | 공통 사전 (모두 `draft`) |
+| `dictionary.schema.json`, `dictionaries/*.json` | 공통 사전 (모두 `draft`). 칩 사전 `experience_chips`·`period_chips`·`region_chips` 포함 |
 
 ## 검증
 

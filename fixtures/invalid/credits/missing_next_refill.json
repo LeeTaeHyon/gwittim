@@ -1,0 +1,10 @@
+{
+  "_expect": {
+    "keyword": "required",
+    "path": ""
+  },
+  "data": {
+    "balance": 3,
+    "entries": []
+  }
+}
