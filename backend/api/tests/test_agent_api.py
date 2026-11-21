@@ -1,7 +1,7 @@
 """AI 상세 분석·크레딧 API (P7a). 제공자는 fake/가짜만 쓰고 실제 LLM은 부르지 않는다."""
 import json
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -270,7 +270,8 @@ def test_prompt_has_no_identity(client, provider):
 def test_build_messages_passes_rule_verdict():
     notice = fixture("notice/explicitly_unrestricted.json")
     verdict = ("not_met", [{"field": "grade", "status": "not_met", "evidence": "3학년", "unknown_reason": None}])
-    system, user = build_messages(notice, {"grade": 2}, verdict)
+    system, user = build_messages(notice, {"grade": 2}, verdict, date(2026, 11, 21))
+    assert '"today": "2026-11-21"' in user
     assert json.loads(user)["notice"]["eligibility_check"]["status"] == "not_met"
     assert "해요체는 쓰지 않습니다" in system
 

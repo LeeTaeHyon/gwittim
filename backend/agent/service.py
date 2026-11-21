@@ -94,7 +94,9 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
         return _response(stored, True)
 
     try:
-        system, user = build_messages(notice, payload, evaluate(notice["eligibility"], profile))
+        system, user = build_messages(
+            notice, payload, evaluate(notice["eligibility"], profile), deps.today_kst(),
+        )
         result = generate_report(system, user, provider=deps.llm, notice_id=notice_id)
         doc = {
             "notice_id": notice_id,
