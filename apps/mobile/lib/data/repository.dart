@@ -109,7 +109,16 @@ class AssetDictionaries {
   final AssetBundle _bundle;
   final Map<String, List<DictionaryItem>> _cache = {};
 
-  static const names = ['categories', 'majors', 'interests', 'roles', 'universities'];
+  static const names = [
+    'categories',
+    'majors',
+    'interests',
+    'roles',
+    'universities',
+    'experience_chips',
+    'period_chips',
+    'region_chips',
+  ];
 
   Future<void> preload() async {
     for (final name in names) {

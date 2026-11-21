@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../data/models.dart';
 import '../data/repository.dart';
+import 'agent_data.dart';
+import 'agent_flow.dart';
 import 'briefing_data.dart';
 import 'common.dart';
 import 'components.dart';
+import 'credits_screen.dart';
 import 'format.dart';
 import 'icons.dart';
 import 'skeleton.dart';
@@ -156,6 +159,7 @@ class ReportScreen extends StatefulWidget {
     required this.openUrl,
     this.recommendation,
     this.today,
+    this.agentStore,
   });
 
   final NoticeRepository repository;
@@ -165,6 +169,9 @@ class ReportScreen extends StatefulWidget {
   /// 추천 목록에서 들어오면 조건 판정과 추천 이유를 함께 보인다.
   final Recommendation? recommendation;
   final DateTime? today;
+
+  /// 상세 분석 질문의 '다음에도 이대로' 저장소. 없으면 기기 저장소를 쓴다.
+  final AgentChipStore? agentStore;
 
   @override
   State<ReportScreen> createState() => _ReportScreenState();
@@ -178,10 +185,80 @@ class _ReportScreenState extends State<ReportScreen> {
   Map<String, Map<String, String>> _names = const {};
   Map<String, String> _categories = const {};
 
+  // AI 상세 분석 (명세 §11): 크레딧 잔액과 받은 분석에 따라 버튼 모양이 달라진다.
+  Credits? _credits;
+  AnalysisResponse? _analysis;
+  bool _agentLoaded = false;
+  bool _agentBusy = false;
+  late final AgentChipStore _agentStore = widget.agentStore ?? PrefsAgentChipStore();
+
   @override
   void initState() {
     super.initState();
     _loadExtras();
+    _refreshAgent();
+  }
+
+  /// 크레딧과 받은 분석을 다시 읽는다. 읽지 못하면 이전 값을 두고, 버튼은 서버가 확인하게 둔다.
+  Future<void> _refreshAgent() async {
+    final repo = widget.repository;
+    var credits = _credits;
+    var analysis = _analysis;
+    await Future.wait([
+      () async {
+        try {
+          credits = await repo.getCredits();
+        } catch (_) {}
+      }(),
+      () async {
+        try {
+          analysis = await repo.getAnalysis(widget.noticeId);
+        } catch (_) {}
+      }(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _credits = credits;
+      _analysis = analysis;
+      _agentLoaded = true;
+    });
+  }
+
+  Future<void> _startAnalysis(Notice notice) async {
+    if (_agentBusy) return;
+    _agentBusy = true;
+    try {
+      final done = await runAnalysisFlow(
+        context,
+        repository: widget.repository,
+        store: _agentStore,
+        noticeId: widget.noticeId,
+        title: notice.summary.title,
+      );
+      await _refreshAgent();
+      if (done == null || !mounted) return;
+      await _openAnalysis(notice, done.response, skippedExperience: done.chips.experience.isEmpty);
+    } finally {
+      _agentBusy = false;
+    }
+  }
+
+  Future<void> _openAnalysis(Notice notice, AnalysisResponse response, {bool skippedExperience = false}) =>
+      Navigator.of(context).push(
+        gwRoute(
+          context,
+          (_) => AnalysisReportScreen(
+            response: response,
+            title: notice.summary.title,
+            receivedAt: _credits?.analysisReceivedAt(widget.noticeId),
+            skippedExperience: skippedExperience,
+          ),
+        ),
+      );
+
+  Future<void> _openCredits() async {
+    await Navigator.of(context).push(gwRoute(context, (_) => CreditsScreen(repository: widget.repository)));
+    if (mounted) _refreshAgent();
   }
 
   Future<void> _loadExtras() async {
@@ -368,6 +445,15 @@ class _ReportScreenState extends State<ReportScreen> {
                 rows: checklistRows(notice, rec, _profileValue),
                 status: rec?.eligibilityStatus,
                 notice: notice,
+              ),
+              AnalysisAction(
+                loaded: _agentLoaded,
+                credits: _credits,
+                analysis: _analysis,
+                receivedAt: _credits?.analysisReceivedAt(widget.noticeId),
+                onStart: () => _startAnalysis(notice),
+                onOpenResult: () => _openAnalysis(notice, _analysis!),
+                onOpenCredits: _openCredits,
               ),
               if (rec != null) _Reasons(recommendation: rec),
               _Schedule(notice: notice, today: today),
