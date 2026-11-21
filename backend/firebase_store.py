@@ -207,6 +207,9 @@ class FirestoreSink(_Base):
     def delete_public(self, notice_id):
         self.db.collection(NOTICES).document(notice_id).delete()
 
+    def touch_public(self, notice_id, fields):
+        self.db.collection(NOTICES).document(notice_id).update(fields)
+
     def put_review(self, notice, issues):
         self.db.collection(REVIEW_QUEUE).document(notice["notice_id"]).set({"notice": notice, "issues": issues})
 

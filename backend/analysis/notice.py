@@ -124,7 +124,9 @@ def build_notice(
     analyzer = analyzer or RuleBasedAnalyzer()
     raw = record.raw
     if previous and previous["notice_version"] == record.notice_version and previous["analysis_version"] == analyzer.version:
-        reused = dict(previous, last_collected_at=record.last_collected_at, changed_fields=[])
+        # 원문을 이번에도 확인했으면 확인 시각은 새로 둔다 (D-006 오래된 정보 표시)
+        reused = dict(previous, last_collected_at=record.last_collected_at,
+                      last_verified_at=record.last_collected_at, changed_fields=[])
         reused["lifecycle_status"] = "removed" if record.removed else _lifecycle(reused, today)
         if reused["lifecycle_status"] != previous["lifecycle_status"]:
             reused["changed_fields"] = ["lifecycle_status"]
@@ -155,7 +157,7 @@ def build_notice(
         "notice_version": record.notice_version,
         "analysis_version": version,
         "last_collected_at": record.last_collected_at,
-        "last_verified_at": raw["collected_at"],
+        "last_verified_at": record.last_collected_at,  # 원문이 그대로면 raw는 처음 받은 것이라 수집 시각이 옛날이다
         "changed_fields": [],
     }
     if "apply_url" in fields:  # 알림톡만 (D-025)
