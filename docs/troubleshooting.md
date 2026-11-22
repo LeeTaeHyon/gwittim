@@ -21,6 +21,7 @@
 | `uv run` 아래에서 Codex CLI가 '액세스가 거부되었습니다'로 실패 | .venv 파이썬 환경과 Codex 앱 서버 충돌 | `tools/llm_compare.py`는 시스템 파이썬(`C:\Python314\python.exe`)으로 실행 |
 | `uv run`(.venv 파이썬)에서 부른 opencode가 `FileSystem.open (...opencode.log)`로 실패 | .venv 파이썬 실행기 아래에서만 생김. 환경변수·샌드박스와 무관(같은 명령이 셸·바탕 파이썬에서는 됨) | 바탕 파이썬 + `PYTHONPATH=.venv/Lib/site-packages`로 실행 (예: `C:/AI/Anime-Llasa/Python312/python.exe tools/llm_board_read.py ...`) |
 | opencode에 공고 페이지를 넘길 때 페이지 속 문장이 도구(파일 읽기·명령)를 쓰게 할 수 있음 | opencode run은 기본으로 도구가 켜진 에이전트 | `OPENCODE_CONFIG_CONTENT`로 `permission: {"*": "deny"}`와 도구 전부 false, 빈 임시 폴더에서 실행. 입력 토큰도 약 12,500 → 3,200으로 줄어듦 |
+| 숭의 `/`가 302(`https://www.sewu.ac.kr:443/index.do`), 명지 `/`가 스크립트로 `mjcIntro.do` 이동 → 요청기가 첫 화면을 못 읽음 | 요청기는 포트가 붙은 주소를 다른 사이트로 보고 리다이렉트를 막고, 스크립트 이동은 따라가지 않음 | `tools/school_terms_check.py`의 학교 표에 첫 화면 경로(`home`)를 직접 둠 (숭의 `/index.do`, 명지 `/mjcIndex.do`) |
 | 사용자 환경변수로 등록한 키가 이미 열린 터미널·세션에서 안 보임 | 환경변수는 새로 연 프로세스부터 적용 | 새 터미널을 열거나, 스크립트에서 레지스트리(`HKCU\Environment`)를 읽어 자식 프로세스에만 넘김. 키 값은 출력하지 않음 |
 
 ## 2. 로컬 서버·실호출 시험
