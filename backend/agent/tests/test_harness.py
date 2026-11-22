@@ -65,3 +65,16 @@ def test_old_format_verdict_is_read_but_format_is_separate():
     quality, form = check(old, 0, 0, "not_met")
     assert quality == []
     assert any("fit: 줄 3개" in f for f in form) and any("eligibility: 첫 줄" in f for f in form)
+
+
+def test_deadline_stretch_and_skill_length_checks():
+    """마감 지남이면 fit 첫 줄이 마감, 학생 선택값 넓힘(방학에만), 칩이 못 되는 긴 역량 줄."""
+    r = {"fit": "맞음: 파이썬 경험과 이어집니다.\n안 맞음: 마감일 2026-11-18이 이미 지났습니다.",
+         "eligibility": "확인 필요: 조건이 불명확합니다.", "todo": "이번 모집은 지원 전에 할 일이 없습니다.",
+         "skills": "제공된 공고 정보에서 요구 역량을 확인하기 어렵습니다."}
+    quality, form = check(r, 0, 0, "needs_check", deadline_passed=True)
+    assert quality == [] and any("첫 줄이 마감이 아님" in f for f in form)
+    assert not any("skills" in f for f in form)  # 안내 문장은 길어도 괜찮음
+    r2 = dict(r, fit="맞음: 방학에만 활동할 수 있어 일정이 겹칩니다.", skills="코딩 경험이 없는 비전공자도 참여할 수 있는 입문")
+    quality, form = check(r2, 0, 0, "needs_check")
+    assert any("넓힘" in q for q in quality) and any("skills: 20자" in f for f in form)

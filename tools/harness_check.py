@@ -40,12 +40,14 @@ PROFILE = {"university_id": "mjc", "major_id": "mjc.computer_engineering", "grad
 CHIPS = {"experience": ["python", "team_project"], "period": "vacation", "regions": ["seoul"]}
 
 PLAIN_ENDING = re.compile(r"(?:한다|이다|있다|없다|된다|않다)[.]")  # 평서형
+STRETCH = re.compile(r"방학에만|학기 중에만|주말에만")  # 학생이 고른 시기를 넓히거나 좁힘
 KEY_ECHO = re.compile(r"참고 사항|조건을 모두 찾았는지|구분이|조건별 결과|원문에서 확인할 조건")
 FIT_TAG = re.compile(r"^(맞음|안 맞음|확인 필요)\s*[:：]")
 VERDICT_LINE = re.compile(r"^(충족|미충족|확인 필요)\s*[:：]")
 # 판정 낱말 읽기: 새 형식 '미충족: …', 예전 형식 '판정: 불충족 …' 둘 다
 VERDICT_WORD = re.compile(r"^(?:판정\s*[:：]\s*)?(충족|미충족|불충족|확인 필요)")
 SERVER_VERDICT = {"met": "충족", "not_met": "미충족", "needs_check": "확인 필요"}
+SKILLS_UNKNOWN = "요구 역량을 확인하기 어렵습니다"
 MAX_LINES = {"fit": 2, "eligibility": 3, "todo": 2, "skills": 4}  # 지금 지침의 칸별 줄 수
 
 
@@ -58,7 +60,8 @@ def report_verdict(report: dict) -> str | None:
     return "미충족" if m.group(1) == "불충족" else m.group(1)
 
 
-def check(report: dict, scrubbed: int, split: int, verdict: str | None = None) -> tuple[list[str], list[str]]:
+def check(report: dict, scrubbed: int, split: int, verdict: str | None = None,
+          deadline_passed: bool = False) -> tuple[list[str], list[str]]:
     """(품질 오류, 형식 점검).
 
     - 품질 오류: 지침이 바뀌어도 늘 지켜야 하는 것. 서버 판정과 리포트 판정 일치, 영어 코드, 평서형, 입력 칸 이름 옮김,
@@ -80,8 +83,10 @@ def check(report: dict, scrubbed: int, split: int, verdict: str | None = None) -
         quality.append("평서형(~한다)")
     if KEY_ECHO.search(text):
         quality.append("입력 칸 이름 옮김")
-    if verdict == "not_met" and "지원서" in str(report.get("todo", "")):
-        quality.append("미충족인데 지원서 작성 권함")
+    if (verdict == "not_met" or deadline_passed) and "지원서" in str(report.get("todo", "")):
+        quality.append("미충족·마감 지남인데 지원서 작성 권함")
+    if STRETCH.search(text):
+        quality.append("학생 선택값 넓힘(…에만)")
 
     if split:
         form.append(f"긴 문단 {split}곳 나눔")
@@ -94,6 +99,11 @@ def check(report: dict, scrubbed: int, split: int, verdict: str | None = None) -
     fit = [ln for ln in str(report.get("fit", "")).split("\n") if ln.strip()]
     if fit and not all(FIT_TAG.match(ln) for ln in fit):
         form.append("fit: 꼬리표 없는 줄")
+    skills = [ln for ln in str(report.get("skills", "")).split("\n") if ln.strip()]
+    if any(len(ln) > 20 for ln in skills) and not any(SKILLS_UNKNOWN in ln for ln in skills):
+        form.append("skills: 20자 넘는 줄(앱이 칩으로 못 보임)")
+    if deadline_passed and fit and "마감" not in fit[0]:
+        form.append("fit: 마감이 지났는데 첫 줄이 마감이 아님")
     first = str(report.get("eligibility", "")).split("\n")[0]
     if not VERDICT_LINE.match(first):
         form.append("eligibility: 첫 줄이 '충족:/미충족:/확인 필요:' 아님")
@@ -129,7 +139,9 @@ def run(system: str, notice: dict, provider, today: date) -> dict:
     res = provider.generate(system, user, notice_id=notice["notice_id"])
     report, scrubbed = scrub_codes(res.report)
     report, split = split_long_lines(report)
-    quality, form = check(report, scrubbed, split, verdict[0])
+    dl = notice.get("application_deadline") or {}
+    passed = bool(dl.get("date")) and dl["date"] < today.isoformat()
+    quality, form = check(report, scrubbed, split, verdict[0], passed)
     return {"report": report, "quality": quality, "format": form, "verdict": verdict[0],
             "tokens": (res.usage.input_tokens, res.usage.output_tokens), "cost": res.usage.cost_krw,
             "seconds": round(res.usage.elapsed_seconds, 1)}

@@ -118,7 +118,7 @@ from backend.agent.prompt import split_long_lines  # noqa: E402
 
 def test_prompt_asks_short_lines_and_labels():
     assert "줄바꿈(" + chr(92) + "n)" in SYSTEM_PROMPT and "맞음:" in SYSTEM_PROMPT and "미충족:" in SYSTEM_PROMPT
-    assert "공고 자료에 적힌 역량만" in SYSTEM_PROMPT
+    assert "요구하거나 우대한다고 밝힌 역량만" in SYSTEM_PROMPT and "'(우대)'를 붙입니다" in SYSTEM_PROMPT
 
 
 def test_split_long_paragraph_at_sentence_ends():
@@ -143,9 +143,13 @@ def test_split_keeps_short_lines_and_numbers():
 def test_prompt_first_card_rules():
     """첫 칸(나와 이 공고)·지원 자격·할 일·역량 규칙 (2026-11-23 리포트 개선)."""
     s = SYSTEM_PROMPT
-    assert "나와 이 공고" in s and "가장 큰 영향" in s
+    assert "나와 이 공고" in s and "지원 결정을 가장 크게 바꾸는 사실부터" in s and "최대 2개만" in s
+    assert "마감이 오늘보다 앞이면 첫 줄은 마감이 지났다는 사실" in s
+    assert "어디서 어떻게 쌓았는지" in s and "'방학에만 가능'처럼 넓히거나" in s  # 선택값·경위 추정 금지
+    assert "강의 주제, 배울 내용, 모집 대상" in s  # 역량이 아닌 것
+    assert "이번 모집은 지원 전에 할 일이 없습니다" in s  # 미충족·마감 지남이고 판단을 바꿀 확인 사항이 없을 때
     assert "거주지가 아닙니다" in s and "단정하지 않고" in s  # 활동 지역은 거주지가 아님
-    assert "숙련도나 맡은 역할을 추정하지 않습니다" in s  # 경험 칩만으로 숙련도 추정 금지
+    assert "숙련도나 맡은 역할을 추정하지 않고" in s  # 경험 칩만으로 숙련도 추정 금지
     assert "판정을 가른 조건" in s and "학생 정보가 비어서인지" in s and "공고 조건이 불명확해서인지" in s
     assert "필수 자격이 아니라" in s  # 우대 사항 구분
     assert "지원서 작성을 권하지 않습니다" in s  # 미충족이면
