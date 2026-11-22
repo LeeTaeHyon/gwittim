@@ -19,7 +19,7 @@ from backend.recommendation import evaluate
 from .credits import DETAIL_ANALYSIS, current_state, next_refill_at, reserve, settle, signup
 from .llm import generate_report
 from .payload import build_payload
-from .prompt import build_messages, scrub_codes
+from .prompt import build_messages, scrub_codes, split_long_lines
 from .report_cache import cache_key, is_expired, report_expires_at
 
 if TYPE_CHECKING:
@@ -129,6 +129,9 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
         _add_spend(deps, month, result.usage.cost_krw)
         spent = True
         report, scrubbed = scrub_codes(result.report)  # 지시문을 어기고 새어 나온 내부 코드를 한국어로
+        report, split = split_long_lines(report)  # 한 문단으로 온 칸은 문장 끝에서 줄로 나눔(화면은 줄 = 항목)
+        if split:
+            log.info("report lines split notice_id=%s count=%d", notice_id, split)
         if scrubbed:
             log.info("report codes scrubbed notice_id=%s count=%d", notice_id, scrubbed)
         doc = {

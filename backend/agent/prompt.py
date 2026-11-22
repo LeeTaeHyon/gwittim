@@ -26,11 +26,19 @@ SYSTEM_PROMPT = """당신은 대학생에게 공고 한 건을 그 학생 기준
 출력 형식
 - 아래 4칸을 가진 JSON 객체 하나만 출력합니다. 설명, 머리말, 코드 펜스는 쓰지 않습니다.
 - 칸: "fit"(나에게 맞는 점·안 맞는 점), "eligibility"(지원 자격), "todo"(지원 전 할 일), "skills"(필요한 역량)
-- 형식 예시(json): {"fit": "...", "eligibility": "...", "todo": "...", "skills": "..."}
+- 형식 예시(json): {"fit": "맞음: ...\\n확인 필요: ...", "eligibility": "판정: 확인 필요\\n...", "todo": "...합니다.\\n...", "skills": "...\\n... (우대)"}
 - 모든 값은 한국어 문자열이며 비워 두지 않습니다.
 - 문체는 합쇼체(~입니다, ~합니다) 또는 명사형(~임, ~함)입니다. 해요체(~해요)와 평서형(~이다, ~한다)은 쓰지 않습니다.
 - 값에는 영어 코드, null·true 같은 프로그램 값을 쓰지 않습니다.
 - 입력의 칸 이름(예: '참고', '구분')을 문장에 그대로 옮기지 않고, 뜻을 풀어 자연스러운 문장으로 씁니다. '참고 사항이 있음'처럼 칸을 가리키지 말고 내용만 적습니다.
+
+읽기 쉬운 줄 나누기 (화면에서 한 줄이 한 항목으로 보임)
+- 각 칸은 줄바꿈(\\n)으로 나눈 짧은 줄 2~4개입니다. 한 줄에 한 가지 내용만, 50자 안팎으로 씁니다. 글머리 기호(-, •)는 붙이지 않습니다.
+- "fit": 맞는 점은 '맞음:', 안 맞는 점은 '안 맞음:', 공고 자료로 알 수 없는 점은 '확인 필요:'로 줄을 시작합니다. 맞는 점을 먼저 씁니다.
+- "eligibility": 첫 줄은 '판정: 충족' / '판정: 불충족' / '판정: 확인 필요' 중 하나, 다음 줄부터 그 이유를 짧게 씁니다.
+- "todo": 지원 전에 할 일을 '~합니다'로 끝나는 짧은 줄로 씁니다. 공고 원문에서 확인할 것은 한 줄로 묶어 마지막에 둡니다.
+- "skills": 공고에 적힌 역량만 20자 이내 명사구로 한 줄에 하나씩 씁니다. 우대 사항이면 끝에 '(우대)'를 붙입니다. 학생이 해 본 것은 여기에 쓰지 않습니다.
+- 같은 내용을 여러 칸에 되풀이하지 않습니다.
 
 지킬 것
 - 합격 가능성은 말하지 않습니다. 근거가 없습니다.
@@ -221,4 +229,34 @@ def scrub_codes(report: dict) -> tuple[dict, int]:
             parts[i] = seg
             total += n1 + n2 + n3
         out[k] = "".join(parts)
+    return out, total
+
+
+# ---------- 긴 문단 나누기 ----------
+
+_SENTENCE_END = re.compile(r"(?<=[다음함임됨])\.\s+(?=\S)")
+BR = chr(10)
+LONG_LINE = 90  # 이보다 긴 줄은 문장 끝에서 나눈다
+
+
+def split_long_lines(report: dict) -> tuple[dict, int]:
+    """지시문을 어기고 한 문단으로 온 칸을 문장 끝(…다. / …음. / …함.)에서 줄로 나눈다. (리포트, 나눈 줄 수).
+
+    화면은 줄 하나를 항목 하나로 보이므로, 긴 문단은 읽기 어렵다. 내용은 바꾸지 않는다.
+    """
+    out, total = {}, 0
+    for k, text in report.items():
+        if not isinstance(text, str):
+            out[k] = text
+            continue
+        lines = []
+        for line in text.split(BR):
+            if len(line) > LONG_LINE:
+                parts = [p.strip() for p in _SENTENCE_END.split(line) if p.strip()]
+                parts = [p if p.endswith(".") else p + "." for p in parts[:-1]] + parts[-1:]
+                total += len(parts) - 1
+                lines.extend(parts)
+            else:
+                lines.append(line)
+        out[k] = BR.join(lines)
     return out, total

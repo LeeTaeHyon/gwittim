@@ -1005,11 +1005,30 @@ enum _BodyStyle { bullets, todo, chips }
 
 final _bulletMark = RegExp(r'^[-•·*]\s+');
 
+/// 문장 끝(…다. / …음. / …함.). 한 문단으로 온 예전 리포트를 줄로 나눌 때 쓴다
+final _sentenceEnd = RegExp(r'(?<=[다음함임됨]\.)\s+(?=\S)');
+
+/// 이보다 긴 줄은 문장 끝에서 나눈다 (서버 split_long_lines와 같은 기준)
+const _longLine = 90;
+
 /// 리포트 글 한 칸을 줄 단위로 나눈다. 앞의 글머리 기호는 떼고, 빈 줄은 버린다.
+/// 서버가 나누기 전에 받은 저장본처럼 한 문단이 길면 문장 끝에서 나눈다.
 List<String> reportLines(String text) => [
   for (final line in text.split('\n'))
-    if (line.trim().isNotEmpty) line.trim().replaceFirst(_bulletMark, ''),
+    if (line.trim().isNotEmpty)
+      for (final part in (line.trim().length > _longLine ? line.trim().split(_sentenceEnd) : [line.trim()]))
+        if (part.trim().isNotEmpty) part.trim().replaceFirst(_bulletMark, ''),
 ];
+
+/// 줄 앞 꼬리표('맞음:', '안 맞음:', '확인 필요:', '판정: …'). 서버 지시문(prompt.py)과 같은 낱말
+final _lineTag = RegExp(r'^(맞음|안 맞음|확인 필요|판정)\s*[:：]\s*');
+
+/// (꼬리표, 나머지 글). 꼬리표가 없으면 (null, 줄 그대로)
+(String?, String) splitLineTag(String line) {
+  final m = _lineTag.firstMatch(line);
+  if (m == null) return (null, line);
+  return (m.group(1), line.substring(m.end));
+}
 
 class _ReportCard extends StatelessWidget {
   const _ReportCard({required this.title, required this.text, required this.style});
@@ -1025,7 +1044,7 @@ class _ReportCard extends StatelessWidget {
     final body = TextStyle(fontSize: 15, height: 1.7, color: c.body);
     final Widget content;
     if (lines.length <= 1) {
-      content = Text(keepAll(lines.firstOrNull ?? ''), style: body);
+      content = _TaggedLine(line: lines.firstOrNull ?? '', style: body);
     } else if (style == _BodyStyle.chips && lines.every((l) => l.length <= 20)) {
       content = Wrap(
         spacing: 8,
@@ -1076,7 +1095,7 @@ class _ReportCard extends StatelessWidget {
                         decoration: BoxDecoration(color: c.muted, shape: BoxShape.circle),
                       ),
                     ),
-                  Expanded(child: Text(keepAll(l), style: body)),
+                  Expanded(child: _TaggedLine(line: l, style: body)),
                 ],
               ),
             ),
@@ -1102,6 +1121,47 @@ class _ReportCard extends StatelessWidget {
           content,
         ],
       ),
+    );
+  }
+}
+
+/// 리포트 한 줄. '맞음:' 같은 꼬리표가 있으면 작은 색 꼬리표 + 나머지 글로 보인다.
+/// '판정: 충족' 줄은 판정 낱말 자체를 꼬리표로 보인다(충족·불충족·확인 필요).
+class _TaggedLine extends StatelessWidget {
+  const _TaggedLine({required this.line, required this.style});
+
+  final String line;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    var (tag, rest) = splitLineTag(line);
+    if (tag == null) return Text(keepAll(line), style: style);
+    if (tag == '판정') {
+      // '판정: 확인 필요' → 꼬리표 '확인 필요', 뒤 글은 남은 말만
+      final verdict = rest.trim();
+      tag = verdict.startsWith('불충족') ? '불충족' : verdict.startsWith('충족') ? '충족' : '확인 필요';
+      rest = verdict.replaceFirst(RegExp(r'^(불충족|충족|확인 필요)[.\s]*'), '');
+    }
+    final (bg, fg) = switch (tag) {
+      '맞음' || '충족' => (c.chip, c.onChip),
+      '안 맞음' || '불충족' => (c.urgentSoft, c.urgent),
+      _ => (c.checkSoft, c.check),
+    };
+    final pill = Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+      child: Text(tag, style: TextStyle(fontSize: 13, height: 1.5, fontWeight: FontWeight.w700, color: fg)),
+    );
+    if (rest.trim().isEmpty) return Align(alignment: Alignment.centerLeft, child: pill);
+    return Text.rich(
+      TextSpan(children: [
+        WidgetSpan(alignment: PlaceholderAlignment.middle, child: pill),
+        TextSpan(text: keepAll(rest.trim())),
+      ]),
+      style: style,
     );
   }
 }

@@ -109,3 +109,32 @@ def test_scrub_leaves_urls_and_ordinary_english():
     text = "https://www.mjc.ac.kr/x?menu=met 에서 Python, AI, any 경험 확인. met-life 아님. Metro 근무."
     out, n = scrub_codes({"fit": text})
     assert out["fit"] == text and n == 0
+
+
+# ---------- 읽기 쉬운 줄 나누기 ----------
+
+from backend.agent.prompt import split_long_lines  # noqa: E402
+
+
+def test_prompt_asks_short_lines_and_labels():
+    assert "줄바꿈(" + chr(92) + "n)" in SYSTEM_PROMPT and "맞음:" in SYSTEM_PROMPT and "판정: 확인 필요" in SYSTEM_PROMPT
+    assert "(우대)" in SYSTEM_PROMPT
+
+
+def test_split_long_paragraph_at_sentence_ends():
+    long = ("공고의 구매 업무는 식자재 계약관리와 구매 운영입니다. 학생이 해 본 데이터 분석은 관련이 적지 않습니다. "
+            "근무지가 서울인지는 공고 자료로 확인되지 않아 원문 확인이 필요합니다.")
+    out, n = split_long_lines({"fit": long, "skills": "식자재 계약관리\nERP 시스템 (우대)"})
+    assert out["fit"].split("\n") == [
+        "공고의 구매 업무는 식자재 계약관리와 구매 운영입니다.",
+        "학생이 해 본 데이터 분석은 관련이 적지 않습니다.",
+        "근무지가 서울인지는 공고 자료로 확인되지 않아 원문 확인이 필요합니다.",
+    ]
+    assert n == 2
+    assert out["skills"] == "식자재 계약관리\nERP 시스템 (우대)"  # 짧은 줄은 그대로
+
+
+def test_split_keeps_short_lines_and_numbers():
+    text = "맞음: 관심 분야와 겹침\n확인 필요: 마감 2026. 11. 30. 이후 일정은 원문 확인"
+    out, n = split_long_lines({"fit": text})
+    assert out["fit"] == text and n == 0
