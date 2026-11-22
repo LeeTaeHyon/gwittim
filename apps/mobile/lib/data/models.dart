@@ -355,7 +355,7 @@ class AgentConsent {
 }
 
 /// 지금 동의 문구의 버전 (docs/agent-privacy-spec.md §5.1)
-const agentConsentVersion = '2026-11-19';
+const agentConsentVersion = '2026-11-22'; // D-044 받는 곳 DeepSeek로 변경, 다시 동의
 
 extension UserProfileConsent on UserProfile? {
   /// 지금 문구에 동의한 기록이 있는지

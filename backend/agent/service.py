@@ -19,7 +19,7 @@ from backend.recommendation import evaluate
 from .credits import DETAIL_ANALYSIS, current_state, next_refill_at, reserve, settle, signup
 from .llm import generate_report
 from .payload import build_payload
-from .prompt import build_messages
+from .prompt import build_messages, scrub_codes
 from .report_cache import cache_key, is_expired, report_expires_at
 
 if TYPE_CHECKING:
@@ -128,10 +128,13 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
         result = generate_report(system, user, provider=deps.llm, notice_id=notice_id)
         _add_spend(deps, month, result.usage.cost_krw)
         spent = True
+        report, scrubbed = scrub_codes(result.report)  # 지시문을 어기고 새어 나온 내부 코드를 한국어로
+        if scrubbed:
+            log.info("report codes scrubbed notice_id=%s count=%d", notice_id, scrubbed)
         doc = {
             "notice_id": notice_id,
             "key": key,
-            "report": result.report,
+            "report": report,
             "created_at": now,
             "expires_at": report_expires_at(notice["application_deadline"], now),
             "request_id": request_id,
