@@ -1,4 +1,27 @@
-# P9 API 전환 준비 (구독 CLI → Anthropic API)
+# P9 API 전환 준비 (구독 CLI → API)
+
+> **2026-11-22 변경(D-044): 서비스 제공자를 DeepSeek Platform으로 바꿨다.** 0절이 지금 기준이다. 1~4절은 Anthropic 기준으로 준비한 기록이며, 코드 쪽 1~3번(생각 토큰, 월 상한, Cloud Run fake 차단)은 DeepSeek에도 그대로 적용된다.
+
+## 0. DeepSeek 기준 (2026-11-22 확인)
+
+| 항목 | 내용 | 출처 |
+|---|---|---|
+| 모델 id | `deepseek-flash` (DeepSeek-V4.1-Flash-1017) | api-docs.deepseek.com 가격 페이지 |
+| 가격 | 입력(캐시 미적중) $0.15, 출력 $0.60 / 100만 토큰. 피크(평일 UTC 01~04·06~10시 = 한국 10~13·15~19시)는 2배 | 같은 페이지 |
+| 생각 정도 | `reasoning_effort`: none / low / high / max, 기본 high. 코드는 none(생각 끔, 2026-11-22 비교로 low에서 변경) | Thinking mode 문서 |
+| 출력 형식 | `response_format: json_object`만. JSON 스키마 강제 없음. 지시문에 'json' 낱말과 예시 필요. JSON이 아니면 공백으로 옴 | JSON mode 문서 |
+| 웹 검색 | `tools: [{"type": "deepseek_web_search"}]`. 11/18부터 모델 호출 안의 검색은 따로 과금 안 함(결과는 입력 토큰) | Web tools 문서 |
+| 서버·학습 | 서버 중국. 입력을 학습에 쓸 수 있음. 학습 거부 설정이 API에 적용되는지 명시 없음. 보관 기간 명시 없음 | DeepSeek 개인정보처리방침(2026-05-06판) |
+| 최소 충전 | $2 (팀장이 결제 화면에서 확인, 공식 문서에서는 미확인) | |
+
+사람이 할 일 (순서대로)
+
+1. DeepSeek Platform 가입, 충전
+2. 설정에서 학습 거부('모두를 위해 모델 개선' 끄기)가 있으면 끔
+3. API 키 만들기. 저장소·앱·대화에 붙이지 않음(AGENTS.md §4). 로컬은 사용자 환경변수 `DEEPSEEK_API_KEY`, Cloud Run은 Secret Manager → 같은 이름 환경변수
+4. 로컬 확인: `GWITTIM_LLM_PROVIDER=deepseek`로 로컬 서버 → 에뮬레이터 앱에서 상세 분석 1건 → 로그에 토큰 수·`cost_krw`가 찍히는지, 리포트 4칸이 다 오는지
+5. Cloud Run에 `GWITTIM_LLM_PROVIDER=deepseek` 설정 후 배포 → 실제 호출 1건
+6. 처리방침 공개본 갱신(P8): 받는 곳 DeepSeek, 학습·보관 문구, 계약 법인명·이용약관 확인
 
 - 작성: 2026-11-21
 - 왜: 2차(최종) 심사 때 APK를 내면 외부 사용자가 생긴다. 구독 CLI는 본인 사용 범위라 그 전에 API로 바꿔야 한다

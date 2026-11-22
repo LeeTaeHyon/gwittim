@@ -374,3 +374,137 @@ def test_fake_on_cloud_run_is_not_ready_but_startup_allowed():
     with pytest.raises(llm.ProviderNotReady):
         llm.get_provider(env=env).generate(SYSTEM, PROMPT)
     assert llm.get_provider("fake", env={}).generate(SYSTEM, PROMPT).report == llm.FAKE_REPORT
+
+
+# ---------- deepseek (D-044) ----------
+
+DS_KEY = "sk-ds-test-SECRET-5678"
+
+
+def ds_provider(**kw):
+    return llm.DeepSeekProvider(env={"DEEPSEEK_API_KEY": DS_KEY}, **kw)
+
+
+def mock_ds(monkeypatch, content, seen=None, finish="stop", usage=None):
+    def fake(req, timeout=None):
+        if seen is not None:
+            seen["req"] = req
+        body = {
+            "choices": [{"message": {"role": "assistant", "content": content, "reasoning_content": "생각-원문"},
+                         "finish_reason": finish}],
+            "usage": usage if usage is not None else {"prompt_tokens": 3000, "completion_tokens": 1500},
+        }
+        return FakeResp(json.dumps(body, ensure_ascii=False).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+
+def test_deepseek_selected_by_env():
+    p = llm.get_provider(env={"GWITTIM_LLM_PROVIDER": "deepseek"})
+    assert isinstance(p, llm.DeepSeekProvider) and p.name == "deepseek"
+
+
+def test_deepseek_without_key_is_not_ready(monkeypatch):
+    def boom(*a, **k):
+        raise AssertionError("키 없이 호출함")
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    with pytest.raises(llm.ProviderNotReady):
+        llm.DeepSeekProvider(env={}).generate(SYSTEM, PROMPT)
+
+
+def test_deepseek_request_body_and_headers(monkeypatch):
+    seen = {}
+    mock_ds(monkeypatch, json.dumps(REPORT, ensure_ascii=False), seen)
+    res = ds_provider().generate(SYSTEM, PROMPT)
+    assert res.report == REPORT
+    req = seen["req"]
+    assert req.full_url == "https://api.deepseek.com/chat/completions"
+    headers = {k.lower(): v for k, v in req.header_items()}
+    assert headers["authorization"] == f"Bearer {DS_KEY}"
+    sent = json.loads(req.data)
+    assert sent["model"] == "deepseek-flash"
+    assert sent["messages"] == [{"role": "system", "content": SYSTEM}, {"role": "user", "content": PROMPT}]
+    assert sent["response_format"] == {"type": "json_object"}
+    assert sent["reasoning_effort"] == "none"
+    assert sent["max_tokens"] == 8000
+    assert "tools" not in sent  # 상세 분석에는 웹 검색을 붙이지 않는다
+
+
+def test_deepseek_reasoning_content_is_dropped(monkeypatch):
+    mock_ds(monkeypatch, json.dumps(REPORT, ensure_ascii=False))
+    res = ds_provider().generate(SYSTEM, PROMPT)
+    assert "생각-원문" not in json.dumps(res.report, ensure_ascii=False)
+
+
+def test_deepseek_blank_content_is_format_error_with_usage(monkeypatch):
+    mock_ds(monkeypatch, "   ")  # JSON으로 인식 못 한 출력은 공백으로 온다
+    with pytest.raises(llm.ReportFormatError) as ei:
+        ds_provider().generate(SYSTEM, PROMPT)
+    assert ei.value.usage is not None and ei.value.usage.output_tokens == 1500
+
+
+def test_deepseek_length_is_format_error(monkeypatch):
+    mock_ds(monkeypatch, '{"fit": "잘', finish="length")
+    with pytest.raises(llm.ReportFormatError):
+        ds_provider().generate(SYSTEM, PROMPT)
+
+
+def test_deepseek_content_filter_is_call_error(monkeypatch):
+    mock_ds(monkeypatch, "", finish="content_filter")
+    with pytest.raises(llm.ProviderCallError):
+        ds_provider().generate(SYSTEM, PROMPT)
+
+
+@pytest.mark.parametrize("code", [401, 402])
+def test_deepseek_auth_and_balance_errors_not_retried_no_secret(monkeypatch, caplog, code):
+    calls = []
+
+    def fake(req, timeout=None):
+        calls.append(1)
+        raise urllib.error.HTTPError(req.full_url, code, "err", {}, io.BytesIO(DS_KEY.encode()))
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    caplog.set_level(logging.INFO, logger="gwittim.agent.llm")
+    with pytest.raises(llm.ProviderCallError) as ei:
+        ds_provider(sleep=lambda s: None).generate(SYSTEM, PROMPT)
+    assert len(calls) == 1
+    assert DS_KEY not in str(ei.value) and DS_KEY not in caplog.text and PROMPT not in caplog.text
+
+
+def test_deepseek_429_is_retried(monkeypatch):
+    calls = []
+
+    def fake(req, timeout=None):
+        calls.append(1)
+        if len(calls) == 1:
+            raise urllib.error.HTTPError(req.full_url, 429, "busy", {}, None)
+        body = {"choices": [{"message": {"content": json.dumps(REPORT)}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+        return FakeResp(json.dumps(body).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    assert ds_provider(sleep=lambda s: None).generate(SYSTEM, PROMPT).report == REPORT
+    assert len(calls) == 2
+
+
+def test_deepseek_prices_peak_and_off_peak():
+    from datetime import datetime, timezone
+    assert llm.deepseek_prices(datetime(2026, 11, 23, 2, 0, tzinfo=timezone.utc)) == (0.30, 1.20)  # 월 11시 KST
+    assert llm.deepseek_prices(datetime(2026, 11, 23, 5, 0, tzinfo=timezone.utc)) == (0.15, 0.60)  # 월 14시 KST
+    assert llm.deepseek_prices(datetime(2026, 11, 23, 9, 59, tzinfo=timezone.utc)) == (0.30, 1.20)
+    assert llm.deepseek_prices(datetime(2026, 11, 23, 10, 0, tzinfo=timezone.utc)) == (0.15, 0.60)
+    assert llm.deepseek_prices(datetime(2026, 11, 22, 2, 0, tzinfo=timezone.utc)) == (0.15, 0.60)  # 일요일
+
+
+def test_deepseek_cost_uses_its_own_price(monkeypatch):
+    mock_ds(monkeypatch, json.dumps(REPORT))
+    monkeypatch.setattr(llm, "deepseek_prices", lambda at: (0.15, 0.60))
+    res = ds_provider().generate(SYSTEM, PROMPT)
+    # 3000*0.15 + 1500*0.60 = 1350 USD/1e6 -> 1.89원
+    assert res.usage.cost_krw == 1.89
+
+
+def test_system_prompt_mentions_json_example():
+    from backend.agent.prompt import SYSTEM_PROMPT
+    assert "json" in SYSTEM_PROMPT and '"fit"' in SYSTEM_PROMPT

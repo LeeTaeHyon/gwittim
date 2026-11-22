@@ -552,3 +552,10 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 - 위비티(`wevity_contest`)·콘테스트코리아(`contestkorea_contest`) 어댑터와 예의 바른 요청기(`backend/collectors/common/http_polite.py`: robots·3초 간격·429/403 멈춤·실행당 상한). `uv run python -m backend.collectors.wevity`, `... contestkorea` (`--dry-run`으로 건수만 확인).
 - 앱 출처 이름 표시는 #120에서 추가. 정기 배치 연결(2026-11-22, #124): `scripts/run_batch.ps1`이 게시판 다음, 알림톡 앞에 위비티 → 콘테스트코리아를 차례로 돈다. 실패해도 배치는 이어가고 완료 알림에 '교외 게시 N'을 붙인다. `-NoExternal`로 끈다. 적용하려면 `Gwittim-batch`를 갱신해야 한다
 - 아직 안 한 것: 주최 측 공식 페이지 따라가기, Gemma 대상 판별, 링커리어 등 나머지 출처, 두 출처 사이 같은 공고 묶기.
+
+## 맞춤 에이전트 API: DeepSeek (2026-11-22, D-044)
+
+- `backend/agent/llm.py`에 `deepseek` 제공자 추가(`deepseek-flash`, `reasoning_effort: none`(11-22 low에서 변경), `json_object`, 시간대별 단가로 비용 추정). `api`(Anthropic)는 남겨 둠
+- 동의 화면·처리방침·명세의 받는 곳을 DeepSeek(중국), 보관을 "DeepSeek 기준, 학습에 쓰일 수 있음"으로. 동의 version `2026-11-22`(기존 동의자는 다시 동의)
+- 사람이 할 일: DeepSeek Platform 충전 → 키를 환경변수 `DEEPSEEK_API_KEY`로(저장소·대화에 붙이지 않음) → 플랫폼 설정에서 학습 거부('모델 개선') 끄기 → `GWITTIM_LLM_PROVIDER=deepseek`로 로컬 서버 → 상세 분석 1건, 로그의 토큰 수·`cost_krw` 확인
+- 아직 안 한 것: 실제 호출 확인, 외부 공고 찾기 웹 검색 연결, Open Platform 이용약관 확인(P8)

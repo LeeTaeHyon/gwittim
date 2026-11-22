@@ -260,10 +260,9 @@ def test_prompt_has_no_identity(client, provider):
         assert secret not in user
         assert secret not in system
     data = json.loads(user)
-    assert data["applicant"]["experience"] == ["python"]
-    assert data["applicant"]["major_id"] == "mjc.computer_engineering"
-    assert data["applicant_code_names"]["mjc.computer_engineering"] == "컴퓨터공학과"
-    assert data["notice"]["eligibility_check"]["status"] in ("met", "not_met", "needs_check")
+    assert data["학생"]["해 본 것"] == ["파이썬"]
+    assert data["학생"]["학과"] == "컴퓨터공학과"
+    assert data["공고"]["지원 자격 판정"]["결과"] in ("충족", "불충족", "확인 필요")
     assert "합격 가능성" in system and "JSON" in system
 
 
@@ -271,9 +270,9 @@ def test_build_messages_passes_rule_verdict():
     notice = fixture("notice/explicitly_unrestricted.json")
     verdict = ("not_met", [{"field": "grade", "status": "not_met", "evidence": "3학년", "unknown_reason": None}])
     system, user = build_messages(notice, {"grade": 2}, verdict, date(2026, 11, 21))
-    assert '"today": "2026-11-21"' in user
-    assert json.loads(user)["notice"]["eligibility_check"]["status"] == "not_met"
-    assert "해요체는 쓰지 않습니다" in system
+    assert '"오늘": "2026-11-21"' in user
+    assert json.loads(user)["공고"]["지원 자격 판정"]["결과"] == "불충족"
+    assert "해요체(~해요)와 평서형(~이다, ~한다)은 쓰지 않습니다" in system
 
 
 # ---------- 다시 보기·크레딧 ----------
