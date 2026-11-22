@@ -208,3 +208,169 @@ def test_api_incomplete_read_is_call_error(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", fake)
     with pytest.raises(llm.ProviderCallError):
         api_provider().generate(SYSTEM, PROMPT)
+
+
+# ---------- 요청 본문·stop_reason ----------
+
+def test_request_body_has_effort_schema_and_max_tokens(monkeypatch):
+    seen = {}
+    mock_urlopen(monkeypatch, json.dumps(REPORT, ensure_ascii=False), seen)
+    api_provider().generate(SYSTEM, PROMPT)
+    sent = json.loads(seen["req"].data)
+    assert sent["max_tokens"] == 8000
+    assert "effort" not in sent and "temperature" not in sent
+    cfg = sent["output_config"]
+    assert cfg["effort"] == "low"
+    assert cfg["format"]["type"] == "json_schema"
+    schema = cfg["format"]["schema"]
+    assert schema["type"] == "object" and schema["additionalProperties"] is False
+    assert tuple(schema["required"]) == llm.REPORT_KEYS
+    assert tuple(schema["properties"]) == llm.REPORT_KEYS
+    assert all(v == {"type": "string"} for v in schema["properties"].values())
+
+
+def mock_payload(monkeypatch, payload):
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: FakeResp(json.dumps(payload).encode()))
+
+
+def test_thinking_block_is_ignored(monkeypatch):
+    mock_payload(monkeypatch, {
+        "content": [{"type": "thinking", "thinking": "{\"fit\": \"x\"}"}, {"type": "text", "text": json.dumps(REPORT)}],
+        "usage": {"input_tokens": 1, "output_tokens": 2}, "stop_reason": "end_turn",
+    })
+    assert api_provider().generate(SYSTEM, PROMPT).report == REPORT
+
+
+def test_max_tokens_is_format_error_without_leak(monkeypatch, caplog):
+    caplog.set_level(logging.DEBUG)
+    mock_payload(monkeypatch, {
+        "content": [{"type": "text", "text": PROMPT + '{"fit": "잘린'}],
+        "usage": {"input_tokens": 100, "output_tokens": 8000}, "stop_reason": "max_tokens",
+    })
+    with pytest.raises(llm.ReportFormatError) as e:
+        api_provider().generate(SYSTEM, PROMPT)
+    assert e.value.usage.output_tokens == 8000 and e.value.usage.cost_krw > 0  # 비용 누적용
+    assert PROMPT not in str(e.value) and PROMPT not in caplog.text and SECRET_KEY not in caplog.text
+
+
+def test_refusal_is_call_error_without_leak(monkeypatch, caplog):
+    caplog.set_level(logging.DEBUG)
+    mock_payload(monkeypatch, {
+        "content": [{"type": "text", "text": "거절문구-" + PROMPT}],
+        "usage": {"input_tokens": 10, "output_tokens": 5}, "stop_reason": "refusal",
+    })
+    with pytest.raises(llm.ProviderCallError) as e:
+        api_provider().generate(SYSTEM, PROMPT)
+    assert "안전 판단" in str(e.value) and PROMPT not in str(e.value) and "거절문구" not in str(e.value)
+    assert PROMPT not in caplog.text and "거절문구" not in caplog.text
+
+
+# ---------- 재시도 ----------
+
+class FakeTime:
+    def __init__(self):
+        self.now = 0.0
+        self.sleeps = []
+
+    def clock(self):
+        return self.now
+
+    def sleep(self, sec):
+        self.sleeps.append(sec)
+        self.now += sec
+
+
+def retry_provider(ft, timeout=120):
+    return llm.ApiProvider({"ANTHROPIC_API_KEY": SECRET_KEY}, timeout=timeout, sleep=ft.sleep, clock=ft.clock)
+
+
+def sequence(monkeypatch, outcomes):
+    """outcomes: (HTTP 코드, 헤더)·예외·응답 텍스트 순서. 마지막 항목은 계속 반복. 호출 때 받은 timeout 목록을 돌려준다."""
+    calls = []
+
+    def fake(req, timeout=None):
+        calls.append(timeout)
+        o = outcomes[min(len(calls) - 1, len(outcomes) - 1)]
+        if isinstance(o, Exception):
+            raise o
+        if isinstance(o, tuple):
+            code, headers = o
+            raise urllib.error.HTTPError(req.full_url, code, "x " + SECRET_KEY, headers, io.BytesIO(PROMPT.encode()))
+        body = {"content": [{"type": "text", "text": o}], "usage": {"input_tokens": 1, "output_tokens": 2}}
+        return FakeResp(json.dumps(body).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    return calls
+
+
+OK = json.dumps(REPORT, ensure_ascii=False)
+
+
+def test_429_retries_then_succeeds(monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
+    ft = FakeTime()
+    calls = sequence(monkeypatch, [(429, {}), OK])
+    assert retry_provider(ft).generate(SYSTEM, PROMPT).report == REPORT
+    assert len(calls) == 2 and ft.sleeps == [1.0]
+    assert "retry" in caplog.text and PROMPT not in caplog.text and SECRET_KEY not in caplog.text
+
+
+def test_529_twice_then_third_succeeds(monkeypatch):
+    ft = FakeTime()
+    calls = sequence(monkeypatch, [(529, {}), (529, {}), OK])
+    assert retry_provider(ft).generate(SYSTEM, PROMPT).report == REPORT
+    assert len(calls) == 3 and ft.sleeps == [1.0, 2.0]
+
+
+def test_connection_error_is_retried(monkeypatch):
+    ft = FakeTime()
+    calls = sequence(monkeypatch, [urllib.error.URLError("down"), OK])
+    assert retry_provider(ft).generate(SYSTEM, PROMPT).report == REPORT
+    assert len(calls) == 2
+
+
+def test_400_is_not_retried(monkeypatch):
+    ft = FakeTime()
+    calls = sequence(monkeypatch, [(400, {})])
+    with pytest.raises(llm.ProviderCallError) as e:
+        retry_provider(ft).generate(SYSTEM, PROMPT)
+    assert len(calls) == 1 and ft.sleeps == []
+    assert SECRET_KEY not in str(e.value) and PROMPT not in str(e.value)
+
+
+def test_retry_after_is_capped_at_10_seconds(monkeypatch):
+    ft = FakeTime()
+    sequence(monkeypatch, [(429, {"Retry-After": "600"}), (429, {"retry-after": "3"}), OK])
+    retry_provider(ft).generate(SYSTEM, PROMPT)
+    assert ft.sleeps == [10.0, 3.0]
+
+
+def test_never_more_than_three_attempts(monkeypatch):
+    ft = FakeTime()
+    calls = sequence(monkeypatch, [(500, {})])
+    with pytest.raises(llm.ProviderCallError):
+        retry_provider(ft).generate(SYSTEM, PROMPT)
+    assert len(calls) == 3 and ft.sleeps == [1.0, 2.0]
+
+
+def test_retry_respects_total_timeout(monkeypatch):
+    ft = FakeTime()
+    calls = sequence(monkeypatch, [(429, {"retry-after": "10"})])
+    with pytest.raises(llm.ProviderCallError):
+        retry_provider(ft, timeout=5).generate(SYSTEM, PROMPT)
+    assert len(calls) == 1 and ft.sleeps == []  # 기다리면 제한을 넘으므로 더 시도하지 않음
+    ft2 = FakeTime()
+    calls = sequence(monkeypatch, [(500, {})])
+    with pytest.raises(llm.ProviderCallError):
+        retry_provider(ft2, timeout=2.5).generate(SYSTEM, PROMPT)
+    assert ft2.now <= 2.5 and all(t <= 2.5 for t in calls)
+
+
+# ---------- Cloud Run에서 fake ----------
+
+def test_fake_on_cloud_run_is_not_ready_but_startup_allowed():
+    env = {"GWITTIM_LLM_PROVIDER": "fake", "K_SERVICE": "gwittim-api"}
+    assert llm.check_startup(env) == "fake"  # 시작은 막지 않는다
+    with pytest.raises(llm.ProviderNotReady):
+        llm.get_provider(env=env).generate(SYSTEM, PROMPT)
+    assert llm.get_provider("fake", env={}).generate(SYSTEM, PROMPT).report == llm.FAKE_REPORT

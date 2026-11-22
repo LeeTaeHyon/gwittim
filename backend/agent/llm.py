@@ -7,6 +7,7 @@
   한 번 확인한다. 도구·MCP·슬래시 명령을 끄고 빈 임시 폴더에서 실행해, 공고 본문에 섞인 지시문이 로컬 파일을
   읽게 만들 수 없게 한다.
 - `api`는 Anthropic Messages API를 urllib로 부른다. 키(`ANTHROPIC_API_KEY`)가 없으면 호출하지 않고 `ProviderNotReady`.
+- 공식 SDK는 쓰지 않음(2026-11-21). 요청 종류가 늘거나 스트리밍·도구 호출이 필요하면 ApiProvider를 SDK로 바꿈(새 라이브러리 승인 필요).
 - 프롬프트·응답 원문과 키 값은 로그·예외 메시지에 넣지 않는다.
   로그에는 명세 §3의 요청 시각·공고 id·토큰 수·비용·성공 여부와 제공자 이름·소요 시간만 남긴다.
 """
@@ -41,7 +42,12 @@ API_KEY_ENV = "ANTHROPIC_API_KEY"
 API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
 API_MODEL = "claude-haiku-5-5"
-API_MAX_TOKENS = 2000
+API_MAX_TOKENS = 8000  # Haiku 5.5의 생각 토큰도 이 안에서 쓴다
+API_EFFORT = "low"
+# 재시도: 429·529·500 이상·연결 오류만, 최대 2번 더. 대기 1초·2초(retry-after가 있으면 그 값, 최대 10초)
+API_MAX_RETRIES = 2
+API_RETRY_DELAYS = (1.0, 2.0)
+API_RETRY_AFTER_MAX = 10.0
 # 도구 전부 끔(--tools ""), 설정된 MCP 무시, 슬래시 명령·세션 저장 끔. 출력은 리포트 JSON 문자열만 필요하다.
 CLI_COMMAND = (
     "claude", "-p", "--model", "haiku",
@@ -55,7 +61,12 @@ TIMEOUT_SECONDS = 120
 
 
 class LLMError(Exception):
-    """제공자 겹의 공통 예외. 메시지에 프롬프트·응답·키를 넣지 않는다."""
+    """제공자 겹의 공통 예외. 메시지에 프롬프트·응답·키를 넣지 않는다.
+
+    호출은 했지만 실패했고 토큰 수를 알면 usage에 담긴다(비용 누적용).
+    """
+
+    usage: Usage | None = None
 
 
 class ProviderRefused(LLMError):
@@ -80,6 +91,10 @@ class Usage:
     elapsed_seconds: float
     input_tokens: int | None = None
     output_tokens: int | None = None
+
+    @property
+    def cost_krw(self) -> float | None:
+        return estimate_cost_krw(self.input_tokens, self.output_tokens)
 
 
 @dataclass(frozen=True)
@@ -146,17 +161,19 @@ class _Call:
     requested_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     started: float = field(default_factory=time.monotonic)
 
-    def fail(self, exc: LLMError) -> LLMError:
-        _log(self.provider, self.notice_id, self.requested_at, time.monotonic() - self.started, None, None, False)
+    def fail(self, exc: LLMError, tin: int | None = None, tout: int | None = None) -> LLMError:
+        elapsed = time.monotonic() - self.started
+        _log(self.provider, self.notice_id, self.requested_at, elapsed, tin, tout, False)
+        if tin is not None and tout is not None:
+            exc.usage = Usage(self.provider, elapsed, tin, tout)
         return exc
 
     def finish(self, text: str, tin: int | None, tout: int | None) -> LLMResult:
         elapsed = time.monotonic() - self.started
         try:
             report = parse_report(text)
-        except ReportFormatError:
-            _log(self.provider, self.notice_id, self.requested_at, elapsed, tin, tout, False)
-            raise
+        except ReportFormatError as exc:
+            raise self.fail(exc, tin, tout)
         _log(self.provider, self.notice_id, self.requested_at, elapsed, tin, tout, True)
         return LLMResult(report, Usage(self.provider, elapsed, tin, tout))
 
@@ -173,7 +190,13 @@ FAKE_REPORT = {
 class FakeProvider:
     name = "fake"
 
+    def __init__(self, env: Mapping[str, str] | None = None):
+        env = os.environ if env is None else env
+        self._cloud_run = _on_cloud_run(env)
+
     def generate(self, system: str, user: str, notice_id: str | None = None) -> LLMResult:
+        if self._cloud_run:  # 합성 리포트를 실사용자에게 주지 않는다. 시작은 막지 않고 호출 때 준비 중으로 답한다
+            raise _Call(self.name, notice_id).fail(ProviderNotReady("Cloud Run에서는 fake 제공자를 쓸 수 없습니다"))
         return _Call(self.name, notice_id).finish(json.dumps(FAKE_REPORT, ensure_ascii=False), None, None)
 
 
@@ -213,13 +236,76 @@ class CliProvider:
         return call.finish(proc.stdout or "", None, None)
 
 
+def _report_schema() -> dict:
+    """구조화 출력용 JSON 스키마. 칸 이름은 REPORT_KEYS에서 만든다."""
+    return {
+        "type": "object",
+        "properties": {k: {"type": "string"} for k in REPORT_KEYS},
+        "required": list(REPORT_KEYS),
+        "additionalProperties": False,
+    }
+
+
+def _retry_wait(attempt: int, headers) -> float:
+    """재시도 전 대기(초). retry-after(초 단위 숫자)가 있으면 그 값, 최대 API_RETRY_AFTER_MAX."""
+    wait = API_RETRY_DELAYS[min(attempt, len(API_RETRY_DELAYS) - 1)]
+    raw = None
+    try:
+        for k, v in headers.items():
+            if str(k).lower() == "retry-after":
+                raw = v
+                break
+    except AttributeError:
+        pass
+    if raw is not None:
+        try:
+            wait = float(raw)
+        except (TypeError, ValueError):
+            pass
+    return max(0.0, min(wait, API_RETRY_AFTER_MAX))
+
+
 class ApiProvider:
     name = "api"
 
-    def __init__(self, env: Mapping[str, str] | None = None, timeout: float = TIMEOUT_SECONDS):
+    def __init__(
+        self, env: Mapping[str, str] | None = None, timeout: float = TIMEOUT_SECONDS,
+        sleep=time.sleep, clock=time.monotonic,
+    ):
         env = os.environ if env is None else env
         self._key = env.get(API_KEY_ENV, "").strip()
         self.timeout = timeout
+        self._sleep = sleep  # 테스트에서 가짜로 바꾼다
+        self._clock = clock
+
+    def _post(self, req: urllib.request.Request, call: _Call) -> dict:
+        """재시도 포함 호출. 전체 시간은 self.timeout을 넘기지 않는다."""
+        start = self._clock()
+        for attempt in range(API_MAX_RETRIES + 1):
+            remaining = self.timeout - (self._clock() - start)
+            if remaining <= 0:
+                raise call.fail(ProviderCallError("api 호출 시간이 초과되었습니다"))
+            headers = {}
+            try:
+                with urllib.request.urlopen(req, timeout=remaining) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as e:
+                failure = ProviderCallError(f"api가 HTTP {e.code}로 응답했습니다")
+                if not (e.code == 429 or e.code >= 500):
+                    raise call.fail(failure) from None
+                headers = getattr(e, "headers", None) or {}
+            except (urllib.error.URLError, http.client.HTTPException, OSError, TimeoutError):
+                failure = ProviderCallError("api 호출에 실패했습니다")
+            except ValueError:
+                raise call.fail(ReportFormatError("api 응답을 해석하지 못했습니다")) from None
+            if attempt >= API_MAX_RETRIES:
+                raise call.fail(failure) from None
+            wait = _retry_wait(attempt, headers)
+            if (self._clock() - start) + wait >= self.timeout:
+                raise call.fail(failure) from None
+            log.info("llm retry provider=%s count=%d", self.name, attempt + 1)
+            self._sleep(wait)
+        raise call.fail(ProviderCallError("api 호출에 실패했습니다"))  # 도달하지 않음
 
     def generate(self, system: str, user: str, notice_id: str | None = None) -> LLMResult:
         call = _Call(self.name, notice_id)
@@ -231,6 +317,10 @@ class ApiProvider:
                 "max_tokens": API_MAX_TOKENS,
                 "system": system,
                 "messages": [{"role": "user", "content": user}],
+                "output_config": {
+                    "effort": API_EFFORT,
+                    "format": {"type": "json_schema", "schema": _report_schema()},
+                },
             },
             ensure_ascii=False,
         ).encode("utf-8")
@@ -244,24 +334,23 @@ class ApiProvider:
                 "content-type": "application/json",
             },
         )
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                payload = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            raise call.fail(ProviderCallError(f"api가 HTTP {e.code}로 응답했습니다")) from None
-        except (urllib.error.URLError, http.client.HTTPException, OSError, TimeoutError):
-            raise call.fail(ProviderCallError("api 호출에 실패했습니다")) from None
-        except ValueError:
-            raise call.fail(ReportFormatError("api 응답을 해석하지 못했습니다")) from None
+        payload = self._post(req, call)
         payload = payload if isinstance(payload, dict) else {}
         blocks = payload.get("content")
         text = ""
-        if isinstance(blocks, list):
+        if isinstance(blocks, list):  # thinking 블록은 버리고 text 블록만 쓴다
             text = "".join(b.get("text", "") for b in blocks if isinstance(b, dict) and b.get("type") == "text")
         usage = payload.get("usage")
         usage = usage if isinstance(usage, dict) else {}
         tin, tout = usage.get("input_tokens"), usage.get("output_tokens")
-        return call.finish(text, tin if isinstance(tin, int) else None, tout if isinstance(tout, int) else None)
+        tin = tin if isinstance(tin, int) else None
+        tout = tout if isinstance(tout, int) else None
+        stop = payload.get("stop_reason")
+        if stop == "max_tokens":
+            raise call.fail(ReportFormatError("api 응답이 최대 길이에서 잘렸습니다"), tin, tout)
+        if stop == "refusal":
+            raise call.fail(ProviderCallError("api가 안전 판단으로 거절했습니다"), tin, tout)
+        return call.finish(text, tin, tout)
 
 
 def get_provider(name: str | None = None, env: Mapping[str, str] | None = None) -> Provider:
@@ -269,7 +358,7 @@ def get_provider(name: str | None = None, env: Mapping[str, str] | None = None) 
     env = os.environ if env is None else env
     chosen = (name or env.get(PROVIDER_ENV) or DEFAULT_PROVIDER).strip().lower()
     if chosen == "fake":
-        return FakeProvider()
+        return FakeProvider(env)
     if chosen == "cli":
         return CliProvider(env)
     if chosen == "api":
