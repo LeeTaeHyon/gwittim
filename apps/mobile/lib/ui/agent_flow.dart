@@ -1054,9 +1054,10 @@ class _ReportCard extends StatelessWidget {
     final lines = reportLines(text);
     final body = TextStyle(fontSize: 15, height: 1.7, color: c.body);
     final Widget content;
-    if (lines.length <= 1) {
-      content = _TaggedLine(line: lines.firstOrNull ?? '', style: body);
-    } else if (style == _BodyStyle.chips && lines.every((l) => l.length <= 20 && !l.contains(skillsUnknown))) {
+    // 역량은 한 줄이어도 칩. '확인하기 어렵습니다' 안내 문장은 일반 문장으로
+    if (style == _BodyStyle.chips &&
+        lines.isNotEmpty &&
+        lines.every((l) => l.length <= 20 && !l.contains(skillsUnknown))) {
       content = Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -1074,6 +1075,8 @@ class _ReportCard extends StatelessWidget {
             ),
         ],
       );
+    } else if (lines.length <= 1) {
+      content = _TaggedLine(line: lines.firstOrNull ?? '', style: body);
     } else {
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -149,6 +149,8 @@ def test_prompt_first_card_rules():
     assert "판정을 가른 조건" in s and "학생 정보가 비어서인지" in s and "공고 조건이 불명확해서인지" in s
     assert "필수 자격이 아니라" in s  # 우대 사항 구분
     assert "지원서 작성을 권하지 않습니다" in s  # 미충족이면
+    assert "입력 자료에 없는 일정이나 경로를 만들어 쓰지 않습니다" in s  # '다음 학기·학과 공지' 같은 근거 없는 안내 금지
+    assert '"fit"에서 같은 조건을 다시 말하지 않습니다' in s  # 판정 조건은 eligibility에서만
     assert "최대 4줄" in s and "제공된 공고 정보에서 요구 역량을 확인하기 어렵습니다" in s
     assert "번호, 글머리 기호" in s  # 앱이 붙임
     assert "불충족" not in s  # ui-style: 충족 / 미충족 / 확인 필요

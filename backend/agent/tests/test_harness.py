@@ -4,7 +4,7 @@ from pathlib import Path
 
 from backend.agent import prompt
 from backend.agent.report_cache import cache_key
-from tools.harness_check import violations
+from tools.harness_check import check, report_verdict, violations
 
 HARNESS = Path(prompt.__file__).resolve().parent / "harness"
 
@@ -42,3 +42,26 @@ def test_violations_detects_format_breaks():
     found = violations(bad, 1, 2)
     for word in ("영어 코드", "긴 문단", "평서형", "fit: 꼬리표", "eligibility: 첫 줄", "todo: 90자"):
         assert any(word in v for v in found), word
+
+
+def test_verdict_must_match_server():
+    """서버 판정과 eligibility 첫 줄 판정 낱말이 다르면 품질 오류."""
+    base = {"fit": "맞음: 겹침", "todo": "확인합니다.", "skills": "SW 개발"}
+    same = dict(base, eligibility="미충족: 3학년 이상만 지원할 수 있습니다.")
+    assert check(same, 0, 0, "not_met") == ([], [])
+    diff = dict(base, eligibility="확인 필요: 학년을 확인해야 합니다.")
+    quality, _ = check(diff, 0, 0, "not_met")
+    assert any("판정 불일치(서버 미충족, 리포트 확인 필요)" in q for q in quality)
+    none = dict(base, eligibility="학년 조건이 있습니다.")
+    quality, _ = check(none, 0, 0, "met")
+    assert any("판정 낱말 없음" in q for q in quality)
+
+
+def test_old_format_verdict_is_read_but_format_is_separate():
+    """예전 '판정: 불충족' 줄도 판정은 읽는다. 첫 줄 모양은 형식 점검으로만 잡힌다."""
+    old = {"fit": "관심 분야와 이어집니다.\n일정 확인이 필요합니다.\n지역 확인이 필요합니다.",
+           "eligibility": "판정: 불충족\n학년 조건", "todo": "확인합니다.", "skills": "SW 개발"}
+    assert report_verdict(old) == "미충족"
+    quality, form = check(old, 0, 0, "not_met")
+    assert quality == []
+    assert any("fit: 줄 3개" in f for f in form) and any("eligibility: 첫 줄" in f for f in form)

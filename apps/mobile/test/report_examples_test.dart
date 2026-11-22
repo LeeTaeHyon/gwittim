@@ -17,12 +17,12 @@ const exampleNeedsPlace = AnalysisReport(
   skills: '앱 시제품 제작\n사용자 문제 정의\n발표 자료 작성',
 );
 
-/// 예시 B (설명용): 학년 조건 미충족 학생, 서버 판정 미충족
+/// 예시 B (설명용): 학년 조건 미충족 학생, 서버 판정 미충족.
+/// 학년 조건은 지원 자격 칸에서만 말하고, 할 일에는 공고 자료에 없는 일정(다음 학기·학과 공지 등)을 쓰지 않는다.
 const exampleGradeNotMet = AnalysisReport(
-  fit: '안 맞음: 3학년 이상만 지원할 수 있어, 2학년인 지금은 이번 모집에 지원할 수 없습니다.\n'
-      '맞음: 공고의 데이터 분석 과업은 해 본 것(데이터 분석)과 이어져, 다음 모집 때 참고할 수 있습니다.',
+  fit: '맞음: 공고의 과업이 데이터 분석이라, 해 본 것(데이터 분석)과 같은 종류의 일입니다.',
   eligibility: '미충족: 3학년 이상만 지원할 수 있는데 프로필 학년은 2학년입니다.\n재학 상태 조건은 충족합니다.',
-  todo: '다음 학기 같은 프로그램 모집 공고가 나오는지 학과 공지를 확인합니다.',
+  todo: '프로필의 학년이 현재 학년과 맞는지 확인합니다.',
   skills: '제공된 공고 정보에서 요구 역량을 확인하기 어렵습니다.',
 );
 
@@ -63,7 +63,10 @@ void main() {
     await _pump(tester, exampleGradeNotMet, status: 'not_met');
     expect(_top(tester, '지원 자격'), lessThan(_top(tester, '나와 이 공고')));
     expect(find.text('미충족'), findsOneWidget);
-    expect(find.text('안 맞음'), findsOneWidget);
+    expect(find.text('맞음'), findsOneWidget);
+    // 학년 조건은 지원 자격 칸에서 한 번만
+    expect(findTextContaining('3학년'), findsOneWidget);
+    expect(findTextContaining('다음 학기'), findsNothing);
     await tester.scrollUntilVisible(findTextContaining('요구 역량을 확인하기 어렵습니다'), 300);
     expect(findTextContaining('요구 역량을 확인하기 어렵습니다'), findsOneWidget);
   });
@@ -78,5 +81,24 @@ void main() {
     await _pump(tester, old);
     expect(find.text('미충족'), findsOneWidget);
     expect(findTextContaining('불충족'), findsNothing);
+  });
+
+  testWidgets('역량이 한 줄이어도 칩으로', (tester) async {
+    const one = AnalysisReport(
+      fit: '맞음: 겹침',
+      eligibility: '충족: 재학 조건을 충족합니다.',
+      todo: '확인합니다.',
+      skills: '데이터 분석',
+    );
+    await _pump(tester, one, status: 'met');
+    await tester.scrollUntilVisible(find.text('데이터 분석'), 300);
+    expect(find.ancestor(of: find.text('데이터 분석'), matching: find.byType(Wrap)), findsOneWidget);
+  });
+
+  testWidgets('역량 확인 어려움 안내는 한 줄이어도 칩이 아님', (tester) async {
+    await _pump(tester, exampleGradeNotMet, status: 'not_met');
+    final unknown = findTextContaining('요구 역량을 확인하기 어렵습니다');
+    await tester.scrollUntilVisible(unknown, 300);
+    expect(find.ancestor(of: unknown, matching: find.byType(Wrap)), findsNothing);
   });
 }
