@@ -13,6 +13,8 @@ SPEC §5·§7의 필드 의미를 JSON Schema(Draft 2020-12)로 고정합니다.
 | `saved_notice.schema.json`, `saved_notice_list_response.schema.json` | 저장, 저장 목록 응답 |
 | `analysis_request.schema.json` | 상세 분석 요청 (칩) |
 | `analysis_response.schema.json` | 상세 분석 응답 (리포트 4칸) |
+| `external_search_request.schema.json` | 외부 공고 찾기 요청 (버튼 값 + 선택 한 줄 50자, D-047) |
+| `external_search_response.schema.json` | 외부 공고 찾기 응답 (검색 출처로 확인된 결과 최대 5개) |
 | `credits.schema.json` | 크레딧 잔액·사용 내역 |
 | `api_error.schema.json` | API 오류 응답 |
 | `dictionary.schema.json`, `dictionaries/*.json` | 공통 사전 (모두 `draft`). 칩 사전 `experience_chips`·`period_chips`·`region_chips` 포함 |

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/external_search_request.schema.json",
+  "title": "request_external_search 요청 — 외부 공고 찾기",
+  "description": "버튼 값(공고 분류·관심 분야·가능한 시기·갈 수 있는 지역)과 선택 한 줄(최대 50자). 한 줄은 검색에만 쓰고 저장·로그에 남기지 않음. 코드 사전: categories, interests, period_chips, region_chips(사전 밖 값은 의미 검증에서 거부, 서버는 무시). 사용자 ID는 인증 정보에서 얻음. docs/agent-privacy-spec.md §2.3, D-047.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "재시도 안전을 위한 요청 식별자. 같은 id로 두 번 차감하지 않음."
+    },
+    "category": {
+      "$ref": "common.schema.json#/$defs/code"
+    },
+    "interests": {
+      "$ref": "common.schema.json#/$defs/code_list",
+      "maxItems": 5
+    },
+    "period": {
+      "$ref": "common.schema.json#/$defs/code"
+    },
+    "regions": {
+      "$ref": "common.schema.json#/$defs/code_list",
+      "if": {
+        "contains": {
+          "const": "any"
+        }
+      },
+      "then": {
+        "maxItems": 1
+      }
+    },
+    "query": {
+      "type": "string",
+      "maxLength": 50,
+      "description": "선택. 빈 문자열은 적지 않은 것으로 봄. 50자를 넘으면 거절(자르지 않음)."
+    }
+  }
+}

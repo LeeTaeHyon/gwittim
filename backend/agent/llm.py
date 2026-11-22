@@ -11,6 +11,9 @@
 - `deepseek`는 DeepSeek Platform 공식 API(Chat Completions, 모델 `deepseek-flash` = V4.1 Flash)를 urllib로 부른다.
   키(`DEEPSEEK_API_KEY`)가 없으면 호출하지 않고 `ProviderNotReady`. JSON 스키마 강제가 없어 `json_object` 모드만 쓰고
   4칸은 `parse_report`로 검사한다. 추론 내용(reasoning_content)은 버린다. 생각은 끈다(`reasoning_effort: none`, 2026-11-22 비교: low 대비 약 3배 싸고 빠르며 품질 차이 없음).
+- 외부 공고 찾기(웹 검색, D-047)는 `web_search`로 따로 부른다. deepseek만 실제로 검색하고, fake는 합성 결과,
+  cli·api는 `ProviderNotReady`. DeepSeek 웹 검색 도구는 JSON 모드와 함께 쓸 수 없어(400) 지시문으로 JSON을 받고,
+  검색 출처(server_tool_calls의 sources)를 함께 돌려준다. 결과 검증은 backend/agent/external.py가 한다.
 - 공식 SDK는 쓰지 않음(2026-11-21). 요청 종류가 늘거나 스트리밍·도구 호출이 필요하면 SDK로 바꿈(새 라이브러리 승인 필요).
 - 프롬프트·응답 원문과 키 값은 로그·예외 메시지에 넣지 않는다.
   로그에는 명세 §3의 요청 시각·공고 id·토큰 수·비용·성공 여부와 제공자 이름·소요 시간만 남긴다.
@@ -72,6 +75,7 @@ DEEPSEEK_EFFORT = "none"  # 판정은 서버 규칙이 내리고 모델은 문�
 DEEPSEEK_PRICE_PEAK = (0.30, 1.20)
 DEEPSEEK_PRICE_OFF_PEAK = (0.15, 0.60)
 DEEPSEEK_PEAK_HOURS_UTC = frozenset({1, 2, 3, 6, 7, 8, 9})
+DEEPSEEK_SEARCH_MAX_TOKENS = 4000  # 외부 공고 찾기 답(최대 5개)
 TIMEOUT_SECONDS = 120
 
 
@@ -124,6 +128,18 @@ class Usage:
 @dataclass(frozen=True)
 class LLMResult:
     report: dict
+    usage: Usage = field(compare=False)
+
+
+@dataclass(frozen=True)
+class WebSearchResult:
+    """웹 검색 호출 결과. text는 모델 답(검증 전), sources는 검색 도구가 실제로 본 페이지 목록.
+
+    sources 항목: {"url", "title", "snippet", "site_name", "published_at"} (DeepSeek server_tool_calls 형식)
+    """
+
+    text: str
+    sources: list[dict]
     usage: Usage = field(compare=False)
 
 
@@ -219,12 +235,37 @@ FAKE_REPORT = {
 }
 
 
+# 외부 공고 찾기 합성 결과: 모델 답 3개 중 하나는 출처에 없는 주소(검증에서 빠져야 함)
+FAKE_SEARCH_SOURCES = [
+    {"url": "https://contest.example.invalid/view/1", "title": "합성 소프트웨어 공모전 참가자 모집",
+     "snippet": "접수 기간 2026.11.20 ~ 2026.12.31 대학생 누구나 온라인 접수", "site_name": "합성 공모전 사이트",
+     "published_at": None},
+    {"url": "https://list.example.invalid/contests", "title": "공모전 목록",
+     "snippet": "[합성 AI 아이디어 해커톤] 참가자 모집 | 2026.11.01 ~ 2026.12.15", "site_name": "합성 목록 사이트",
+     "published_at": None},
+]
+FAKE_SEARCH_TEXT = json.dumps({"items": [
+    {"title": "합성 소프트웨어 공모전", "url": "https://contest.example.invalid/view/1", "deadline": "2026-12-31",
+     "reason": "합성 예시입니다. 관심 분야인 소프트웨어 개발과 이어지는 공모전입니다."},
+    {"title": "합성 AI 아이디어 해커톤", "url": "https://made-up.example.invalid/", "deadline": "2026-12-15",
+     "reason": "합성 예시입니다. 온라인으로 참여할 수 있습니다."},
+    {"title": "출처에 없는 합성 대회", "url": "https://nowhere.example.invalid/", "deadline": "2026-12-20",
+     "reason": "합성 예시입니다."},
+]}, ensure_ascii=False)
+
+
 class FakeProvider:
     name = "fake"
 
     def __init__(self, env: Mapping[str, str] | None = None):
         env = os.environ if env is None else env
         self._cloud_run = _on_cloud_run(env)
+
+    def web_search(self, system: str, user: str) -> WebSearchResult:
+        call = _Call(self.name, None)
+        if self._cloud_run:
+            raise call.fail(ProviderNotReady("Cloud Run에서는 fake 제공자를 쓸 수 없습니다"))
+        return WebSearchResult(FAKE_SEARCH_TEXT, [dict(s) for s in FAKE_SEARCH_SOURCES], Usage(self.name, 0.0))
 
     def generate(self, system: str, user: str, notice_id: str | None = None) -> LLMResult:
         if self._cloud_run:  # 합성 리포트를 실사용자에게 주지 않는다. 시작은 막지 않고 호출 때 준비 중으로 답한다
@@ -457,6 +498,60 @@ class DeepSeekProvider:
             raise call.fail(ProviderCallError("deepseek가 내용 필터로 응답을 막았습니다"), tin, tout)
         # JSON으로 인식되지 않은 출력은 공백으로 바뀌어 온다 -> parse_report가 ReportFormatError로 처리
         return call.finish(text, tin, tout)
+
+    def web_search(self, system: str, user: str) -> WebSearchResult:
+        """웹 검색 도구를 켠 호출 한 번(D-047). 검색은 DeepSeek 서버가 하고, 클라이언트 쪽 도구 실행은 없다.
+
+        - 생각 끔(`thinking: disabled`) = 일반 웹 검색. 켜면 '깊은 검색'(최대 약 20번 호출)이라 느리고 비싸다
+        - JSON 모드 불가(웹 도구와 함께 쓰면 400) → 지시문으로 JSON을 받고 서버가 검증한다
+        - 사이트 제한(allowed_domains 등)은 지원하지 않는다(400) → 출처 검증으로 대신한다
+        - 검색 자체는 2026-11-18부터 따로 과금하지 않고, 결과가 입력 토큰으로 잡힌다(약 1만 토큰)
+        """
+        call = _Call(self.name, None)
+        call.price_input, call.price_output = deepseek_prices(call.requested_at)
+        if not self._key:
+            raise call.fail(ProviderNotReady("deepseek 키가 없어 준비 중입니다"))
+        body = json.dumps(
+            {
+                "model": DEEPSEEK_MODEL,
+                "max_tokens": DEEPSEEK_SEARCH_MAX_TOKENS,
+                "thinking": {"type": "disabled"},
+                "tools": [{"type": "deepseek_web_search"}],
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            DEEPSEEK_URL, data=body, method="POST",
+            headers={"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"},
+        )
+        payload = _post_json(
+            req, call, self.name, self.timeout, self._sleep, self._clock,
+            http_errors={401: "deepseek 인증에 실패했습니다(키 없음 또는 무효)", 402: "deepseek 잔액이 부족합니다"},
+        )
+        payload = payload if isinstance(payload, dict) else {}
+        usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else {}
+        tin, tout = usage.get("prompt_tokens"), usage.get("completion_tokens")
+        tin = tin if isinstance(tin, int) else None
+        tout = tout if isinstance(tout, int) else None
+        choices = payload.get("choices")
+        choice = choices[0] if isinstance(choices, list) and choices and isinstance(choices[0], dict) else {}
+        message = choice.get("message") if isinstance(choice.get("message"), dict) else {}
+        finish = choice.get("finish_reason")
+        if finish == "length":
+            raise call.fail(ReportFormatError("deepseek 응답이 최대 길이에서 잘렸습니다"), tin, tout)
+        if finish == "content_filter":
+            raise call.fail(ProviderCallError("deepseek가 내용 필터로 응답을 막았습니다"), tin, tout)
+        sources = []
+        for step in message.get("server_tool_calls") or []:
+            for c in (step.get("calls") or []) if isinstance(step, dict) else []:
+                for src in (c.get("sources") or []) if isinstance(c, dict) else []:
+                    if isinstance(src, dict) and isinstance(src.get("url"), str):
+                        sources.append({k: src.get(k) for k in ("url", "title", "snippet", "site_name", "published_at")})
+        text = message.get("content") if isinstance(message.get("content"), str) else ""
+        elapsed = time.monotonic() - call.started
+        _log(self.name, None, call.requested_at, elapsed, tin, tout, True, call.price_input, call.price_output)
+        return WebSearchResult(text, sources, Usage(self.name, elapsed, tin, tout, call.price_input, call.price_output))
 
 def get_provider(name: str | None = None, env: Mapping[str, str] | None = None) -> Provider:
     """제공자를 만든다. name이 없으면 GWITTIM_LLM_PROVIDER, 그것도 없으면 fake."""

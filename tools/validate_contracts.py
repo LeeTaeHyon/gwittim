@@ -71,6 +71,8 @@ DICT_FIELDS = {
     "experience": "experience_chips",
     "period": "period_chips",
     "regions": "region_chips",
+    # 외부 공고 찾기 요청 (external_search_request)
+    "interests": "interests",
 }
 
 
