@@ -19,7 +19,7 @@ from backend.recommendation import evaluate
 from .credits import DETAIL_ANALYSIS, current_state, next_refill_at, reserve, settle, signup
 from .llm import generate_report
 from .payload import build_payload
-from .prompt import build_messages, scrub_codes, split_long_lines
+from .prompt import HARNESS_VERSION, build_messages, scrub_codes, split_long_lines
 from .report_cache import cache_key, is_expired, report_expires_at
 
 if TYPE_CHECKING:
@@ -87,7 +87,7 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
 
     now = deps.clock.now()
     payload = build_payload(profile, body["chips"])
-    key = cache_key(notice_id, payload)
+    key = cache_key(notice_id, payload, HARNESS_VERSION)
     stored = _live(deps.reports.get_by_key(uid, key), now)
 
     month = deps.month_kst()
@@ -137,14 +137,17 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
         doc = {
             "notice_id": notice_id,
             "key": key,
+            "harness_version": HARNESS_VERSION,  # 어느 지침으로 만든 리포트인지 (원문은 남기지 않음)
             "report": report,
             "created_at": now,
             "expires_at": report_expires_at(notice["application_deadline"], now),
             "request_id": request_id,
         }
         deps.reports.put(uid, doc)
+        log.info("analysis created notice_id=%s harness=%s provider=%s cost_krw=%s",
+                 notice_id, HARNESS_VERSION, result.usage.provider, result.usage.cost_krw)
     except Exception as exc:  # LLM 실패·저장 실패 모두 환불. 원문은 로그에 남기지 않는다
-        log.warning("analysis failed notice_id=%s error=%s", notice_id, type(exc).__name__)
+        log.warning("analysis failed notice_id=%s harness=%s error=%s", notice_id, HARNESS_VERSION, type(exc).__name__)
         usage = getattr(exc, "usage", None)  # 실패한 호출도 토큰이 있으면 비용이 든 것으로 센다
         if not spent and usage is not None:
             _add_spend(deps, month, usage.cost_krw)
