@@ -255,6 +255,8 @@ class _ReportScreenState extends State<ReportScreen> {
             title: notice.summary.title,
             receivedAt: _credits?.analysisReceivedAt(widget.noticeId),
             skippedExperience: skippedExperience,
+            // 추천 목록에서 들어온 공고만 서버 판정이 있다. 없으면 리포트는 기본 순서
+            eligibilityStatus: widget.recommendation?.eligibilityStatus,
           ),
         ),
       );
