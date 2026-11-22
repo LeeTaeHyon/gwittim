@@ -533,8 +533,11 @@ class SavedEntry {
 }
 
 class DictionaryItem {
-  const DictionaryItem(this.id, this.name);
+  const DictionaryItem(this.id, this.name, {this.universityId});
 
   final String id;
   final String name;
+
+  /// 학과 사전에서 학과가 속한 학교 코드. 다른 사전은 null.
+  final String? universityId;
 }
