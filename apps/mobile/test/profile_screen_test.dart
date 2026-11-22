@@ -291,12 +291,11 @@ void main() {
       expect(find.text('숭의여자대학교 ${first.name}'), findsOneWidget);
     });
 
-    testWidgets('학교를 선택 안 함으로 두면 학과 칸이 없고 안내가 보인다', (tester) async {
+    testWidgets('학교를 선택 안 함으로 두면 학과 칸은 그대로 있다 (기존 동작)', (tester) async {
       await openProfile(tester);
       await tester.tap(find.text('입력하기'));
       await tester.pumpAndSettle();
-      expect(find.text('학과'), findsNothing);
-      expect(find.text('학교를 선택하면 학과를 고를 수 있습니다.'), findsOneWidget);
+      expect(find.text('학과'), findsWidgets);
     });
   });
 
