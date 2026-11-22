@@ -94,11 +94,11 @@ def test_region_any_is_exclusive():
 
 def test_unlisted_school_is_named_without_guessing_school():
     """unlisted는 '목록에 없는 학교'로 이름 붙고, 학교 이름·학과는 만들어 붙이지 않는다 (D-043)."""
-    from backend.agent.prompt import _labels
+    from backend.agent.prompt import _student
 
     profile = {**PROFILE, "university_id": "unlisted", "major_id": None}
     payload = build_payload(profile, {})
     assert payload["university_id"] == "unlisted" and "major_id" not in payload
-    names = _labels(payload)
-    assert names["unlisted"] == "목록에 없는 학교"
-    assert "mjc" not in names and not any(k.startswith("mjc.") for k in names)
+    student = _student(payload)  # 모델에 보내는 학생 정보(한국어, #127)
+    assert student["학교"] == "목록에 없는 학교"
+    assert "학과" not in student and "명지" not in str(student)
