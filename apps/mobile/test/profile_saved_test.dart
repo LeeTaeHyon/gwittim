@@ -76,7 +76,7 @@ void main() {
     expect(find.byType(ProfileScreen), findsOneWidget); // 저장하면 내 정보로 돌아온다
 
     final profile = await repo.getProfile();
-    expect(profile!.universityId, 'mjc');
+    expect(profile!.universityId, isNull); // 학교는 기본값 없이 비어 있다
     expect(profile.interestIds, ['software']);
     expect(profile.majorId, isNull); // 선택하지 않은 항목은 추정하지 않음
 
