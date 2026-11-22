@@ -334,3 +334,47 @@ def test_unlisted_fails_school_condition_without_filter(profile):
     # null 학생은 비교할 수 없어 needs_check 쪽
     status_null, _ = evaluate(cond_notice["eligibility"], dict(profile, university_id=None))
     assert status_null == "needs_check"
+
+
+# ---------- 학교 출처 공지는 같은 학교 학생에게만 (두 번째 학교 숭의, D-045) ----------
+
+SEWU_TODAY = date(2026, 11, 20)  # 숭의 합성 공지(신청 ~ 12-04)가 열려 있는 날
+SEWU_NOW = "2026-11-20T03:05:00Z"
+
+
+def _sewu_notice_and_others() -> tuple[dict, dict, dict]:
+    sewu = fixture("notice/sewu_notice_scholarship.json")
+    mjc = fixture("notice/explicitly_unrestricted.json")
+    external = fixture("notice/external_contest.json")
+    return sewu, mjc, external
+
+
+def _ids_on(notices: list[dict], profile: dict) -> list[str]:
+    out = recommend(notices, profile, today=SEWU_TODAY, generated_at=SEWU_NOW)
+    assert schema_errors("recommendation_list_response", out) == []
+    return _ids(out)
+
+
+def test_sewu_notice_is_visible_only_to_sewu_students(profile):
+    sewu, mjc, external = _sewu_notice_and_others()
+    assert sewu["source_id"] == "sewu_www_notice"
+    for school in ("mjc", "unlisted", None):
+        ids = _ids_on([sewu], dict(profile, university_id=school, major_id=None))
+        assert sewu["notice_id"] not in ids, school
+    ids = _ids_on([sewu, mjc, external], dict(profile, university_id="sewu", major_id=None))
+    assert sewu["notice_id"] in ids
+
+
+def test_mjc_notice_is_hidden_from_sewu_students_but_external_is_kept(profile):
+    sewu, mjc, external = _sewu_notice_and_others()
+    ids = _ids_on([sewu, mjc, external], dict(profile, university_id="sewu", major_id=None))
+    assert mjc["notice_id"] not in ids
+    assert external["notice_id"] in ids
+
+
+def test_sewu_notice_is_hidden_from_search_of_other_schools(profile):
+    sewu, _, _ = _sewu_notice_and_others()
+    out = recommend(
+        [sewu], dict(profile, university_id="mjc"), today=SEWU_TODAY, generated_at=SEWU_NOW, query=sewu["title"][:4]
+    )
+    assert _ids(out) == []
