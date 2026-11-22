@@ -144,7 +144,7 @@ def test_prompt_first_card_rules():
     """첫 칸(나와 이 공고)·지원 자격·할 일·역량 규칙 (2026-11-23 리포트 개선)."""
     s = SYSTEM_PROMPT
     assert "나와 이 공고" in s and "지원 결정을 가장 크게 바꾸는 사실부터" in s and "최대 2개만" in s
-    assert "마감이 오늘보다 앞이면 첫 줄은 마감이 지났다는 사실" in s
+    assert "첫 줄은 마감이 지났다는 사실" in s and "요약·제목에만 있는 내용은 근거가 아닙니다" in s
     assert "어디서 어떻게 쌓았는지" in s and "'방학에만 가능'처럼 넓히거나" in s  # 선택값·경위 추정 금지
     assert "강의 주제, 배울 내용, 모집 대상" in s  # 역량이 아닌 것
     assert "이번 모집은 지원 전에 할 일이 없습니다" in s  # 미충족·마감 지남이고 판단을 바꿀 확인 사항이 없을 때
@@ -159,3 +159,70 @@ def test_prompt_first_card_rules():
     assert "번호, 글머리 기호" in s  # 앱이 붙임
     assert "불충족" not in s  # ui-style: 충족 / 미충족 / 확인 필요
 
+
+
+
+# ---------- 근거 맞추기 (역량·할 일) ----------
+
+from backend.agent.prompt import SKILLS_UNKNOWN, TODO_NONE, deadline_passed, ground_report  # noqa: E402
+
+_TODAY = date(2026, 11, 23)
+
+
+def _notice(unresolved=(), deadline=None):
+    return {
+        "eligibility": {"unresolved_conditions": [{"evidence": e, "note": n} for e, n in unresolved]},
+        "application_deadline": {"date": deadline} if deadline else None,
+    }
+
+
+def _report(skills="", todo="확인합니다."):
+    return {"fit": "맞음: 겹침", "eligibility": "확인 필요: 조건", "todo": todo, "skills": skills}
+
+
+def test_skills_kept_only_with_source_and_preferred_from_source():
+    notice = _notice([("AI를 활용해 결과물을 직접 만들어 본 경험이 있는 분", "우대 사항"),
+                      ("토익 750점 이상", None)])
+    out, ch = ground_report(_report("AI를 활용한 결과물 제작\n토익 750점 이상 (우대)\nSW 개발 역량"), notice, "needs_check", _TODAY)
+    # 우대는 원문 구분으로: 앞 줄은 붙이고, 토익은 자격 조건이라 뗀다. 원문에 없는 모집 부문은 뺀다
+    assert out["skills"].split("\n") == ["AI를 활용한 결과물 제작 (우대)", "토익 750점 이상"]
+    assert ch == {"skills_dropped": 1}
+
+
+def test_skills_without_source_become_unknown_sentence():
+    notice = _notice([("코딩 경험이 없는 비전공자", "LLM 추출")])
+    out, ch = ground_report(_report("AI 활용 학습도구 개발 기초\n바이브코딩 실습"), notice, "needs_check", _TODAY)
+    assert out["skills"] == SKILLS_UNKNOWN and ch["skills_dropped"] == 2
+    out, _ = ground_report(_report(SKILLS_UNKNOWN), _notice(), "met", _TODAY)
+    assert out["skills"] == SKILLS_UNKNOWN
+
+
+def test_deadline_passed_todo_is_fixed_sentence():
+    notice = _notice(deadline="2026-11-18")
+    assert deadline_passed(notice, _TODAY) and not deadline_passed(_notice(), _TODAY)
+    out, ch = ground_report(_report(SKILLS_UNKNOWN, "다음 모집 공고가 나올 때 지원 여부를 판단합니다."), notice, "needs_check", _TODAY)
+    assert out["todo"] == TODO_NONE and ch == {"todo": "deadline_passed"}
+    out, _ = ground_report(_report(SKILLS_UNKNOWN, "근무지를 확인합니다."), _notice(deadline="2026-11-23"), "needs_check", _TODAY)
+    assert out["todo"] == "근무지를 확인합니다."  # 오늘 마감은 아직 지나지 않음
+
+
+def test_not_met_todo_drops_application_prep_and_made_up_schedule():
+    out, ch = ground_report(
+        _report(SKILLS_UNKNOWN, "AI를 활용해 만든 결과물을 정리해 둡니다.\n병역 관련 결격사유 여부를 확인합니다."),
+        _notice(), "not_met", _TODAY)
+    assert out["todo"] == "병역 관련 결격사유 여부를 확인합니다." and ch == {"todo": "not_met_filtered"}
+    out, _ = ground_report(_report(SKILLS_UNKNOWN, "다음 학기 학과 공지를 확인합니다."), _notice(), "not_met", _TODAY)
+    assert out["todo"] == TODO_NONE
+    # 미충족이 아니면 할 일은 그대로
+    out, ch = ground_report(_report(SKILLS_UNKNOWN, "지원서 초안을 씁니다."), _notice(), "met", _TODAY)
+    assert out["todo"] == "지원서 초안을 씁니다." and ch == {}
+
+
+def test_material_marks_deadline_passed():
+    notice = {
+        "title": "합성 공고", "category": None, "summary": "요약",
+        "application_deadline": {"date": "2026-11-18", "time": None, "timezone": None, "precision": "date"},
+        "eligibility": {"conditions": [], "unresolved_conditions": [], "extraction_complete": True},
+    }
+    _, user = build_messages(notice, {}, ("met", []), _TODAY)
+    assert "마감 지남" in user

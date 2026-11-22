@@ -27,7 +27,8 @@ sys.path.insert(0, str(ROOT))
 from backend.agent import llm  # noqa: E402
 from backend.agent.payload import build_payload  # noqa: E402
 from backend.agent.prompt import (  # noqa: E402
-    HARNESS_FILE, HARNESS_VERSION, build_messages, load_harness, scrub_codes, split_long_lines,
+    HARNESS_FILE, HARNESS_VERSION, build_messages, deadline_passed, ground_report, load_harness, scrub_codes,
+    split_long_lines,
 )
 from backend.recommendation import evaluate  # noqa: E402
 
@@ -139,10 +140,12 @@ def run(system: str, notice: dict, provider, today: date) -> dict:
     res = provider.generate(system, user, notice_id=notice["notice_id"])
     report, scrubbed = scrub_codes(res.report)
     report, split = split_long_lines(report)
-    dl = notice.get("application_deadline") or {}
-    passed = bool(dl.get("date")) and dl["date"] < today.isoformat()
+    raw_skills, raw_todo = report.get("skills"), report.get("todo")
+    report, grounded = ground_report(report, notice, verdict[0], today)  # 운영(service.py)과 같은 후처리
+    passed = deadline_passed(notice, today)
     quality, form = check(report, scrubbed, split, verdict[0], passed)
-    return {"report": report, "quality": quality, "format": form, "verdict": verdict[0],
+    return {"report": report, "quality": quality, "format": form, "verdict": verdict[0], "grounded": grounded,
+            "model": {"skills": raw_skills, "todo": raw_todo},
             "tokens": (res.usage.input_tokens, res.usage.output_tokens), "cost": res.usage.cost_krw,
             "seconds": round(res.usage.elapsed_seconds, 1)}
 
@@ -186,6 +189,9 @@ def main(argv=None) -> int:
                     f"토큰 {r['tokens'][0]}/{r['tokens'][1]} · {r['cost']}원 · {r['seconds']}초")
             print(f"[{nid}] {name}: 품질 {q} / {form_label} {f}")
             lines += [head, ""] + [f"**{k}**\n{v}\n" for k, v in r["report"].items()]
+            if r["grounded"]:  # 후처리 전 모델 출력도 남겨, 지침이 어디까지 지켰는지 본다
+                lines += [f"후처리: {r['grounded']}", "", "모델 원래 출력",
+                          f"- skills: {r['model']['skills']!r}", f"- todo: {r['model']['todo']!r}", ""]
     lines.append("\n## 합계")
     for name, t in tally.items():
         lines.append(f"- {name}: 품질 오류 {t['quality']}건, 형식 점검 {t['format']}건")
