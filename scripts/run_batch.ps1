@@ -8,6 +8,7 @@
 #   폰 알림은 200자에서 잘리므로 전문은 내보내기로 채운다. 방마다 가장 새 파일만 읽는다. -NoKakaoExport 로 끈다
 # - 게시판 다음, 알림톡 앞에 교외 공모전(D-038: 위비티·콘테스트코리아)을 차례로 돈다. 같은 data\local을 쓰므로 직렬로만.
 #   robots·3초 간격·실행당 상한은 수집기가 지킨다. 실패해도 배치는 이어간다(종료 코드에 넣지 않음). -NoExternal 로 끈다
+# - 명지 게시판 다음, 교외 앞에 숭의여대 공지(D-045, 학교 팩)를 돈다. 교외와 같은 규칙(실패해도 이어감). -NoSewu 로 끈다
 # Windows 알림(WinRT)이 필요하므로 Windows PowerShell 5.1로 실행한다. 이 파일은 UTF-8 BOM으로 저장한다(5.1의 한글 처리).
 param(
     [Parameter(Mandatory = $true)][string]$DataDir,
@@ -16,7 +17,8 @@ param(
     [string]$Uv = "uv",
     [string]$KakaoDir = "",
     [switch]$NoKakaoExport,
-    [switch]$NoExternal
+    [switch]$NoExternal,
+    [switch]$NoSewu
 )
 
 $ErrorActionPreference = "Continue"
@@ -56,6 +58,28 @@ try {
     Pop-Location
 }
 foreach ($line in $lines) { Write-Log $line }
+
+# 숭의여대 공지 (D-045): 명지 게시판 다음, 교외 앞. 실패해도 배치는 이어간다(종료 코드에 넣지 않음)
+$sewuPublished = 0
+$sewuNote = ""
+if ($exit -eq 0 -and -not $NoSewu) {
+    Push-Location $code
+    try {
+        $slines = & $Uv run --frozen python -m backend.collectors.sewu_www --data-dir $DataDir 2>&1 | ForEach-Object { "$_" }
+        $sexit = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    foreach ($line in $slines) { Write-Log $line }
+    $sline = $slines | Where-Object { $_ -like '{*' } | Select-Object -Last 1
+    if ($sexit -eq 0 -and $sline) {
+        $sw = $sline | ConvertFrom-Json
+        $sewuPublished = [int]$sw.published
+        if ($sw.stopped) { $sewuNote = " (멈춤)" }
+    } else {
+        $sewuNote = " (실패)"
+    }
+}
 
 # 교외 공모전 (D-038): 게시판 다음, 알림톡 앞. 출처마다 따로 돌리고 한 곳이 실패해도 다음으로 넘어간다
 $externalSources = @("wevity", "contestkorea")
@@ -128,9 +152,11 @@ if ($exit -eq 0 -and $summaryLine) {
         $k = $kakaoLine | ConvertFrom-Json
         $kakao = " | 알림톡 게시 $($k.published) (폰 수집 $($k.inbox))$exportNote"
     }
+    $sewu = ""
+    if (-not $NoSewu) { $sewu = " | 숭의 게시 $sewuPublished$sewuNote" }
     $external = ""
     if (-not $NoExternal) { $external = " | 교외 게시 $externalPublished$externalNote" }
-    Show-Toast "귀띔 수집 완료 ($minutes분)" "새 $($o.new) · 변경 $($o.changed) · 그대로 $($o.unchanged) | $gpu$external$kakao"
+    Show-Toast "귀띔 수집 완료 ($minutes분)" "새 $($o.new) · 변경 $($o.changed) · 그대로 $($o.unchanged) | $gpu$sewu$external$kakao"
 } else {
     Show-Toast "귀띔 수집 실패" "batch.log를 확인해 주세요. (종료 코드 $exit)"
 }
