@@ -1,13 +1,17 @@
 """LLM 제공자 겹 (docs/agent-privacy-spec.md §3).
 
-환경변수 `GWITTIM_LLM_PROVIDER`로 고른다: `fake`(기본) / `cli` / `api`.
-세 제공자 모두 같은 형식의 리포트(4칸)를 돌려준다. 응답 JSON을 파싱해 4칸이 다 있는지 검사한다.
+환경변수 `GWITTIM_LLM_PROVIDER`로 고른다: `fake`(기본) / `cli` / `api` / `deepseek`.
+네 제공자 모두 같은 형식의 리포트(4칸)를 돌려준다. 응답 JSON을 파싱해 4칸이 다 있는지 검사한다.
+서비스 제공자는 `deepseek`(D-044, 2026-11-22). `api`(Anthropic)는 되돌릴 때를 위해 남겨 둔다.
 
 - `cli`는 로컬 `claude -p` 하위 프로세스다. `K_SERVICE`(Cloud Run)가 있으면 거부한다. 앱 시작 때 `check_startup()`으로
   한 번 확인한다. 도구·MCP·슬래시 명령을 끄고 빈 임시 폴더에서 실행해, 공고 본문에 섞인 지시문이 로컬 파일을
   읽게 만들 수 없게 한다.
 - `api`는 Anthropic Messages API를 urllib로 부른다. 키(`ANTHROPIC_API_KEY`)가 없으면 호출하지 않고 `ProviderNotReady`.
-- 공식 SDK는 쓰지 않음(2026-11-21). 요청 종류가 늘거나 스트리밍·도구 호출이 필요하면 ApiProvider를 SDK로 바꿈(새 라이브러리 승인 필요).
+- `deepseek`는 DeepSeek Platform 공식 API(Chat Completions, 모델 `deepseek-flash` = V4.1 Flash)를 urllib로 부른다.
+  키(`DEEPSEEK_API_KEY`)가 없으면 호출하지 않고 `ProviderNotReady`. JSON 스키마 강제가 없어 `json_object` 모드만 쓰고
+  4칸은 `parse_report`로 검사한다. 추론 내용(reasoning_content)은 버린다. 생각은 끈다(`reasoning_effort: none`, 2026-11-22 비교: low 대비 약 3배 싸고 빠르며 품질 차이 없음).
+- 공식 SDK는 쓰지 않음(2026-11-21). 요청 종류가 늘거나 스트리밍·도구 호출이 필요하면 SDK로 바꿈(새 라이브러리 승인 필요).
 - 프롬프트·응답 원문과 키 값은 로그·예외 메시지에 넣지 않는다.
   로그에는 명세 §3의 요청 시각·공고 id·토큰 수·비용·성공 여부와 제공자 이름·소요 시간만 남긴다.
 """
@@ -57,7 +61,25 @@ CLI_COMMAND = (
 PRICE_INPUT_USD_PER_MTOK = 0.10
 PRICE_OUTPUT_USD_PER_MTOK = 0.50
 KRW_PER_USD = 1400
+# deepseek(DeepSeek Platform): api-docs.deepseek.com 2026-11-22 확인
+DEEPSEEK_KEY_ENV = "DEEPSEEK_API_KEY"
+DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
+DEEPSEEK_MODEL = "deepseek-flash"  # DeepSeek-V4.1-Flash-1017
+DEEPSEEK_MAX_TOKENS = 8000  # 추론 토큰도 이 안에서 쓴다
+DEEPSEEK_EFFORT = "none"  # 판정은 서버 규칙이 내리고 모델은 문장 정리만 하므로 생각을 끈다
+# 단가(USD/MTok, 입력은 캐시 미적중 기준으로 넉넉히). 피크는 평일 UTC 01-04시·06-10시, 나머지는 절반.
+# 중국 공휴일은 할인이지만 달력을 두지 않고 피크로 계산한다(월 상한 쪽으로 보수적).
+DEEPSEEK_PRICE_PEAK = (0.30, 1.20)
+DEEPSEEK_PRICE_OFF_PEAK = (0.15, 0.60)
+DEEPSEEK_PEAK_HOURS_UTC = frozenset({1, 2, 3, 6, 7, 8, 9})
 TIMEOUT_SECONDS = 120
+
+
+def deepseek_prices(at: datetime) -> tuple[float, float]:
+    """그 시각의 DeepSeek 입력·출력 단가(USD/MTok). at은 시간대가 있는 시각."""
+    utc = at.astimezone(timezone.utc)
+    peak = utc.weekday() < 5 and utc.hour in DEEPSEEK_PEAK_HOURS_UTC
+    return DEEPSEEK_PRICE_PEAK if peak else DEEPSEEK_PRICE_OFF_PEAK
 
 
 class LLMError(Exception):
@@ -91,10 +113,12 @@ class Usage:
     elapsed_seconds: float
     input_tokens: int | None = None
     output_tokens: int | None = None
+    price_input: float = PRICE_INPUT_USD_PER_MTOK  # 제공자별 추정 단가(USD/MTok)
+    price_output: float = PRICE_OUTPUT_USD_PER_MTOK
 
     @property
     def cost_krw(self) -> float | None:
-        return estimate_cost_krw(self.input_tokens, self.output_tokens)
+        return estimate_cost_krw(self.input_tokens, self.output_tokens, self.price_input, self.price_output)
 
 
 @dataclass(frozen=True)
@@ -132,23 +156,27 @@ def parse_report(text: str) -> dict:
     return {k: data[k] for k in REPORT_KEYS}
 
 
-def estimate_cost_krw(input_tokens: int | None, output_tokens: int | None) -> float | None:
+def estimate_cost_krw(
+    input_tokens: int | None, output_tokens: int | None,
+    price_input: float = PRICE_INPUT_USD_PER_MTOK, price_output: float = PRICE_OUTPUT_USD_PER_MTOK,
+) -> float | None:
     """토큰 수로 추정한 비용(원). 토큰 수를 모르면 None(추정하지 않음)."""
     if input_tokens is None or output_tokens is None:
         return None
-    usd = (input_tokens * PRICE_INPUT_USD_PER_MTOK + output_tokens * PRICE_OUTPUT_USD_PER_MTOK) / 1_000_000
+    usd = (input_tokens * price_input + output_tokens * price_output) / 1_000_000
     return round(usd * KRW_PER_USD, 2)
 
 
 def _log(
     provider: str, notice_id: str | None, requested_at: datetime, elapsed: float,
     tin: int | None, tout: int | None, ok: bool,
+    price_input: float = PRICE_INPUT_USD_PER_MTOK, price_output: float = PRICE_OUTPUT_USD_PER_MTOK,
 ) -> None:
     log.info(
         "llm requested_at=%s notice_id=%s provider=%s elapsed=%.2fs input_tokens=%s output_tokens=%s "
         "cost_krw=%s success=%s",
         requested_at.isoformat(timespec="seconds"), notice_id, provider, elapsed, tin, tout,
-        estimate_cost_krw(tin, tout), ok,
+        estimate_cost_krw(tin, tout, price_input, price_output), ok,
     )
 
 
@@ -160,12 +188,15 @@ class _Call:
     notice_id: str | None
     requested_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     started: float = field(default_factory=time.monotonic)
+    price_input: float = PRICE_INPUT_USD_PER_MTOK
+    price_output: float = PRICE_OUTPUT_USD_PER_MTOK
 
     def fail(self, exc: LLMError, tin: int | None = None, tout: int | None = None) -> LLMError:
         elapsed = time.monotonic() - self.started
-        _log(self.provider, self.notice_id, self.requested_at, elapsed, tin, tout, False)
+        _log(self.provider, self.notice_id, self.requested_at, elapsed, tin, tout, False,
+             self.price_input, self.price_output)
         if tin is not None and tout is not None:
-            exc.usage = Usage(self.provider, elapsed, tin, tout)
+            exc.usage = Usage(self.provider, elapsed, tin, tout, self.price_input, self.price_output)
         return exc
 
     def finish(self, text: str, tin: int | None, tout: int | None) -> LLMResult:
@@ -174,8 +205,9 @@ class _Call:
             report = parse_report(text)
         except ReportFormatError as exc:
             raise self.fail(exc, tin, tout)
-        _log(self.provider, self.notice_id, self.requested_at, elapsed, tin, tout, True)
-        return LLMResult(report, Usage(self.provider, elapsed, tin, tout))
+        _log(self.provider, self.notice_id, self.requested_at, elapsed, tin, tout, True,
+             self.price_input, self.price_output)
+        return LLMResult(report, Usage(self.provider, elapsed, tin, tout, self.price_input, self.price_output))
 
 
 # 합성 문장. 명사형·합쇼체만 쓴다.
@@ -265,6 +297,43 @@ def _retry_wait(attempt: int, headers) -> float:
     return max(0.0, min(wait, API_RETRY_AFTER_MAX))
 
 
+def _post_json(
+    req: urllib.request.Request, call: _Call, label: str, timeout: float, sleep, clock,
+    http_errors: Mapping[int, str] | None = None,
+) -> dict:
+    """재시도 포함 JSON 호출(api·deepseek 공통). 429·5xx·연결 오류만 최대 API_MAX_RETRIES번 더 부른다.
+
+    전체 시간은 timeout을 넘기지 않는다. http_errors는 HTTP 코드별 메시지(원인 종류만, 키·원문 없음).
+    """
+    start = clock()
+    for attempt in range(API_MAX_RETRIES + 1):
+        remaining = timeout - (clock() - start)
+        if remaining <= 0:
+            raise call.fail(ProviderCallError(f"{label} 호출 시간이 초과되었습니다"))
+        headers = {}
+        try:
+            with urllib.request.urlopen(req, timeout=remaining) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            msg = (http_errors or {}).get(e.code) or f"{label}가 HTTP {e.code}로 응답했습니다"
+            failure = ProviderCallError(msg)
+            if not (e.code == 429 or e.code >= 500):
+                raise call.fail(failure) from None
+            headers = getattr(e, "headers", None) or {}
+        except (urllib.error.URLError, http.client.HTTPException, OSError, TimeoutError):
+            failure = ProviderCallError(f"{label} 호출에 실패했습니다")
+        except ValueError:
+            raise call.fail(ReportFormatError(f"{label} 응답을 해석하지 못했습니다")) from None
+        if attempt >= API_MAX_RETRIES:
+            raise call.fail(failure) from None
+        wait = _retry_wait(attempt, headers)
+        if (clock() - start) + wait >= timeout:
+            raise call.fail(failure) from None
+        log.info("llm retry provider=%s count=%d", label, attempt + 1)
+        sleep(wait)
+    raise call.fail(ProviderCallError(f"{label} 호출에 실패했습니다"))  # 도달하지 않음
+
+
 class ApiProvider:
     name = "api"
 
@@ -280,32 +349,7 @@ class ApiProvider:
 
     def _post(self, req: urllib.request.Request, call: _Call) -> dict:
         """재시도 포함 호출. 전체 시간은 self.timeout을 넘기지 않는다."""
-        start = self._clock()
-        for attempt in range(API_MAX_RETRIES + 1):
-            remaining = self.timeout - (self._clock() - start)
-            if remaining <= 0:
-                raise call.fail(ProviderCallError("api 호출 시간이 초과되었습니다"))
-            headers = {}
-            try:
-                with urllib.request.urlopen(req, timeout=remaining) as resp:
-                    return json.loads(resp.read().decode("utf-8"))
-            except urllib.error.HTTPError as e:
-                failure = ProviderCallError(f"api가 HTTP {e.code}로 응답했습니다")
-                if not (e.code == 429 or e.code >= 500):
-                    raise call.fail(failure) from None
-                headers = getattr(e, "headers", None) or {}
-            except (urllib.error.URLError, http.client.HTTPException, OSError, TimeoutError):
-                failure = ProviderCallError("api 호출에 실패했습니다")
-            except ValueError:
-                raise call.fail(ReportFormatError("api 응답을 해석하지 못했습니다")) from None
-            if attempt >= API_MAX_RETRIES:
-                raise call.fail(failure) from None
-            wait = _retry_wait(attempt, headers)
-            if (self._clock() - start) + wait >= self.timeout:
-                raise call.fail(failure) from None
-            log.info("llm retry provider=%s count=%d", self.name, attempt + 1)
-            self._sleep(wait)
-        raise call.fail(ProviderCallError("api 호출에 실패했습니다"))  # 도달하지 않음
+        return _post_json(req, call, self.name, self.timeout, self._sleep, self._clock)
 
     def generate(self, system: str, user: str, notice_id: str | None = None) -> LLMResult:
         call = _Call(self.name, notice_id)
@@ -353,6 +397,67 @@ class ApiProvider:
         return call.finish(text, tin, tout)
 
 
+class DeepSeekProvider:
+    name = "deepseek"
+
+    def __init__(
+        self, env: Mapping[str, str] | None = None, timeout: float = TIMEOUT_SECONDS,
+        sleep=time.sleep, clock=time.monotonic,
+    ):
+        env = os.environ if env is None else env
+        self._key = env.get(DEEPSEEK_KEY_ENV, "").strip()
+        self.timeout = timeout
+        self._sleep = sleep  # 테스트에서 가짜로 바꾼다
+        self._clock = clock
+
+    def generate(self, system: str, user: str, notice_id: str | None = None) -> LLMResult:
+        call = _Call(self.name, notice_id)
+        call.price_input, call.price_output = deepseek_prices(call.requested_at)
+        if not self._key:
+            raise call.fail(ProviderNotReady("deepseek 키가 없어 준비 중입니다"))
+        body = json.dumps(
+            {
+                "model": DEEPSEEK_MODEL,
+                "max_tokens": DEEPSEEK_MAX_TOKENS,
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                # json_object 모드는 지시문에 'json' 낱말과 형식 예시가 있어야 한다(SYSTEM_PROMPT '형식 예시(json)')
+                "response_format": {"type": "json_object"},
+                "reasoning_effort": DEEPSEEK_EFFORT,
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            DEEPSEEK_URL,
+            data=body,
+            method="POST",
+            headers={"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"},
+        )
+        payload = _post_json(
+            req, call, self.name, self.timeout, self._sleep, self._clock,
+            http_errors={
+                401: "deepseek 인증에 실패했습니다(키 없음 또는 무효)",
+                402: "deepseek 잔액이 부족합니다",
+            },
+        )
+        payload = payload if isinstance(payload, dict) else {}
+        usage = payload.get("usage")
+        usage = usage if isinstance(usage, dict) else {}
+        tin, tout = usage.get("prompt_tokens"), usage.get("completion_tokens")
+        tin = tin if isinstance(tin, int) else None
+        tout = tout if isinstance(tout, int) else None
+        choices = payload.get("choices")
+        choice = choices[0] if isinstance(choices, list) and choices and isinstance(choices[0], dict) else {}
+        message = choice.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        text = content if isinstance(content, str) else ""  # reasoning_content는 쓰지 않고 버린다
+        finish = choice.get("finish_reason")
+        if finish == "length":
+            raise call.fail(ReportFormatError("deepseek 응답이 최대 길이에서 잘렸습니다"), tin, tout)
+        if finish == "content_filter":
+            raise call.fail(ProviderCallError("deepseek가 내용 필터로 응답을 막았습니다"), tin, tout)
+        # JSON으로 인식되지 않은 출력은 공백으로 바뀌어 온다 -> parse_report가 ReportFormatError로 처리
+        return call.finish(text, tin, tout)
+
 def get_provider(name: str | None = None, env: Mapping[str, str] | None = None) -> Provider:
     """제공자를 만든다. name이 없으면 GWITTIM_LLM_PROVIDER, 그것도 없으면 fake."""
     env = os.environ if env is None else env
@@ -363,6 +468,8 @@ def get_provider(name: str | None = None, env: Mapping[str, str] | None = None) 
         return CliProvider(env)
     if chosen == "api":
         return ApiProvider(env)
+    if chosen == "deepseek":
+        return DeepSeekProvider(env)
     raise LLMError("알 수 없는 제공자입니다")
 
 

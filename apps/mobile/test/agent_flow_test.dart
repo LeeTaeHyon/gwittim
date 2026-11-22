@@ -91,9 +91,10 @@ void main() {
       final repo = await _open(tester, _Repo());
       await _tap(tester, findText('내 기준으로 자세히 보기'));
       expect(findText('AI에 보내는 정보'), findsOneWidget);
-      expect(findText('이름·이메일·학번은 보내지 않습니다.'), findsOneWidget);
+      expect(findText('이름·이메일·학번 등 직접 식별 정보는 보내지 않습니다.'), findsOneWidget);
       await _reveal(tester, find.text('동의하지 않음'));
-      expect(findText('Anthropic(미국)'), findsOneWidget);
+      expect(findText('DeepSeek(중국)'), findsOneWidget);
+      expect(findTextContaining('모델 학습에 쓰일 수 있습니다'), findsOneWidget);
       // 두 버튼은 같은 크기
       expect(
         tester.getSize(find.widgetWithText(FilledButton, '동의하고 계속')),
