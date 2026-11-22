@@ -78,6 +78,23 @@ def test_profile_rejects_user_id_and_unknown_codes(client):
     assert_error(client.put("/v1/profile", headers=ALICE, json={**profile_body(), "grade": 9}), 400, "invalid_argument")
 
 
+def test_profile_unlisted_school_requires_null_major(client):
+    """'목록에 없는 학교'(unlisted)는 저장되고, 학과가 있으면 invalid_argument (D-043)."""
+    unlisted = {**profile_body(), "university_id": "unlisted", "major_id": None}
+    resp = client.put("/v1/profile", headers=ALICE, json=unlisted)
+    assert resp.status_code == 200
+    assert resp.json()["university_id"] == "unlisted" and resp.json()["major_id"] is None
+    assert_error(client.put("/v1/profile", headers=ALICE, json={**unlisted, "major_id": "mjc.computer_engineering"}), 400, "invalid_argument")
+    assert client.get("/v1/profile", headers=ALICE).json()["major_id"] is None  # 거절된 요청은 저장되지 않음
+
+
+def test_unlisted_student_recommendations_exclude_school_notices(client):
+    client.put("/v1/profile", headers=ALICE, json={**profile_body(), "university_id": "unlisted", "major_id": None})
+    ids = [i["notice"]["notice_id"] for i in client.get("/v1/recommendations", headers=ALICE).json()["items"]]
+    assert "n_synthetic_0101" in ids  # 교외(wevity_contest)
+    assert not any(i.startswith("n_synthetic_000") or i.startswith("n_synthetic_kakao") for i in ids)  # 학교 출처
+
+
 def test_profile_limits_interests_and_roles_to_five(client):
     """관심사·직무는 각각 최대 5개 (D-031)."""
     five = ["ai_data", "software", "security", "design", "media_content"]

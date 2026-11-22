@@ -20,6 +20,13 @@ def codes(dictionary: str) -> frozenset[str]:
     return frozenset(item["id"] for item in data["items"])
 
 
+UNLISTED_UNIVERSITY = "unlisted"  # 지원 학교(학교 팩) 밖의 학교. 학과 사전이 없어 major_id는 null (SPEC §5)
+
+
+def unlisted_with_major(profile: dict) -> bool:
+    return profile.get("university_id") == UNLISTED_UNIVERSITY and profile.get("major_id") is not None
+
+
 def unknown_profile_codes(profile: dict) -> list[str]:
     bad = []
     for field, dictionary in PROFILE_FIELDS.items():

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gwittim.invalid/contracts/user_profile.schema.json",
   "title": "UserProfile — 사용자 입력",
-  "description": "미입력은 null 또는 빈 배열. 관심사·직무는 각각 최대 5개(D-031). 사용자 ID는 인증 정보에서 얻으므로 이 문서에 넣지 않음. agent_consent는 AI 상세 분석 첫 사용 동의 기록(선택, 없으면 동의하지 않은 것). SPEC §5.",
+  "description": "미입력은 null 또는 빈 배열. 관심사·직무는 각각 최대 5개(D-031). 사용자 ID는 인증 정보에서 얻으므로 이 문서에 넣지 않음. agent_consent는 AI 상세 분석 첫 사용 동의 기록(선택, 없으면 동의하지 않은 것). university_id가 \"unlisted\"(목록에 없는 학교)이면 major_id는 null(사전 밖 값 의미 규칙, tools/validate_contracts.py). SPEC §5.",
   "type": "object",
   "additionalProperties": false,
   "required": [
