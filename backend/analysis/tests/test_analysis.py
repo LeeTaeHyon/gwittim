@@ -496,6 +496,36 @@ def test_graduate_only_stays_single_value():
     assert (c["operator"], c["value"]) == ("eq", "graduated")
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        "- 2027년 2월 졸업 예정자 또는 기졸업자로, 풀타임 근무가 가능하신 분",
+        "- 기졸업자 또는 2027년 2월 졸업예정자",
+        "* 관련 학과 졸업자 및 2027년 2월 졸업 예정인 분",
+        "졸업생 및 27년 2월 졸업 예정자",
+    ],
+)
+def test_graduating_students_line_is_checked_by_hand(line):
+    """졸업 예정자는 재학생 중 일부라 졸업생만으로 읽지 않고 직접 확인으로 둔다 (D-046)."""
+    fields = RuleBasedAnalyzer().analyze(raw_notice("지원자격\n" + line), MJC)
+    assert cond(fields, "enrollment_status") is None
+    assert any("예정" in u["evidence"] for u in fields["eligibility"]["unresolved_conditions"])  # 글머리표는 정리됨
+    assert fields["eligibility"]["extraction_complete"] is False
+
+
+def test_graduating_included_still_widens_enrolled():
+    """'재학생(졸업예정자 포함)'은 재학생 조건 그대로다."""
+    c = cond(RuleBasedAnalyzer().analyze(raw_notice("대상: 재학생(졸업예정자 포함)"), MJC), "enrollment_status")
+    assert (c["operator"], c["value"]) == ("eq", "enrolled")
+
+
+def test_high_school_or_more_with_graduating_keeps_all_statuses():
+    """고졸 이상 학력 줄은 졸업 예정 문구가 같이 있어도 재학·휴학·졸업 모두 (D-023)."""
+    line = "전문대/대학교 졸업자 및 2027년 2월이내 졸업예정자, 고등학교 졸업 이상"
+    c = cond(RuleBasedAnalyzer().analyze(raw_notice("지원자격\n" + line), MJC), "enrollment_status")
+    assert c["value"] == ["enrolled", "on_leave", "graduated"]
+
+
 def test_period_with_from_until_uses_end_date_as_deadline():
     body = "※ 수강신청 실시 기간 : 2026. 11. 30. (월), 10:00부터 2026. 12. 03. (목), 23:59까지"
     fields = RuleBasedAnalyzer().analyze(raw_notice(body, title="[알림] 계절학기 운영 공고"), MJC)
