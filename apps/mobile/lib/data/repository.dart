@@ -133,7 +133,8 @@ class AssetDictionaries {
     try {
       final dict = jsonDecode(await _bundle.loadString('assets/dictionaries/$name.json')) as Map<String, dynamic>;
       return _cache[name] = [
-        for (final i in dict['items'] as List) DictionaryItem(i['id'] as String, i['name_ko'] as String),
+        for (final i in dict['items'] as List)
+          DictionaryItem(i['id'] as String, i['name_ko'] as String, universityId: i['university_id'] as String?),
       ];
     } on FlutterError {
       throw const RepositoryException(RepositoryErrorKind.unavailable);

@@ -577,6 +577,42 @@ void main() {
     expect(opened.single.toString(), contains('mjc.ac.kr/bbs/data/view.do'));
   });
 
+  testWidgets('공고 상세 출처 이름: 숭의 공지는 숭의여대, 출처를 모르면 학교 이름 없이 표시', (tester) async {
+    Future<void> show(String? sourceId) async {
+      final n = notice();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: gwittimTheme(),
+          home: ReportScreen(
+            key: UniqueKey(),
+            repository: OneNoticeRepository(
+              Notice(
+                summary: n.summary,
+                description: null,
+                applicationStart: null,
+                activityPeriod: null,
+                eligibility: n.eligibility,
+                lastVerifiedAt: null,
+                sourceId: sourceId,
+              ),
+            ),
+            noticeId: 'n',
+            openUrl: (_) async => true,
+            today: today,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await show('sewu_www_notice');
+    expect(find.text('숭의여대 공지사항'), findsOneWidget);
+    expect(find.textContaining('명지'), findsNothing);
+    await show(null);
+    expect(find.text('학교 공지'), findsOneWidget);
+    expect(find.textContaining('명지'), findsNothing);
+  });
+
   testWidgets('알림톡 공고: 원문 링크 대신 안내 문구, 발송 시각 표시 (D-019)', (tester) async {
     final base = notice();
     final kakao = Notice(

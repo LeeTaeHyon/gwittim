@@ -20,6 +20,7 @@ const _sourceNames = {
   'mjc_www_job': '명지전문대 채용공지',
   'mjc_www_work': '명지전문대 근로게시판',
   'mjc_kakao': '명지전문대 카카오톡 알림톡', // D-019: 웹 원문 링크 없음
+  'sewu_www_notice': '숭의여대 공지사항',
   'wevity_contest': '위비티', // D-038 교외 공모전
   'contestkorea_contest': '콘테스트코리아',
 };
@@ -417,7 +418,7 @@ class _ReportScreenState extends State<ReportScreen> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
-                          _sourceNames[notice.sourceId] ?? '명지전문대 학교 공지',
+                          _sourceNames[notice.sourceId] ?? '학교 공지',
                           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.sub),
                         ),
                         if (n.published != null)

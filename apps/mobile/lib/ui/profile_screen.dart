@@ -762,9 +762,16 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       for (final i in [...widget.universities, ...widget.majors]) i.id: i.name,
     };
     final unlisted = _universityId == _unlistedUniversity;
+    // 지원 학교(사전 순) → 목록에 없는 학교. '선택 안 함'은 팝업이 맨 위에 붙인다.
+    final schools = [
+      for (final u in widget.universities)
+        if (u.id != _unlistedUniversity) u,
+      ...widget.universities.where((u) => u.id == _unlistedUniversity),
+    ];
+    // 고른 학교의 학과만. 학교를 고르지 않았으면 학과 칸이 없다.
     final majors = [
       for (final m in widget.majors)
-        if (_universityId == null || m.id.startsWith('$_universityId.')) m,
+        if (_universityId != null && m.universityId == _universityId) m,
     ];
     final (title, detail, body) = switch (_step) {
       0 => (
@@ -778,7 +785,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
               value: names[_universityId],
               onTap: () => _pick(
                 title: '학교',
-                items: widget.universities,
+                items: schools,
                 selected: _universityId,
                 allowNone: true,
                 onPicked: (id) {
@@ -791,6 +798,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text('학교 공지는 지원 학교 학생에게만 보입니다. 교외 공모전은 그대로 추천됩니다.', style: caption),
+              )
+            else if (_universityId == null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('학교를 선택하면 학과를 고를 수 있습니다.', style: caption),
               )
             else
               _PickRow(
