@@ -9,6 +9,10 @@ build_messages는 (system, user) 문자열 둘을 만든다.
 1. 보내기 전에 모든 코드를 한국어로 바꾼다. 칸 이름도 한국어다. 모델이 코드를 보지 못하면 옮겨 쓸 수 없다.
 2. 지시문에 영어 코드·칸 이름을 쓰지 말라고 적는다.
 3. 받은 리포트에서 알려진 코드가 나오면 scrub_codes가 한국어로 바꾼다(거절하지 않음).
+
+근거 맞추기 (2026-11-23, 지침만으로는 역량에 모집 부문·강의 주제가 들어가고 마감 지난 공고에 '다음 모집' 할 일이 나옴)
+- ground_report가 역량 줄을 공고의 '원문에서 확인할 조건' 원문과 대조해 근거 없는 줄을 빼고, '(우대)'는 원문 구분으로 다시 붙인다.
+- 마감이 지났으면 할 일은 고정 문장, 미충족이면 지원서·근거 없는 일정 줄을 뺀다.
 """
 from __future__ import annotations
 
@@ -99,6 +103,12 @@ def _student(payload: dict) -> dict:
     return s
 
 
+def deadline_passed(notice: dict, today: date) -> bool:
+    """마감 날짜가 오늘(한국 날짜)보다 앞이면 True. 마감 미상이면 False."""
+    day = (notice.get("application_deadline") or {}).get("date")
+    return bool(day) and day < today.isoformat()
+
+
 def _notes(el: dict) -> list[str]:
     notes = []
     if not el.get("extraction_complete"):
@@ -149,6 +159,8 @@ def build_messages(
             },
         },
     }
+    if deadline_passed(notice, today):
+        material["공고"]["마감 지남"] = "마감이 오늘보다 앞이라 이미 지났음"
     activity = notice.get("activity_period") or {}
     if activity.get("start") or activity.get("end"):
         # 활동 기간을 못 뽑았을 때 '미상'으로 보내면 요약에 적힌 기간까지 모른다고 판단해서, 있을 때만 넣는다
@@ -244,3 +256,71 @@ def split_long_lines(report: dict) -> tuple[dict, int]:
                 lines.append(line)
         out[k] = BR.join(lines)
     return out, total
+
+
+# ---------- 근거 맞추기 (역량·할 일) ----------
+
+SKILLS_UNKNOWN = "제공된 공고 정보에서 요구 역량을 확인하기 어렵습니다."
+TODO_NONE = "이번 모집은 지원 전에 할 일이 없습니다."
+PREFERRED_NOTE = "우대 사항"  # unresolved_condition.note (backend.analysis.rules.PREFERRED_NOTE와 같은 값)
+SKILL_MATCH = 0.5  # 역량 줄의 두 글자 묶음 중 이 비율 이상이 한 원문에 있어야 근거로 본다
+_PREF_MARK = re.compile(r"\s*[(（]\s*우대\s*[)）]\s*$")
+_NOT_TEXT = re.compile(r"[^0-9A-Za-z가-힣]")
+# 미충족 공고 할 일에서 뺄 줄: 지원서 준비, 공고 자료에 없는 다음 일정·경로
+_NOT_MET_TODO = re.compile(
+    r"지원서|자기\s*소개서|이력서|포트폴리오|정리해\s*둡|다음\s*모집|추가\s*모집|다음\s*학기|다음\s*공고|학과\s*공지"
+)
+
+
+def _grams(text: str) -> set[str]:
+    t = _NOT_TEXT.sub("", text).lower()
+    return {t[i:i + 2] for i in range(len(t) - 1)} or ({t} if t else set())
+
+
+def _best_evidence(line: str, evidence: list[dict]) -> dict | None:
+    """역량 줄과 두 글자 묶음이 가장 많이 겹치는 원문 조건. SKILL_MATCH 미만이면 None."""
+    grams = _grams(line)
+    if not grams:
+        return None
+    best, score = None, 0.0
+    for u in evidence:
+        s = len(grams & _grams(u.get("evidence") or "")) / len(grams)
+        if s > score:
+            best, score = u, s
+    return best if score >= SKILL_MATCH else None
+
+
+def ground_report(report: dict, notice: dict, status: str, today: date) -> tuple[dict, dict]:
+    """받은 리포트의 역량·할 일을 공고 자료에 맞춘다. (리포트, 바꾼 내용 {'skills_dropped': n, 'todo': 사유}).
+
+    - 역량: 공고의 '원문에서 확인할 조건' 원문에 근거가 있는 줄만 남긴다. '(우대)'는 모델 표시가 아니라 원문 구분으로 붙인다.
+      남는 줄이 없으면 '확인하기 어렵습니다' 문장.
+    - 할 일: 마감이 지났으면 고정 문장. 미충족이면 지원서·근거 없는 일정 줄을 빼고, 남는 줄이 없으면 고정 문장.
+    """
+    out, changes = dict(report), {}
+    evidence = (notice.get("eligibility") or {}).get("unresolved_conditions") or []
+
+    skills = [ln.strip() for ln in str(report.get("skills", "")).split(BR) if ln.strip()]
+    if not any("요구 역량을 확인하기 어렵습니다" in ln for ln in skills):
+        kept = []
+        for ln in skills:
+            u = _best_evidence(_PREF_MARK.sub("", ln), evidence)
+            if u is None:
+                continue
+            name = _PREF_MARK.sub("", ln)
+            kept.append(f"{name} (우대)" if u.get("note") == PREFERRED_NOTE else name)
+        if len(kept) != len(skills):
+            changes["skills_dropped"] = len(skills) - len(kept)
+        out["skills"] = BR.join(kept) if kept else SKILLS_UNKNOWN
+
+    if deadline_passed(notice, today):
+        if out.get("todo") != TODO_NONE:
+            changes["todo"] = "deadline_passed"
+        out["todo"] = TODO_NONE
+    elif status == "not_met":
+        todo = [ln for ln in str(report.get("todo", "")).split(BR) if ln.strip()]
+        kept = [ln for ln in todo if not _NOT_MET_TODO.search(ln)]
+        if len(kept) != len(todo):
+            changes["todo"] = "not_met_filtered"
+        out["todo"] = BR.join(kept) if kept else TODO_NONE
+    return out, changes

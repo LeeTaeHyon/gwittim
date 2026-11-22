@@ -27,7 +27,8 @@ sys.path.insert(0, str(ROOT))
 from backend.agent import llm  # noqa: E402
 from backend.agent.payload import build_payload  # noqa: E402
 from backend.agent.prompt import (  # noqa: E402
-    HARNESS_FILE, HARNESS_VERSION, build_messages, load_harness, scrub_codes, split_long_lines,
+    HARNESS_FILE, HARNESS_VERSION, build_messages, deadline_passed, ground_report, load_harness, scrub_codes,
+    split_long_lines,
 )
 from backend.recommendation import evaluate  # noqa: E402
 
@@ -129,6 +130,53 @@ def api_key() -> str:
         return ""
 
 
+class OpencodeProvider:
+    """팀장 OpenCode Go 구독으로 부른다(내부 시험 전용, 서비스는 DeepSeek Platform API, D-044).
+
+    모델·생각 끔·도구 전부 끔 설정은 게시판 시험(tools/llm_board_read.py)과 같다. 운영과 달리 JSON 모드가 없어
+    지침의 'JSON 객체 하나만' 지시에 기대고, 답은 운영과 같은 parse_report로 4칸을 검사한다.
+    토큰에는 OpenCode가 덧붙이는 지시문 몫이 섞여 있고, 비용은 구독이라 0원으로 적는다.
+    `uv run`(.venv 파이썬) 아래에서는 opencode가 로그 파일을 못 열어 실패한다 → 기본 파이썬 + PYTHONPATH로 실행.
+    """
+
+    name = "opencode"
+
+    def generate(self, system: str, user: str, notice_id: str | None = None) -> llm.LLMResult:
+        import shutil
+        import subprocess
+        import tempfile
+        import time
+
+        from tools.llm_board_read import OPENCODE_CONFIG, OPENCODE_MODEL, OPENCODE_VARIANT
+
+        exe = shutil.which("opencode")
+        if exe is None:
+            raise SystemExit("opencode 실행 파일을 찾지 못했습니다")
+        prompt = f"{system}\n\n[입력]\n{user}"
+        cmd = [exe, "run", "-m", OPENCODE_MODEL, "--variant", OPENCODE_VARIANT, "--format", "json", "--pure"]
+        start = time.monotonic()
+        with tempfile.TemporaryDirectory(prefix="gwittim-harness-") as workdir:
+            proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8", timeout=180,
+                                  check=False, cwd=workdir, env={**os.environ, "OPENCODE_CONFIG_CONTENT": OPENCODE_CONFIG})
+        texts, tin, tout = [], 0, 0
+        for line in (proc.stdout or "").splitlines():
+            try:
+                ev = json.loads(line)
+            except ValueError:
+                continue
+            part = ev.get("part") or {}
+            if ev.get("type") == "text":
+                texts.append(part.get("text", ""))
+            elif ev.get("type") == "step_finish":
+                tok = part.get("tokens") or {}
+                tin += tok.get("input", 0) + (tok.get("cache") or {}).get("read", 0)
+                tout += tok.get("output", 0) + tok.get("reasoning", 0)
+        if proc.returncode != 0 or not texts:
+            raise SystemExit(f"opencode 호출이 실패했습니다(종료 코드 {proc.returncode})")
+        usage = llm.Usage("opencode", time.monotonic() - start, tin, tout, 0.0, 0.0)
+        return llm.LLMResult(llm.parse_report("".join(texts)), usage)
+
+
 def notice_verdict(notice: dict) -> str:
     return evaluate(notice["eligibility"], PROFILE)[0]
 
@@ -139,10 +187,12 @@ def run(system: str, notice: dict, provider, today: date) -> dict:
     res = provider.generate(system, user, notice_id=notice["notice_id"])
     report, scrubbed = scrub_codes(res.report)
     report, split = split_long_lines(report)
-    dl = notice.get("application_deadline") or {}
-    passed = bool(dl.get("date")) and dl["date"] < today.isoformat()
+    raw_skills, raw_todo = report.get("skills"), report.get("todo")
+    report, grounded = ground_report(report, notice, verdict[0], today)  # 운영(service.py)과 같은 후처리
+    passed = deadline_passed(notice, today)
     quality, form = check(report, scrubbed, split, verdict[0], passed)
-    return {"report": report, "quality": quality, "format": form, "verdict": verdict[0],
+    return {"report": report, "quality": quality, "format": form, "verdict": verdict[0], "grounded": grounded,
+            "model": {"skills": raw_skills, "todo": raw_todo},
             "tokens": (res.usage.input_tokens, res.usage.output_tokens), "cost": res.usage.cost_krw,
             "seconds": round(res.usage.elapsed_seconds, 1)}
 
@@ -152,20 +202,25 @@ def main(argv=None) -> int:
     ap.add_argument("--harness", type=Path, default=HARNESS_FILE, help="시험할 지침 파일 (기본: 지금 지침)")
     ap.add_argument("--compare", type=Path, help="나란히 볼 다른 지침 파일")
     ap.add_argument("--ids", nargs="*", default=DEFAULT_IDS)
+    ap.add_argument("--provider", choices=("deepseek", "opencode"), default="deepseek",
+                    help="deepseek: 서비스와 같은 API(유료) / opencode: 팀장 구독(내부 시험, JSON 모드 없음)")
     args = ap.parse_args(argv)
-    key = api_key()
-    if not key:
-        print("DEEPSEEK_API_KEY가 없어 실행하지 않습니다.")
-        return 2
     notices = json.loads(NOTICES.read_text(encoding="utf-8"))
-    provider = llm.DeepSeekProvider(env={"DEEPSEEK_API_KEY": key})
+    if args.provider == "opencode":
+        provider = OpencodeProvider()
+    else:
+        key = api_key()
+        if not key:
+            print("DEEPSEEK_API_KEY가 없어 실행하지 않습니다.")
+            return 2
+        provider = llm.DeepSeekProvider(env={"DEEPSEEK_API_KEY": key})
     today = date.today()
     # (이름, 지침, 지금 형식으로 채점하는지). 비교용 이전 지침은 형식 점검을 참고로만 센다
     sets = [(args.harness.name, load_harness(args.harness), True)]
     if args.compare:
         sets.append((args.compare.name, load_harness(args.compare), False))
     tally = {name: {"quality": 0, "format": 0} for name, _, _ in sets}
-    lines = [f"# 지침 시험 {datetime.now():%Y-%m-%d %H:%M}", "", f"- 지금 지침 버전: `{HARNESS_VERSION}`",
+    lines = [f"# 지침 시험 {datetime.now():%Y-%m-%d %H:%M}", "", f"- 지금 지침 버전: `{HARNESS_VERSION}`", f"- 호출: {args.provider}",
              f"- 비교: {' vs '.join(n for n, _, _ in sets)}", ""]
     total = 0.0
     for nid in args.ids:
@@ -186,6 +241,9 @@ def main(argv=None) -> int:
                     f"토큰 {r['tokens'][0]}/{r['tokens'][1]} · {r['cost']}원 · {r['seconds']}초")
             print(f"[{nid}] {name}: 품질 {q} / {form_label} {f}")
             lines += [head, ""] + [f"**{k}**\n{v}\n" for k, v in r["report"].items()]
+            if r["grounded"]:  # 후처리 전 모델 출력도 남겨, 지침이 어디까지 지켰는지 본다
+                lines += [f"후처리: {r['grounded']}", "", "모델 원래 출력",
+                          f"- skills: {r['model']['skills']!r}", f"- todo: {r['model']['todo']!r}", ""]
     lines.append("\n## 합계")
     for name, t in tally.items():
         lines.append(f"- {name}: 품질 오류 {t['quality']}건, 형식 점검 {t['format']}건")

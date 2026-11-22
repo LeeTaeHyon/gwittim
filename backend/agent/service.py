@@ -19,7 +19,7 @@ from backend.recommendation import evaluate
 from .credits import DETAIL_ANALYSIS, current_state, next_refill_at, reserve, settle, signup
 from .llm import generate_report
 from .payload import build_payload
-from .prompt import HARNESS_VERSION, build_messages, scrub_codes, split_long_lines
+from .prompt import HARNESS_VERSION, build_messages, ground_report, scrub_codes, split_long_lines
 from .report_cache import cache_key, is_expired, report_expires_at
 
 if TYPE_CHECKING:
@@ -122,14 +122,18 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
 
     spent = False
     try:
-        system, user = build_messages(
-            notice, payload, evaluate(notice["eligibility"], profile), deps.today_kst(),
-        )
+        verdict = evaluate(notice["eligibility"], profile)
+        system, user = build_messages(notice, payload, verdict, deps.today_kst())
         result = generate_report(system, user, provider=deps.llm, notice_id=notice_id)
         _add_spend(deps, month, result.usage.cost_krw)
         spent = True
         report, scrubbed = scrub_codes(result.report)  # 지시문을 어기고 새어 나온 내부 코드를 한국어로
         report, split = split_long_lines(report)  # 한 문단으로 온 칸은 문장 끝에서 줄로 나눔(화면은 줄 = 항목)
+        # 역량은 원문 근거가 있는 줄만, 마감 지남·미충족 할 일은 판단을 바꿀 행동만
+        report, grounded = ground_report(report, notice, verdict[0], deps.today_kst())
+        if grounded:
+            log.info("report grounded notice_id=%s %s", notice_id,
+                     " ".join(f"{k}={v}" for k, v in sorted(grounded.items())))
         if split:
             log.info("report lines split notice_id=%s count=%d", notice_id, split)
         if scrubbed:
