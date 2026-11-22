@@ -22,15 +22,20 @@ def _normalize(value):
     return value
 
 
-def cache_key(notice_id: str, payload: dict) -> str:
-    """공고 id + 보낸 값 전체의 SHA-256(16진 문자열).
+def cache_key(notice_id: str, payload: dict, harness: str | None = None) -> str:
+    """공고 id + 보낸 값 전체(+ 지침 버전)의 SHA-256(16진 문자열).
+
+    harness(지침 버전)를 주면 해시에 넣는다. 지침을 고쳐 버전을 올리면 같은 입력도 키가 달라져 새로 분석한다.
 
     보낸 값은 키를 정렬하고, 목록 값은 정렬해서 해시한다. 칩·관심사 목록은 순서가 의미 없으므로
     순서만 다른 입력은 같은 키가 된다(순서가 의미 있는 목록이 생기면 이 판단을 다시 봐야 한다).
     값이 하나라도 바뀌면 키가 달라진다. 공고 id는 해시 입력에 구분해서 넣는다.
     """
+    keyed = {"notice_id": notice_id, "payload": _normalize(payload)}
+    if harness:
+        keyed["harness"] = harness
     body = json.dumps(
-        {"notice_id": notice_id, "payload": _normalize(payload)},
+        keyed,
         sort_keys=True, ensure_ascii=False, separators=(",", ":"),
     )
     return hashlib.sha256(body.encode("utf-8")).hexdigest()

@@ -578,3 +578,19 @@ def test_firestore_spend_key_and_increment():
     assert isinstance(data["krw"], type(firestore.Increment(1)))  # 덮어쓰기가 아니라 증가 연산
     store.db.stored["ops/llm_spend_2026-11"] = {"krw": 12.5}
     assert store.get("2026-11") == 12.5 and store.get("2026-12") == 0.0
+
+
+def test_report_records_harness_version_in_doc_key_and_log(client, deps, caplog):
+    """저장본 문서·키·로그에 지침 버전 (backend/agent/harness)."""
+    import logging
+
+    from backend.agent.prompt import HARNESS_VERSION
+    from backend.agent.report_cache import cache_key
+
+    consent(client)
+    caplog.set_level(logging.INFO, logger="gwittim.agent.service")
+    analyze(client)
+    (doc,) = deps.reports.docs["alice"].values()
+    assert doc["harness_version"] == HARNESS_VERSION
+    assert doc["key"] != cache_key(NOTICE, {}) and len(doc["key"]) == 64
+    assert f"harness={HARNESS_VERSION}" in caplog.text
