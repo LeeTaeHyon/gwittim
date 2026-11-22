@@ -2,11 +2,15 @@
  "dictionary": "universities",
  "status": "draft",
  "updated": "2026-11-22",
- "source": "P0 대상 학교 (SPEC §2). 2026-10-17",
+ "source": "P0 대상 학교 (SPEC §2). 명지 2026-10-17, 숭의 2026-11-22 (D-045)",
  "items": [
   {
    "id": "mjc",
    "name_ko": "명지전문대학"
+  },
+  {
+   "id": "sewu",
+   "name_ko": "숭의여자대학교"
   },
   {
    "id": "unlisted",
