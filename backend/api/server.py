@@ -3,6 +3,7 @@
 GWITTIM_FIREBASE_PROJECT_ID=<프로젝트 ID> uv run uvicorn backend.api.server:app --port 8080
 에뮬레이터: FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 와 demo-* 프로젝트 ID
 """
+import logging
 import os
 
 from backend.agent.llm import check_startup
@@ -20,6 +21,9 @@ from backend.firebase_store import (
 
 from .app import create_app
 from .deps import CachedNoticeReader, Deps
+
+# Cloud Run 로그에 gwittim.* INFO(LLM 호출의 토큰 수·비용, 원문 없음)가 남도록. 기본은 WARNING이라 버려졌음
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
 check_startup()  # 고른 LLM 제공자를 이 환경에서 쓸 수 없으면(Cloud Run의 cli 등) 시작을 막는다
 

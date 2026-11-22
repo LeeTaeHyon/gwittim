@@ -300,10 +300,10 @@ class SampleNoticeRepository implements NoticeRepository {
       report:
           stored?.report ??
           const AnalysisReport(
-            fit: '- 샘플 분석입니다. 실제 분석은 서버에서 만듭니다.\n- 관심 분야와 공고 내용이 겹치는지 비교합니다.',
-            eligibility: '- 공고에 적힌 지원 자격을 정리합니다.\n- 확인하지 못한 조건은 직접 확인해야 합니다.',
-            todo: '- 지원서 준비\n- 제출 마감 확인',
-            skills: '- 문제 해결\n- 팀 프로젝트 경험',
+            fit: '맞음: 샘플 분석입니다. 실제 분석은 서버에서 만듭니다.\n맞음: 관심 분야와 공고 내용이 겹치는지 비교합니다.\n확인 필요: 공고 자료로 알 수 없는 점은 원문 확인이 필요합니다.',
+            eligibility: '판정: 확인 필요\n공고에 적힌 지원 자격을 정리합니다.\n확인하지 못한 조건은 직접 확인해야 합니다.',
+            todo: '지원서를 준비합니다.\n제출 마감을 확인합니다.',
+            skills: '문제 해결\n팀 프로젝트 경험 (우대)',
           ),
       expiresAt: now.add(const Duration(days: 30)),
       fromCache: stored != null,
