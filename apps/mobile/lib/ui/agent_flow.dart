@@ -247,7 +247,7 @@ class _AgentConsentScreenState extends State<AgentConsentScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(2, 16, 2, 0),
                 child: Text(
-                  keepAll('이름·이메일·학번은 보내지 않습니다.'),
+                  keepAll('이름·이메일·학번 등 직접 식별 정보는 보내지 않습니다.'),
                   style: TextStyle(fontSize: 15, height: 1.65, fontWeight: FontWeight.w700, color: c.ink),
                 ),
               ),
@@ -257,11 +257,11 @@ class _AgentConsentScreenState extends State<AgentConsentScreen> {
                 decoration: BoxDecoration(color: c.cardSoft, borderRadius: BorderRadius.circular(14)),
                 child: Column(
                   children: [
-                    const _InfoLine('받는 곳', 'Anthropic(미국)'),
+                    const _InfoLine('받는 곳', 'DeepSeek(중국)'),
                     Divider(height: 1, color: c.line),
                     const _InfoLine('목적', '이 공고 맞춤 분석'),
                     Divider(height: 1, color: c.line),
-                    const _InfoLine('보관', '받은 뒤 30일 안에 삭제하고 학습에 쓰지 않습니다.'),
+                    const _InfoLine('보관', '보관 기간은 DeepSeek 기준을 따르며, 모델 학습에 쓰일 수 있습니다.'),
                   ],
                 ),
               ),
