@@ -554,7 +554,7 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 
 ## 맞춤 에이전트 API: DeepSeek (2026-11-22, D-044)
 
-- `backend/agent/llm.py`에 `deepseek` 제공자 추가(`deepseek-flash`, `reasoning_effort: low`, `json_object`, 시간대별 단가로 비용 추정). `api`(Anthropic)는 남겨 둠
+- `backend/agent/llm.py`에 `deepseek` 제공자 추가(`deepseek-flash`, `reasoning_effort: none`(11-22 low에서 변경), `json_object`, 시간대별 단가로 비용 추정). `api`(Anthropic)는 남겨 둠
 - 동의 화면·처리방침·명세의 받는 곳을 DeepSeek(중국), 보관을 "DeepSeek 기준, 학습에 쓰일 수 있음"으로. 동의 version `2026-11-22`(기존 동의자는 다시 동의)
 - 사람이 할 일: DeepSeek Platform 충전 → 키를 환경변수 `DEEPSEEK_API_KEY`로(저장소·대화에 붙이지 않음) → 플랫폼 설정에서 학습 거부('모델 개선') 끄기 → `GWITTIM_LLM_PROVIDER=deepseek`로 로컬 서버 → 상세 분석 1건, 로그의 토큰 수·`cost_krw` 확인
 - 아직 안 한 것: 실제 호출 확인, 외부 공고 찾기 웹 검색 연결, Open Platform 이용약관 확인(P8)

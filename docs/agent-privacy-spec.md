@@ -52,7 +52,7 @@
 | `fake` (기본) | 고정 JSON 리포트를 돌려준다 | 테스트, 밤 작업 |
 | `cli` | 로컬 `claude -p --model haiku`를 하위 프로세스로 부른다 | 팀장 PC에서 팀장 본인 개발·시연만 |
 | `api` | Anthropic Messages API, 모델 Haiku 5.5, 키는 `ANTHROPIC_API_KEY` | 되돌릴 때를 위해 남겨 둠 |
-| `deepseek` | DeepSeek Platform Chat Completions, 모델 `deepseek-flash`(V4.1 Flash), `reasoning_effort: low`, `json_object` 모드, 키는 `DEEPSEEK_API_KEY` | 결제 후 Cloud Run (D-044) |
+| `deepseek` | DeepSeek Platform Chat Completions, 모델 `deepseek-flash`(V4.1 Flash), `reasoning_effort: none`(생각 끔), `json_object` 모드, 키는 `DEEPSEEK_API_KEY` | 결제 후 Cloud Run (D-044) |
 
 - `cli`는 Cloud Run에서 켜지면 시작을 거부한다(`K_SERVICE` 환경변수가 있으면 예외). 구독 계정을 다른 사용자 요청 처리에 쓰지 않기 위함이다.
 - `api`·`deepseek` 키가 없으면 상세 분석 경로는 "준비 중" 응답을 낸다.

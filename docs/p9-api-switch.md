@@ -8,7 +8,7 @@
 |---|---|---|
 | 모델 id | `deepseek-flash` (DeepSeek-V4.1-Flash-1017) | api-docs.deepseek.com 가격 페이지 |
 | 가격 | 입력(캐시 미적중) $0.15, 출력 $0.60 / 100만 토큰. 피크(평일 UTC 01~04·06~10시 = 한국 10~13·15~19시)는 2배 | 같은 페이지 |
-| 생각 정도 | `reasoning_effort`: none / low / high / max, 기본 high. 코드는 low | Thinking mode 문서 |
+| 생각 정도 | `reasoning_effort`: none / low / high / max, 기본 high. 코드는 none(생각 끔, 2026-11-22 비교로 low에서 변경) | Thinking mode 문서 |
 | 출력 형식 | `response_format: json_object`만. JSON 스키마 강제 없음. 지시문에 'json' 낱말과 예시 필요. JSON이 아니면 공백으로 옴 | JSON mode 문서 |
 | 웹 검색 | `tools: [{"type": "deepseek_web_search"}]`. 11/18부터 모델 호출 안의 검색은 따로 과금 안 함(결과는 입력 토큰) | Web tools 문서 |
 | 서버·학습 | 서버 중국. 입력을 학습에 쓸 수 있음. 학습 거부 설정이 API에 적용되는지 명시 없음. 보관 기간 명시 없음 | DeepSeek 개인정보처리방침(2026-05-06판) |

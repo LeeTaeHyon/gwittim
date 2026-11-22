@@ -55,12 +55,26 @@ def test_material_korean_values():
     assert v["결과"] == "불충족"
     assert v["조건별 결과"] == [{"항목": "학적 상태", "결과": "불충족", "근거": "졸업 예정자 또는 기졸업자",
                              "공고 조건": "졸업·졸업 예정"}]
-    assert v["자동 비교하지 못한 조건"][1] == {"원문": "병역필", "구분": "자격 조건"}
+    assert v["원문에서 확인할 조건"][1] == {"원문": "병역필", "구분": "자격 조건"}
+    assert v["참고"] == []  # 조건을 다 찾았고 '누구나' 문구도 없음
+
+
+def test_notes_are_sentences_not_yes_no():
+    el = {**NOTICE["eligibility"], "extraction_complete": False, "explicitly_unrestricted": True}
+    _, user = build_messages({**NOTICE, "eligibility": el}, PAYLOAD, VERDICT, date(2026, 11, 22))
+    v = json.loads(user)["공고"]["지원 자격 판정"]
+    assert v["참고"] == ["공고의 지원 조건을 모두 찾지 못했을 수 있어 원문 확인이 필요함", "공고에 누구나 지원할 수 있다고 적혀 있음"]
+    assert "아니요" not in user and '"예"' not in user
 
 
 def test_missing_profile_fields_are_left_out():
     _, user = build_messages(NOTICE, {}, ("needs_check", []), date(2026, 11, 22))
     assert json.loads(user)["학생"] == {}
+
+
+def test_activity_period_left_out_when_not_extracted():
+    _, user = build_messages({**NOTICE, "activity_period": None}, PAYLOAD, VERDICT, date(2026, 11, 22))
+    assert "활동 기간" not in json.loads(user)["공고"]
 
 
 def test_minute_deadline_keeps_time_without_timezone():
@@ -72,6 +86,7 @@ def test_minute_deadline_keeps_time_without_timezone():
 
 def test_system_prompt_rules():
     assert "영어 코드" in SYSTEM_PROMPT and "가능한 시기" in SYSTEM_PROMPT and "json" in SYSTEM_PROMPT
+    assert "칸 이름" in SYSTEM_PROMPT and "어느 항목과 이어지는지" in SYSTEM_PROMPT
     assert "null" not in SYSTEM_PROMPT.split("영어 코드")[0]  # 규칙 앞에서 코드를 쓰지 않는다
 
 

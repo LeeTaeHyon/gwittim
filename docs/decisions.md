@@ -2144,7 +2144,8 @@ SPEC 범위 변경 (AGENTS.md §3, SPEC 0.4)
 ### 결정
 
 - 상세 분석의 서비스 제공자를 Anthropic Haiku 5.5(D-039)에서 **DeepSeek Platform `deepseek-flash`(V4.1 Flash)** 로 바꾼다
-  - `GWITTIM_LLM_PROVIDER=deepseek`, 키 `DEEPSEEK_API_KEY`. `reasoning_effort: low`, `json_object` 모드
+  - `GWITTIM_LLM_PROVIDER=deepseek`, 키 `DEEPSEEK_API_KEY`. `reasoning_effort: none`(생각 끔), `json_object` 모드
+  - 생각 끔은 같은 날 비교로 정함: 같은 공고 2회씩, low 1.8~2.9원·13~19초, none 0.8~0.9원·5초. 판정은 서버 규칙이 내리고 모델은 문장 정리만 해서 품질 차이 없음(시기 판단은 none이 더 정확)
   - `api`(Anthropic) 제공자는 되돌릴 때를 위해 코드에 남긴다
 - 동의 화면·처리방침의 받는 곳을 DeepSeek(중국)으로, 보관을 "DeepSeek 기준, 학습에 쓰일 수 있음"으로 고친다. 동의 version을 `2026-11-22`로 올려 다시 묻는다
 

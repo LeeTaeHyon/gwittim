@@ -28,13 +28,15 @@ SYSTEM_PROMPT = """당신은 대학생에게 공고 한 건을 그 학생 기준
 - 칸: "fit"(나에게 맞는 점·안 맞는 점), "eligibility"(지원 자격), "todo"(지원 전 할 일), "skills"(필요한 역량)
 - 형식 예시(json): {"fit": "...", "eligibility": "...", "todo": "...", "skills": "..."}
 - 모든 값은 한국어 문자열이며 비워 두지 않습니다.
-- 문체는 명사형 또는 합쇼체입니다. 해요체는 쓰지 않습니다.
-- 값에는 영어 코드, 입력의 칸 이름, null·true 같은 프로그램 값을 쓰지 않습니다. 입력에 적힌 한국어 표현을 씁니다.
+- 문체는 합쇼체(~입니다, ~합니다) 또는 명사형(~임, ~함)입니다. 해요체(~해요)와 평서형(~이다, ~한다)은 쓰지 않습니다.
+- 값에는 영어 코드, null·true 같은 프로그램 값을 쓰지 않습니다.
+- 입력의 칸 이름(예: '참고', '구분')을 문장에 그대로 옮기지 않고, 뜻을 풀어 자연스러운 문장으로 씁니다. '참고 사항이 있음'처럼 칸을 가리키지 말고 내용만 적습니다.
 
 지킬 것
 - 합격 가능성은 말하지 않습니다. 근거가 없습니다.
 - 필요한 역량은 공고에 적힌 것만 적습니다. 학생이 가진 기술은 입력의 '해 본 것'만 쓰고 추정하지 않습니다.
-- 지원 자격은 입력의 '지원 자격 판정'(충족 / 불충족 / 확인 필요)과 조건별 결과를 그대로 따릅니다. 판정과 다르게 말하지 않고, 판정이 확인 필요면 확정해서 말하지 않습니다.
+- 학생의 '해 본 것'이 공고의 요구·우대 사항과 관련 있으면 '맞는 점·안 맞는 점'에 어느 항목과 이어지는지 적습니다. 관련이 없으면 관련이 적다고 적습니다. 해 본 것이 입력에 없으면 이 내용은 쓰지 않습니다.
+- 지원 자격은 입력의 '지원 자격 판정'(충족 / 불충족 / 확인 필요)과 조건별 결과를 그대로 따릅니다. '원문에서 확인할 조건'은 자동으로 비교하지 못한 조건이며, 구분이 우대 사항이면 자격이 아니라 갖추면 유리한 조건입니다. 판정과 다르게 말하지 않고, 판정이 확인 필요면 확정해서 말하지 않습니다.
 - 학생의 '가능한 시기'·'갈 수 있는 지역'이 있으면 공고 자료(활동 기간, 요약, 조건)와 맞는지 '맞는 점·안 맞는 점'에 적습니다. 공고 자료로 알 수 없으면 확인이 필요하다고 적습니다.
 - 공고 자료에 없는 사실(날짜, 금액, 조건, 링크)은 지어내지 않습니다. 모르면 공고 원문 확인이 필요하다고 적습니다.
 - 마감이 '미상'이면 임의로 정하지 않습니다.
@@ -105,6 +107,15 @@ def _student(payload: dict) -> dict:
     return s
 
 
+def _notes(el: dict) -> list[str]:
+    notes = []
+    if not el.get("extraction_complete"):
+        notes.append("공고의 지원 조건을 모두 찾지 못했을 수 있어 원문 확인이 필요함")
+    if el.get("explicitly_unrestricted"):
+        notes.append("공고에 누구나 지원할 수 있다고 적혀 있음")
+    return notes
+
+
 def build_messages(
     notice: dict, payload: dict, eligibility: tuple[str, list[dict]], today: date,
 ) -> tuple[str, str]:
@@ -125,7 +136,6 @@ def build_messages(
         if r.get("unknown_reason"):
             item["확인 필요 이유"] = UNKNOWN_REASON_KO.get(r["unknown_reason"], "확인 필요")
         by_field.append(item)
-    activity = notice.get("activity_period") or {}
     material = {
         "오늘": today.isoformat(),
         "학생": _student(payload),
@@ -134,21 +144,23 @@ def build_messages(
             "분류": _name("categories", notice.get("category")),
             "요약": notice["summary"],
             "마감": _date_ko(notice.get("application_deadline")),
-            "활동 기간": (f"{_date_ko(activity.get('start'))} ~ {_date_ko(activity.get('end'))}"
-                       if activity.get("start") or activity.get("end") else UNKNOWN),
             "지원 자격 판정": {
                 "결과": VERDICT_KO.get(status, "확인 필요"),
                 "조건별 결과": by_field,
                 # 자동 비교하지 못한 조건 원문. 구분이 '우대 사항'이면 자격이 아니라 갖추면 유리한 조건
-                "자동 비교하지 못한 조건": [
+                "원문에서 확인할 조건": [
                     {"원문": u.get("evidence") or UNKNOWN, "구분": u.get("note") or "자격 조건"}
                     for u in el.get("unresolved_conditions", [])
                 ],
-                "조건을 모두 찾았는지": "예" if el.get("extraction_complete") else "아니요",
-                "누구나 지원 가능하다고 명시": "예" if el.get("explicitly_unrestricted") else "아니요",
+                # 예/아니요 칸은 모델이 '조건을 모두 찾았는지 여부는 아니요' 식으로 옮겨 써서 문장으로 준다
+                "참고": _notes(el),
             },
         },
     }
+    activity = notice.get("activity_period") or {}
+    if activity.get("start") or activity.get("end"):
+        # 활동 기간을 못 뽑았을 때 '미상'으로 보내면 요약에 적힌 기간까지 모른다고 판단해서, 있을 때만 넣는다
+        material["공고"]["활동 기간"] = f"{_date_ko(activity.get('start'))} ~ {_date_ko(activity.get('end'))}"
     return SYSTEM_PROMPT, json.dumps(material, ensure_ascii=False, indent=1)
 
 
@@ -172,7 +184,7 @@ def _code_table() -> dict[str, str]:
     table.update({"interest_ids": "관심 분야", "target_role_ids": "희망 직무", "application_deadline": "마감"})
     table.update(ENROLLMENT_KO)
     table.update(UNKNOWN_REASON_KO)
-    table.update({"unresolved_conditions": "자동 비교하지 못한 조건", "extraction_complete": "조건을 모두 찾았는지",
+    table.update({"unresolved_conditions": "원문에서 확인할 조건", "extraction_complete": "조건 확인",
                   "explicitly_unrestricted": "누구나 지원 가능", "null": UNKNOWN, "None": UNKNOWN})
     return table
 
