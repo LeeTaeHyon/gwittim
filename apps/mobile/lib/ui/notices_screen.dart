@@ -32,6 +32,9 @@ class NoticesScreen extends StatefulWidget {
 class NoticesScreenState extends State<NoticesScreen> {
   RecommendationList? _list;
   Map<String, String> _categories = const {};
+
+  /// 학교를 고르지 않았으면 교외 공고만 온다 (rank-0.8). 안내 한 줄을 보인다
+  bool _noSchool = false;
   Object? _error;
 
   /// 검색 결과. 검색어·분류가 없으면 null이고 [_list]를 보인다.
@@ -80,10 +83,17 @@ class NoticesScreenState extends State<NoticesScreen> {
       } catch (_) {
         // 분류 이름만 코드로 보인다.
       }
+      var noSchool = _noSchool;
+      try {
+        noSchool = (await widget.repository.getProfile())?.universityId == null;
+      } catch (_) {
+        // 안내 한 줄만 이전 상태로 둔다.
+      }
       if (!mounted) return;
       setState(() {
         _list = list;
         _categories = categories;
+        _noSchool = noSchool;
         _error = null;
       });
       if (_filtering) await _search();
@@ -218,6 +228,10 @@ class NoticesScreenState extends State<NoticesScreen> {
                     ),
             ),
           ),
+          if (_noSchool)
+            const SliverToBoxAdapter(
+              child: Padding(padding: EdgeInsets.fromLTRB(16, 0, 16, 8), child: SchoolHint()),
+            ),
           if (items.isEmpty && !_searching)
             SliverFillRemaining(
               hasScrollBody: false,

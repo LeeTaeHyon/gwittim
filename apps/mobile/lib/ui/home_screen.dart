@@ -294,6 +294,8 @@ class HomeScreenState extends State<HomeScreen> {
         _Header(profile: data.profile, majors: data.majors, today: _today, onOpenProfile: widget.onOpenProfile),
         const SizedBox(height: 16),
         if (!list.personalized) ...[_ProfilePrompt(onOpenProfile: widget.onOpenProfile), const SizedBox(height: 12)],
+        // 학교를 고르지 않으면 서버가 교외 공고만 준다 (rank-0.8, D-043)
+        if (data.profile?.universityId == null) ...[const SchoolHint(), const SizedBox(height: 12)],
         if (!briefing.isEmpty) ...[
           _BriefingCard(briefing: briefing, today: _today, opened: _opened, onOpen: () => _openBriefing(briefing)),
           const SizedBox(height: 28),

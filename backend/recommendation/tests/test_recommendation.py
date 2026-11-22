@@ -165,7 +165,7 @@ def test_latest_mode_without_personal_input(notices):
 
 
 def test_tie_break_by_published_then_id(notices):
-    empty = fixture("user_profile/empty.json")
+    empty = dict(fixture("user_profile/empty.json"), university_id="mjc")  # 학교 공지가 보이도록 학교만 (rank-0.8)
     a, b, c = (copy.deepcopy(notices[2]) for _ in range(3))
     a["notice_id"], a["published"]["date"] = "n_b", "2026-10-10"
     b["notice_id"], b["published"]["date"] = "n_a", "2026-10-10"
@@ -217,7 +217,7 @@ def test_old_notice_without_deadline_excluded(notices, profile):
     recent["published"]["date"] = "2026-08-18"  # 60일 전까지는 남긴다
     dated = copy.deepcopy(notices[0])  # 마감일을 아는 공고는 게시일과 무관
     dated["published"]["date"] = "2026-01-02"
-    for p in (profile, {}):
+    for p in (profile, {"university_id": "mjc"}):
         ids = [i["notice"]["notice_id"] for i in recommend([old, recent, dated], p, today=TODAY, generated_at=NOW)["items"]]
         assert ids.count("n_synthetic_0002") == 0 and "n_recent" in ids and "n_synthetic_0001" in ids
 
@@ -304,9 +304,11 @@ def _school_and_external() -> list[dict]:
     return [school, external, school_cond]
 
 
-def test_unlisted_student_sees_only_external_notices(profile):
+@pytest.mark.parametrize("university_id", ["unlisted", None])
+def test_unlisted_or_no_school_student_sees_only_external_notices(profile, university_id):
+    """목록에 없는 학교·학교 안 고른 학생은 교외 공고만 (D-043, rank-0.8)."""
     notices = _school_and_external()
-    unlisted = dict(profile, university_id="unlisted", major_id=None)
+    unlisted = dict(profile, university_id=university_id, major_id=None)
     out = recommend(notices, unlisted, today=TODAY, generated_at=NOW)
     assert schema_errors("recommendation_list_response", out) == []
     assert _ids(out) == [notices[1]["notice_id"]]
@@ -315,10 +317,9 @@ def test_unlisted_student_sees_only_external_notices(profile):
     assert all(i not in _ids(searched) for i in (notices[0]["notice_id"], notices[2]["notice_id"]))
 
 
-@pytest.mark.parametrize("university_id", [None, "mjc"])
-def test_null_and_mjc_students_still_see_school_notices(profile, university_id):
+def test_mjc_student_sees_school_and_external_notices(profile):
     notices = _school_and_external()
-    out = recommend(notices, dict(profile, university_id=university_id), today=TODAY, generated_at=NOW)
+    out = recommend(notices, dict(profile, university_id="mjc"), today=TODAY, generated_at=NOW)
     assert notices[0]["notice_id"] in _ids(out)
     assert notices[1]["notice_id"] in _ids(out)
 
