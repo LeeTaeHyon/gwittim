@@ -191,6 +191,28 @@ class ApiNoticeRepository implements NoticeRepository {
   }
 
   @override
+  Future<ExternalSearchResult> requestExternalSearch({
+    required String requestId,
+    String? category,
+    List<String> interests = const [],
+    String? period,
+    List<String> regions = const [],
+    String query = '',
+  }) async {
+    var text = query.trim();
+    if (text.runes.length > externalQueryMax) text = String.fromCharCodes(text.runes.take(externalQueryMax));
+    final body = {
+      'request_id': requestId,
+      'category': ?category,
+      if (interests.isNotEmpty) 'interests': interests,
+      'period': ?period,
+      if (regions.isNotEmpty) 'regions': regions,
+      if (text.isNotEmpty) 'query': text,
+    };
+    return ExternalSearchResult.fromJson(_json(await _send('POST', 'v1/external-search', body: body, wait: analysisTimeout)));
+  }
+
+  @override
   Future<AnalysisResponse?> getAnalysis(String noticeId) => _orNullIfNotFound(
     () async => AnalysisResponse.fromJson(_json(await _send('GET', 'v1/analysis/${Uri.encodeComponent(noticeId)}'))),
   );

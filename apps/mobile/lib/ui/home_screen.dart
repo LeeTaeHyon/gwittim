@@ -8,6 +8,7 @@ import 'briefing_screen.dart';
 import 'briefing_stats.dart';
 import 'common.dart';
 import 'components.dart';
+import 'external_search_screen.dart';
 import 'format.dart';
 import 'icons.dart';
 import 'notices_screen.dart';
@@ -372,7 +373,58 @@ class HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 8),
           _ChangedCard(entry: s, onTap: () => _openNotice(s.notice, null)),
         ],
+        const SizedBox(height: 18),
+        _ExternalSearchEntry(onTap: _openExternalSearch),
       ],
+    );
+  }
+
+  Future<void> _openExternalSearch() async {
+    await Navigator.of(context).push(
+      gwRoute(context, (_) => ExternalSearchScreen(repository: widget.repository, openUrl: widget.openUrl)),
+    );
+  }
+}
+
+/// 홈 맨 아래 한 줄 입구: 학교 밖 공모전·대외활동을 AI 웹 검색으로 찾는다 (D-047).
+class _ExternalSearchEntry extends StatelessWidget {
+  const _ExternalSearchEntry({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return GwCard(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          ExcludeSemantics(
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: c.chip, shape: BoxShape.circle),
+              child: Icon(Icons.travel_explore_rounded, size: 22, color: c.onChip),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '학교 밖 기회 찾기',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.ink),
+                ),
+                const SizedBox(height: 2),
+                Text('AI 웹 검색 · 크레딧 2개', style: TextStyle(fontSize: 13, color: c.muted)),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right_rounded, size: 20, color: c.muted),
+        ],
+      ),
     );
   }
 }

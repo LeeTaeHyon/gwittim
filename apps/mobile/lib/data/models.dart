@@ -440,6 +440,58 @@ class AnalysisResponse {
   );
 }
 
+/// 외부 공고 찾기 직접 적기 최대 글자 수 (external_search_request.schema.json query)
+const externalQueryMax = 50;
+
+/// 외부 공고 찾기 결과 한 건 (external_search_response.schema.json items)
+class ExternalSearchItem {
+  const ExternalSearchItem({
+    required this.title,
+    required this.url,
+    required this.sourceName,
+    required this.deadline,
+    required this.reason,
+    required this.verified,
+  });
+
+  final String title;
+  final String url;
+
+  /// 출처 사이트 이름 (주최가 아님)
+  final String sourceName;
+
+  /// 출처 문장에서 확인된 날짜 'YYYY-MM-DD'. 모르면 null (verified가 false면 항상 null)
+  final String? deadline;
+  final String reason;
+
+  /// 검색 출처로 확인했는지. false면 화면에 '출처 확인 안 됨'
+  final bool verified;
+
+  factory ExternalSearchItem.fromJson(Map<String, dynamic> m) => ExternalSearchItem(
+    title: m['title'] as String,
+    url: m['url'] as String,
+    sourceName: m['source_name'] as String,
+    deadline: m['deadline'] as String?,
+    reason: m['reason'] as String,
+    verified: m['verified'] as bool,
+  );
+}
+
+/// 외부 공고 찾기 응답. 서버에 저장하지 않는다. 결과가 없으면 [charged]가 false(크레딧 환불).
+class ExternalSearchResult {
+  const ExternalSearchResult({required this.items, required this.charged, required this.searchedAt});
+
+  final List<ExternalSearchItem> items;
+  final bool charged;
+  final DateTime searchedAt;
+
+  factory ExternalSearchResult.fromJson(Map<String, dynamic> m) => ExternalSearchResult(
+    items: [for (final i in m['items'] as List) ExternalSearchItem.fromJson(i as Map<String, dynamic>)],
+    charged: m['charged'] as bool,
+    searchedAt: DateTime.parse(m['searched_at'] as String),
+  );
+}
+
 /// 크레딧 사용 내역 한 줄 (credits.schema.json)
 class CreditEntry {
   const CreditEntry({required this.kind, required this.amount, required this.at, required this.ref});
