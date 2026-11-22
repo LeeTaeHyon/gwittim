@@ -1,0 +1,9 @@
+{
+  "_expect": {
+    "semantic": "dictionary_code"
+  },
+  "data": {
+    "request_id": "synthetic-req-0106",
+    "category": "not_a_category"
+  }
+}

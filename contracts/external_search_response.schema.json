@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/external_search_response.schema.json",
+  "title": "외부 공고 찾기 응답",
+  "description": "DeepSeek 웹 검색 결과 최대 5개. verified=true는 검색 출처로 확인된 것(url은 검색 도구가 실제로 본 페이지), verified=false는 출처로 확인하지 못해 모델이 낸 주소 그대로인 것(앱은 '출처 확인 안 됨' 표시). deadline은 출처 문장에서 확인된 날짜만(아니면 null, verified=false면 항상 null). 확인된 것이 먼저 온다. 주최는 보내지 않고 source_name(출처 사이트 이름)을 보냄. 결과가 없으면 charged=false(크레딧 환불). 서버에 저장하지 않음. D-047.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "items",
+    "charged",
+    "searched_at"
+  ],
+  "properties": {
+    "items": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "url",
+          "source_name",
+          "deadline",
+          "reason",
+          "verified"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https?://"
+          },
+          "source_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "deadline": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "검색 출처로 확인했는지. false면 '출처 확인 안 됨'"
+          }
+        },
+        "if": {
+          "properties": {
+            "verified": {
+              "const": false
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "deadline": {
+              "type": "null"
+            }
+          }
+        }
+      }
+    },
+    "charged": {
+      "type": "boolean"
+    },
+    "searched_at": {
+      "$ref": "common.schema.json#/$defs/utc_timestamp"
+    }
+  }
+}

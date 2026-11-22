@@ -11,6 +11,7 @@
   DELETE /v1/saved/{notice_id}     delete_saved_notice (반복 요청 안전)
   POST   /v1/analysis              request_detail_analysis: AI 상세 분석 요청 (동의·크레딧 필요, 성공해야 차감)
   GET    /v1/analysis/{notice_id}  get_detail_analysis: 받은 분석 다시 보기 (차감 없음)
+  POST   /v1/external-search       request_external_search: 외부 공고 찾기 (웹 검색, 동의·크레딧 2개, 결과 없으면 환불, D-047)
   GET    /v1/credits               get_credits: 잔액·다음 충전·사용 내역
   POST   /v1/ingest/kakao          팀장 폰 수집기의 학교 채널 알림톡 올리기 (D-036). 수집 토큰(X-Ingest-Token)으로만.
                                    토큰이 설정되지 않은 서버에서는 없는 경로처럼 404
@@ -25,6 +26,7 @@ from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
+from backend.agent import external
 from backend.agent import service as agent
 from backend.collectors.mjc_kakao.inbox import InboxError, accept
 from backend.contracts import schema_errors
@@ -212,6 +214,10 @@ def create_app(deps: Deps) -> FastAPI:
     @app.get("/v1/analysis/{notice_id}")
     def get_detail_analysis(notice_id: str, uid: str = Depends(current_uid)):
         return agent.get_analysis(uid, notice_id, deps)
+
+    @app.post("/v1/external-search")
+    def request_external_search(body: dict, uid: str = Depends(current_uid)):
+        return external.request_external_search(uid, body, deps)
 
     @app.get("/v1/credits")
     def get_credits(uid: str = Depends(current_uid)):

@@ -275,6 +275,8 @@ balance(0~5), next_refill_at(다음 충전 시각, 최대 보유면 `null`), ent
 
 상세 분석·크레딧의 HTTP 경로(확정, D-039): `POST /v1/analysis`(request_detail_analysis), `GET /v1/analysis/{notice_id}`(get_detail_analysis), `GET /v1/credits`(get_credits). 동의 기록은 `PUT /v1/profile`의 agent_consent로 보낸다. 오류 HTTP 상태는 insufficient_credits 402, request_in_progress 409, consent_required 403이다.
 
+외부 공고 찾기(D-047): `POST /v1/external-search`(request_external_search, 계약 `external_search_request`·`external_search_response`). DeepSeek 웹 검색 결과 최대 5개(검색 출처로 확인된 것 먼저, 확인 못 한 것은 '출처 확인 안 됨' 표시), 크레딧 2개, 결과가 없으면 환불. 결과와 학생이 적은 한 줄은 저장하지 않는다(docs/agent-privacy-spec.md §12.1).
+
 앱 데이터 접근은 Repository 인터페이스로 감싼다. 샘플 구현과 실제 구현을 교체할 수 있어야 한다. UI에 추천 점수 계산을 중복 구현하지 않는다.
 
 ## 8. 역할·파일 소유권 제안

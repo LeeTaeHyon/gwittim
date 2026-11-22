@@ -6,6 +6,8 @@
 |---|---|
 | `detail_analysis.md` | 지시문 본문. 그대로 LLM의 system 메시지가 된다(이 README는 보내지 않음) |
 | `VERSION` | 지침 버전. 한 줄 |
+| `external_search.md` | 외부 공고 찾기(웹 검색) 지시문(D-047). 결과 검증은 코드(`backend/agent/external.py`)가 함 |
+| `EXTERNAL_VERSION` | 외부 공고 찾기 지침 버전. 로그 `external search done harness=…` |
 
 ## 고치는 순서
 

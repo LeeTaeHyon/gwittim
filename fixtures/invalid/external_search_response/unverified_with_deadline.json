@@ -1,0 +1,20 @@
+{
+  "_expect": {
+    "keyword": "type",
+    "path": "items/0/deadline"
+  },
+  "data": {
+    "items": [
+      {
+        "title": "합성",
+        "url": "https://x.example.invalid/",
+        "source_name": "x.example.invalid",
+        "deadline": "2026-12-31",
+        "reason": "합성 예시입니다.",
+        "verified": false
+      }
+    ],
+    "charged": true,
+    "searched_at": "2026-11-23T03:00:00Z"
+  }
+}

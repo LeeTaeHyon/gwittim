@@ -1,0 +1,30 @@
+{
+  "items": [
+    {
+      "title": "합성 소프트웨어 공모전",
+      "url": "https://contest.example.invalid/view/1",
+      "source_name": "합성 공모전 사이트",
+      "deadline": "2026-12-31",
+      "reason": "합성 예시입니다. 관심 분야인 소프트웨어 개발과 이어지는 공모전입니다.",
+      "verified": true
+    },
+    {
+      "title": "합성 AI 아이디어 해커톤",
+      "url": "https://list.example.invalid/contests",
+      "source_name": "합성 목록 사이트",
+      "deadline": null,
+      "reason": "합성 예시입니다. 온라인으로 참여할 수 있습니다.",
+      "verified": true
+    },
+    {
+      "title": "출처에 없는 합성 대회",
+      "url": "https://nowhere.example.invalid/",
+      "source_name": "nowhere.example.invalid",
+      "deadline": null,
+      "reason": "합성 예시입니다.",
+      "verified": false
+    }
+  ],
+  "charged": true,
+  "searched_at": "2026-11-23T03:00:00Z"
+}
