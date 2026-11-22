@@ -15,6 +15,19 @@ import 'theme.dart';
 // 조건(모두 선택) → (처음만) 동의 화면 → 웹에서 찾는 중 → 결과 카드.
 // 결과가 있을 때만 크레딧 2개가 차감된다. 결과는 서버에도 앱에도 저장하지 않고, 화면을 닫으면 사라진다.
 
+/// 외부 공고 찾기에서 고를 수 있는 공고 분류 (사전 순서 그대로 보인다)
+const _externalCategories = {
+  'contest',
+  'internship',
+  'education_program',
+  'extracurricular',
+  'global',
+  'startup',
+  'volunteer',
+  'job',
+  'scholarship',
+};
+
 /// 같은 질문의 다른 칩과 함께 고를 수 없는 칩 ('상관없음')
 const _anyRegion = 'any';
 
@@ -67,7 +80,8 @@ class _ExternalSearchScreenState extends State<ExternalSearchScreen> {
 
   Future<_Choices> _load() async {
     final r = widget.repository;
-    final categories = [for (final i in await r.dictionary('categories')) if (i.id != 'admin_notice') i];
+    // 학교 밖에서 학생이 직접 지원하는 기회만. 학사 안내·행사·행정 공지·기타는 교내 공지용 분류라 뺀다
+    final categories = [for (final i in await r.dictionary('categories')) if (_externalCategories.contains(i.id)) i];
     final interests = await r.dictionary('interests');
     final period = await r.dictionary('period_chips');
     final regions = await r.dictionary('region_chips');
