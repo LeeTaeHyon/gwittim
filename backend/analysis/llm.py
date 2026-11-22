@@ -19,7 +19,7 @@ from backend.dictionaries import codes
 from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
-from .rules import EXCLUDES, RuleBasedAnalyzer, is_activity_line, is_llm_condition, tidy_unresolved
+from .rules import EXCLUDES, OTHER_STATUS, RuleBasedAnalyzer, is_activity_line, is_llm_condition, tidy_unresolved
 
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _PHONE = re.compile(r"(?:\+?82[-\s]?)?0\d{1,2}[-\s.)]?\d{3,4}[-\s.]?\d{4}")
@@ -185,6 +185,10 @@ class OllamaAnalyzer:
                 continue
             if EXCLUDES.search(c["evidence"]):
                 self.rejected.append(f"빼는 조건을 허용으로 답함: {c['evidence'][:40]}")
+                continue
+            if c["field"] == "enrollment_status" and OTHER_STATUS.search(c["evidence"]):
+                # 졸업 예정자·복학생 등은 프로필 재학 상태로 판정할 수 없다. 규칙처럼 직접 확인으로 둔다 (D-046)
+                self.rejected.append(f"재학 상태로 판정할 수 없는 학적: {c['evidence'][:40]}")
                 continue
             if not self._valid_value(c["field"], c["operator"], c.get("value")):
                 self.rejected.append(f"값 검증 실패: {c['field']}={c.get('value')!r}")
