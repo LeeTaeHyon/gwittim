@@ -289,3 +289,46 @@ def test_major_prior_table_covers_dictionary():
     table = load_prior()
     missing = sorted(m["id"] for m in majors if m["id"] not in table)
     assert missing == ["mjc.undeclared"]  # 자유전공학과는 대응하는 커리어넷 학과가 없다
+
+
+# ---------- 목록에 없는 학교 (unlisted, D-043) ----------
+
+def _ids(out: dict) -> list[str]:
+    return [i["notice"]["notice_id"] for i in out["items"]]
+
+
+def _school_and_external() -> list[dict]:
+    school = fixture("notice/explicitly_unrestricted.json")  # mjc_www_notice, 조건 없음
+    external = fixture("notice/external_contest.json")  # wevity_contest
+    school_cond = fixture("notice/date_only_timezone_unknown.json")  # mjc 본교 조건 포함
+    return [school, external, school_cond]
+
+
+def test_unlisted_student_sees_only_external_notices(profile):
+    notices = _school_and_external()
+    unlisted = dict(profile, university_id="unlisted", major_id=None)
+    out = recommend(notices, unlisted, today=TODAY, generated_at=NOW)
+    assert schema_errors("recommendation_list_response", out) == []
+    assert _ids(out) == [notices[1]["notice_id"]]
+    # 검색·분류에서도 같은 규칙
+    searched = recommend(notices, unlisted, today=TODAY, generated_at=NOW, query=notices[0]["title"][:4])
+    assert all(i not in _ids(searched) for i in (notices[0]["notice_id"], notices[2]["notice_id"]))
+
+
+@pytest.mark.parametrize("university_id", [None, "mjc"])
+def test_null_and_mjc_students_still_see_school_notices(profile, university_id):
+    notices = _school_and_external()
+    out = recommend(notices, dict(profile, university_id=university_id), today=TODAY, generated_at=NOW)
+    assert notices[0]["notice_id"] in _ids(out)
+    assert notices[1]["notice_id"] in _ids(out)
+
+
+def test_unlisted_fails_school_condition_without_filter(profile):
+    """'본교 재학생' 조건(university_id eq mjc)은 필터와 별개로 unlisted에게 not_met이다."""
+    cond_notice = fixture("notice/date_only_timezone_unknown.json")
+    status, results = evaluate(cond_notice["eligibility"], dict(profile, university_id="unlisted", major_id=None))
+    assert status == "not_met"
+    assert [r["status"] for r in results if r["field"] == "university_id"] == ["not_met"]
+    # null 학생은 비교할 수 없어 needs_check 쪽
+    status_null, _ = evaluate(cond_notice["eligibility"], dict(profile, university_id=None))
+    assert status_null == "needs_check"

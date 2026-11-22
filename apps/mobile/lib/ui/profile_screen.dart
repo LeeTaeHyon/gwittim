@@ -60,8 +60,8 @@ class _ProfileData {
   _ProfileData withProfile(UserProfile p) => _ProfileData(p, universities, majors, interests, roles, majorInterests);
 }
 
-/// P0 대상 학교는 명지전문대 하나 (D-005 #6). 저장된 학교가 없을 때만 쓴다.
-const _p0University = 'mjc';
+/// 지원 학교(학교 팩) 밖의 학교를 고르는 사전 항목 (D-043). 학교 이름은 받지 않고 학과는 비운다.
+const _unlistedUniversity = 'unlisted';
 
 const _statusNames = {'enrolled': '재학', 'on_leave': '휴학', 'graduated': '졸업'};
 
@@ -455,7 +455,8 @@ class _SummaryCard extends StatelessWidget {
     String? name(List<DictionaryItem> items, String? id) => items.where((i) => i.id == id).firstOrNull?.name;
     final empty =
         p == null ||
-        (p.majorId == null &&
+        (p.universityId == null &&
+            p.majorId == null &&
             p.grade == null &&
             p.enrollmentStatus == null &&
             p.interestIds.isEmpty &&
@@ -605,7 +606,7 @@ const _maxPicks = 5;
 const _suggestedPicks = 3;
 
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
-  late String? _universityId = widget.profile?.universityId ?? _p0University;
+  late String? _universityId = widget.profile?.universityId;
   late String? _majorId = widget.profile?.majorId;
   late int? _grade = widget.profile?.grade;
   late String? _status = widget.profile?.enrollmentStatus;
@@ -760,6 +761,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     final names = {
       for (final i in [...widget.universities, ...widget.majors]) i.id: i.name,
     };
+    final unlisted = _universityId == _unlistedUniversity;
     final majors = [
       for (final m in widget.majors)
         if (_universityId == null || m.id.startsWith('$_universityId.')) m,
@@ -778,24 +780,30 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                 title: '학교',
                 items: widget.universities,
                 selected: _universityId,
-                allowNone: false,
+                allowNone: true,
                 onPicked: (id) {
                   if (id != _universityId) _majorId = null;
                   _universityId = id;
                 },
               ),
             ),
-            _PickRow(
-              label: '학과',
-              value: names[_majorId],
-              onTap: () => _pick(
-                title: '학과',
-                items: majors,
-                selected: _majorId,
-                allowNone: true,
-                onPicked: (id) => _majorId = id,
+            if (unlisted)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('학교 공지는 지원 학교 학생에게만 보입니다. 교외 공모전은 그대로 추천됩니다.', style: caption),
+              )
+            else
+              _PickRow(
+                label: '학과',
+                value: names[_majorId],
+                onTap: () => _pick(
+                  title: '학과',
+                  items: majors,
+                  selected: _majorId,
+                  allowNone: true,
+                  onPicked: (id) => _majorId = id,
+                ),
               ),
-            ),
             const SizedBox(height: 18),
             const _FieldLabel('학년'),
             const SizedBox(height: 8),

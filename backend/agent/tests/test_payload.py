@@ -90,3 +90,15 @@ def test_region_any_is_exclusive():
     assert build_payload({}, {"regions": ["any", "online_only"], "experience": ["python"]}) == {"experience": ["python"]}
     # 사전 밖 값과 함께면 버려진 값은 세지 않는다
     assert build_payload({}, {"regions": ["any", "busan"]}) == {"regions": ["any"]}
+
+
+def test_unlisted_school_is_named_without_guessing_school():
+    """unlisted는 '목록에 없는 학교'로 이름 붙고, 학교 이름·학과는 만들어 붙이지 않는다 (D-043)."""
+    from backend.agent.prompt import _student
+
+    profile = {**PROFILE, "university_id": "unlisted", "major_id": None}
+    payload = build_payload(profile, {})
+    assert payload["university_id"] == "unlisted" and "major_id" not in payload
+    student = _student(payload)  # 모델에 보내는 학생 정보(한국어, #127)
+    assert student["학교"] == "목록에 없는 학교"
+    assert "학과" not in student and "명지" not in str(student)

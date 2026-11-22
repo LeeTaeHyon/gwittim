@@ -106,8 +106,12 @@ void main() {
 
     // 1단계 학적
     expect(find.bySemanticsLabel('1/3단계'), findsOneWidget);
-    expect(find.text('명지전문대학'), findsOneWidget); // P0 학교가 기본
+    expect(find.text('명지전문대학'), findsNothing); // 학교는 기본값 없이 비어 있다 (사용자가 말하지 않은 값을 채우지 않음)
     expect(find.text('저장하기'), findsNothing);
+    await tapIn(tester, editList(), find.text('학교'));
+    await tester.tap(find.text('명지전문대학'));
+    await tester.pumpAndSettle();
+    expect(find.text('명지전문대학'), findsOneWidget);
     await tapIn(tester, editList(), find.text('2학년'));
     await tapIn(tester, editList(), find.text('2학년')); // 고른 칸을 다시 누르면 비운다
     await tapIn(tester, editList(), find.text('3학년'));
@@ -160,6 +164,70 @@ void main() {
     expect(find.text('AI·데이터'), findsOneWidget);
     expect(find.text('소프트웨어 개발자'), findsOneWidget);
     expect(find.text('고치기'), findsOneWidget);
+  });
+
+  group('목록에 없는 학교 (D-043)', () {
+    final consent = AgentConsent(version: 'v-test', agreedAt: DateTime.utc(2026, 11, 20));
+
+    Future<SampleNoticeRepository> openEdit(WidgetTester tester, [UserProfile? saved]) async {
+      final repo = SampleNoticeRepository(personalized: false);
+      if (saved != null) await repo.updateProfile(saved);
+      await openProfile(tester, repository: repo);
+      await tester.tap(find.text(saved == null ? '입력하기' : '고치기'));
+      await tester.pumpAndSettle();
+      return repo;
+    }
+
+    Finder inDialog(String text) => find.descendant(of: find.byType(Dialog), matching: find.text(text));
+
+    Future<void> pickSchool(WidgetTester tester, String name) async {
+      await tapIn(tester, editList(), find.text('학교'));
+      await tester.tap(inDialog(name));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> saveAll(WidgetTester tester) async {
+      await next(tester);
+      await next(tester);
+      await tester.tap(find.text('저장하기'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('학교 선택지는 선택 안 함, 명지전문대학, 목록에 없는 학교 세 가지', (tester) async {
+      await openEdit(tester);
+      await tapIn(tester, editList(), find.text('학교'));
+      expect(inDialog('선택 안 함'), findsOneWidget);
+      expect(inDialog('명지전문대학'), findsOneWidget);
+      expect(inDialog('목록에 없는 학교'), findsOneWidget);
+    });
+
+    testWidgets('목록에 없는 학교를 고르면 학과 칸이 꺼지고 안내가 보이며, 저장 값은 학과 없음', (tester) async {
+      final repo = await openEdit(
+        tester,
+        UserProfile(universityId: 'mjc', majorId: 'mjc.computer_engineering', agentConsent: consent),
+      );
+      expect(find.text('컴퓨터공학과'), findsOneWidget);
+      await pickSchool(tester, '목록에 없는 학교');
+      expect(find.text('목록에 없는 학교'), findsOneWidget);
+      expect(find.text('학과'), findsNothing);
+      expect(find.text('컴퓨터공학과'), findsNothing);
+      expect(find.text('학교 공지는 지원 학교 학생에게만 보입니다. 교외 공모전은 그대로 추천됩니다.'), findsOneWidget);
+      await saveAll(tester);
+
+      final p = (await repo.getProfile())!;
+      expect(p.universityId, 'unlisted');
+      expect(p.majorId, isNull);
+      expect(p.agentConsent?.version, 'v-test'); // 동의 기록은 그대로 이어 보낸다 (#118)
+      expect(find.text('목록에 없는 학교'), findsOneWidget); // 요약 카드
+    });
+
+    testWidgets('선택 안 함으로 학교를 비우면 null로 저장되고 명지로 채워지지 않는다', (tester) async {
+      final repo = await openEdit(tester, const UserProfile(universityId: 'mjc', interestIds: ['software']));
+      await pickSchool(tester, '선택 안 함');
+      expect(find.text('명지전문대학'), findsNothing);
+      await saveAll(tester);
+      expect((await repo.getProfile())!.universityId, isNull);
+    });
   });
 
   testWidgets('학과를 고르지 않았으면 관심 분야 단계에 학과 통계 칸이 없다', (tester) async {

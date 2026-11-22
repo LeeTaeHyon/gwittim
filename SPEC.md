@@ -149,6 +149,7 @@ P0 자동 비교 지원 필드는 university_id, major_id, grade, enrollment_sta
 university_id, major_id, grade, enrollment_status, interest_ids, target_role_ids, updated_at, 선택: agent_consent.
 
 - 학교·학과·상태·관심사·직무는 공통 선택 사전(`contracts/dictionaries/`)을 사용한다. 코드는 학교 접두사를 붙인 불투명 ID다(예: `mjc`, `mjc.computer_engineering`).
+- university_id: null은 미입력, `unlisted`(표시 이름 '목록에 없는 학교')는 지원 학교(학교 팩) 밖의 학교를 사용자가 직접 고른 것이다(D-043, 2026-11-22). 학교 이름은 받지 않는다(자유 입력 없음). `unlisted`면 그 학교의 학과 사전이 없으므로 major_id는 null이어야 하고, 아니면 서버는 `invalid_argument`로 거절한다. 공고 조건(EligibilityCondition)의 값에는 `unlisted`를 쓰지 않는다. 앱은 학교 기본값을 채우지 않는다.
 - grade는 1~4 정수, enrollment_status는 enrolled / on_leave / graduated.
 - 미입력은 null 또는 빈 선택 배열로 보존한다.
 - 관심사·희망 직무는 각각 최대 5개까지 고른다. 앱은 3개를 넘으면 '3개 이하일 때 추천이 더 정확합니다.'라고 안내한다. 점수는 하나라도 겹치면 1이라 많이 고를수록 덜 원하는 분야 공고가 같은 점수로 섞인다(D-031).
@@ -230,6 +231,7 @@ balance(0~5), next_refill_at(다음 충전 시각, 최대 보유면 `null`), ent
 
 1. review_pending, closed, removed 공고와 학생 대상이 아닌 행정 공지(category admin_notice: 교직원 채용, 시설·점검 안내 등)는 기본 추천에서 제외한다. 행정 공지는 게시는 하되 관심사·직무·전공 꼬리표를 붙이지 않는다.
    마감일을 모르는(lifecycle unknown) 공고는 게시 후 60일이 지나면 기본 추천에서 제외한다(D-013). 게시일 미상이면 제외하지 않는다.
+   프로필 university_id가 `unlisted`이면 학교 출처(출처 설정의 university_id가 있는 출처) 공지는 기본 추천과 공고 탭 검색에서 제외하고 교외 공고(출처 university_id 없음)만 보인다. university_id가 null이거나 학교 코드면 이 필터는 적용하지 않는다. "본교 재학생" 같은 학교 조건은 기존 판정대로 `unlisted`이면 not_met이다(D-043).
 2. not_met은 기본 추천에서 제외하되 전체 탐색에서는 상태와 함께 볼 수 있다.
 3. needs_check는 배지를 붙여 후보에 포함할 수 있다. 날짜 미상 공고는 마감 임박 영역에서 제외한다.
 4. 초기 점수: 관심사 40, 직무 35, 전공 15, 시기 10. 각 요소는 0~1이다. 시기는 마감까지 남은 날짜로 0~14일 1.0, 15~30일 0.6, 31일 이상 0.3이며, 마감일이 없거나 지났거나 deadline_note만 있으면 0이다(D-027, 평가 불가로 두면 마감이 확인된 공고보다 점수가 높아진다).

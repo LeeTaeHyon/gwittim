@@ -28,7 +28,7 @@ from fastapi.responses import JSONResponse, Response
 from backend.agent import service as agent
 from backend.collectors.mjc_kakao.inbox import InboxError, accept
 from backend.contracts import schema_errors
-from backend.dictionaries import codes, unknown_profile_codes
+from backend.dictionaries import codes, unknown_profile_codes, unlisted_with_major
 from backend.recommendation import recommend
 
 from .deps import Deps
@@ -251,5 +251,5 @@ def _empty_profile() -> dict:
 
 
 def _codes_known(profile: dict) -> bool:
-    """사전에 있는 코드만 받는다."""
-    return not unknown_profile_codes(profile)
+    """사전에 있는 코드만 받는다. '목록에 없는 학교'(unlisted)는 학과를 가질 수 없다."""
+    return not unknown_profile_codes(profile) and not unlisted_with_major(profile)

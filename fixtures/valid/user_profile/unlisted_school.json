@@ -1,0 +1,14 @@
+{
+  "university_id": "unlisted",
+  "major_id": null,
+  "grade": 2,
+  "enrollment_status": "enrolled",
+  "interest_ids": [
+    "software",
+    "ai_data"
+  ],
+  "target_role_ids": [
+    "software_developer"
+  ],
+  "updated_at": "2026-11-22T03:00:00Z"
+}
