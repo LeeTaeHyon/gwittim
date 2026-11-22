@@ -137,3 +137,63 @@ def test_fake_run_then_compare(monkeypatch, tmp_path, capsys):
     assert o["recall"] == pytest.approx(4 / 6, abs=1e-4) and o["link_match"] == 1
     assert summary["cost"]["total_krw"] is None and "재현율" in out
     assert "합성 제목" not in out.split("놓친 항목")[0]  # 요약 표 앞부분에 원문 나열 없음
+
+
+# ---------- opencode (구독) ----------
+
+def _oc_stdout(text, tin=3500, tout=400):
+    evs = [{"type": "text", "part": {"text": text}},
+           {"type": "step_finish", "part": {"tokens": {"input": tin, "output": tout - 50, "reasoning": 50, "cache": {"read": 0}}}}]
+    return "\n".join(json.dumps(e, ensure_ascii=False) for e in evs)
+
+
+def test_opencode_call_disables_tools_and_uses_variant(monkeypatch):
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen.update(cmd=cmd, **kw)
+        return t.subprocess.CompletedProcess(cmd, 0, stdout=_oc_stdout('{"items":[]}'), stderr="")
+
+    monkeypatch.setattr(t.shutil, "which", lambda n: "/bin/opencode")
+    monkeypatch.setattr(t.subprocess, "run", fake_run)
+    out = t.call_opencode("지시", "<html>페이지</html>")
+    assert out == {"text": '{"items":[]}', "input_tokens": 3500, "output_tokens": 400}
+    assert seen["cmd"][1:] == ["run", "-m", t.OPENCODE_MODEL, "--variant", "none", "--format", "json", "--pure"]
+    cfg = json.loads(seen["env"]["OPENCODE_CONFIG_CONTENT"])
+    assert cfg["permission"] == {"*": "deny"} and not any(cfg["tools"].values())
+    assert "<html>페이지</html>" in seen["input"] and "JSON Schema" in seen["input"]
+    assert "gwittim-board-read-" in seen["cwd"]
+
+
+def test_opencode_error_event_is_tool_error(monkeypatch):
+    def fake_run(cmd, **kw):
+        return t.subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"type": "error", "error": "x"}), stderr="")
+
+    monkeypatch.setattr(t.shutil, "which", lambda n: "/bin/opencode")
+    monkeypatch.setattr(t.subprocess, "run", fake_run)
+    with pytest.raises(t.ToolError):
+        t.call_opencode("지시", "페이지")
+
+
+def test_opencode_compare_subtracts_overhead_and_converts_price(tmp_path):
+    rows = "".join(
+        f"<tr><td>{i}</td><td><a href=\"javascript:fn_view('BM0000000026','BD00000000{i:02d}')\">합성 제목 {i}번</a></td>"
+        f"<td></td><td>학과</td><td>2026-11-{i + 1:02d}</td><td>3</td></tr>"
+        for i in range(3)
+    )
+    pages = tmp_path / "pages"
+    pages.mkdir()
+    (pages / "mjc_www_notice_p1.html").write_text(f"<table><tbody>{rows}</tbody></table>", encoding="utf-8")
+    run_dir = tmp_path / "runs" / "opencode_x"
+    run_dir.mkdir(parents=True)
+    (run_dir / "_meta.json").write_text(json.dumps({"overhead_input_tokens": 3000}), encoding="utf-8")
+    items = [{"title": f"합성 제목 {i}번", "posted_date": f"2026-11-{i + 1:02d}",
+              "detail_url": f"fn_view('BM0000000026','BD00000000{i:02d}')", "is_pinned_notice": None} for i in range(3)]
+    (run_dir / "mjc_www_notice_p1.json").write_text(json.dumps(
+        {"items": items, "input_tokens": 13000, "output_tokens": 1000, "elapsed_seconds": 5.0}), encoding="utf-8")
+    s = t.compare_run(run_dir, pages)
+    c = s["cost"]
+    assert c["input_tokens"] == 10000 and c["output_tokens"] == 1000
+    assert c["total_krw"] == round((10000 * 0.15 + 1000 * 0.60) / 1e6 * 1400, 2)  # 할인 단가
+    assert c["total_krw_peak"] == round((10000 * 0.30 + 1000 * 1.20) / 1e6 * 1400, 2)
+    assert s["overall"]["recall"] == 1

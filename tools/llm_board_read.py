@@ -6,21 +6,25 @@
 
 하위 명령
   fetch    활성 게시판 목록 페이지를 받아 pages/<board>_p<N>.html 로 저장 (--pages, --delay, --refresh)
-  run      저장된 페이지를 LLM에 읽히고 정답과 비교 (--provider fake|cli|api, --limit-pages)
+  run      저장된 페이지를 LLM에 읽히고 정답과 비교 (--provider fake|cli|api|opencode, --limit-pages)
   compare  runs 폴더 하나를 다시 비교
 
 사용법
   1) uv run python tools/llm_board_read.py fetch --pages 1
   2) 키 없이 cli로 맛보기 (구독 사용량 소량):
        uv run python tools/llm_board_read.py run --provider cli --limit-pages 2
-  3) 키가 생기면:
+  3) OpenCode 구독(DeepSeek V4.1 Flash, 생각 끔)으로 전체:
+       uv run python tools/llm_board_read.py run --provider opencode
+     도구를 전부 끈 설정으로 빈 임시 폴더에서 실행한다. 비용은 DeepSeek 공식 단가로 환산(실제 청구는 정액 구독)
+  4) Anthropic 키가 생기면:
        ANTHROPIC_API_KEY=... uv run python tools/llm_board_read.py run --provider api
      (키는 환경변수로만 받는다. 없으면 안내하고 종료)
 
 보고서에 넣을 숫자: runs/<provider>_<시각>/summary.json
   overall.recall / precision / title_match / date_match / link_match / pinned_match  (전체)
   boards.<board>.*                                                                  (게시판별)
-  cost.total_krw / cost.per_page_krw / cost.input_tokens / cost.output_tokens       (api만 토큰 있음)
+  cost.total_krw / cost.per_page_krw / cost.input_tokens / cost.output_tokens       (api·opencode만 토큰 있음)
+  cost.total_krw_peak                                                               (opencode: DeepSeek 피크 단가 환산)
   elapsed_seconds_total / elapsed_seconds_per_page                                  (걸린 시간)
 """
 from __future__ import annotations
@@ -65,6 +69,19 @@ CLI_COMMAND = (
 PRICE_INPUT_USD_PER_MTOK = 0.10
 PRICE_OUTPUT_USD_PER_MTOK = 0.50
 KRW_PER_USD = 1400
+# opencode: 팀장 OpenCode Go 구독. 서비스(DeepSeek Platform API, D-044)와 나눠 내부 시험에만 쓴다
+OPENCODE_MODEL = "opencode-go/deepseek-v4.1-flash"
+OPENCODE_VARIANT = "none"  # 생각 끔(서비스 설정과 같게)
+# 도구 전부 끔: 페이지 속 문장이 파일 읽기·명령 실행을 시킬 수 없게 한다 (2026-11-22 '도구 없음' 응답으로 확인)
+OPENCODE_CONFIG = json.dumps({
+    "$schema": "https://opencode.ai/config.json",
+    "permission": {"*": "deny"},
+    "tools": {t: False for t in ("bash", "edit", "write", "read", "glob", "grep", "list", "webfetch", "task",
+                                 "todowrite", "patch")},
+})
+# 환산 단가: DeepSeek 공식(api-docs.deepseek.com, 2026-11-22), 입력은 캐시 미적중 기준 (USD/MTok)
+DEEPSEEK_PRICE_OFF_PEAK = (0.15, 0.60)
+DEEPSEEK_PRICE_PEAK = (0.30, 1.20)
 MAX_INPUT_CHARS = 200_000
 MIN_DELAY = 1.0
 
@@ -205,6 +222,54 @@ def call_cli(system: str, user: str) -> dict:
     return {"text": proc.stdout or "", "input_tokens": None, "output_tokens": None}
 
 
+def call_opencode(system: str, user: str) -> dict:
+    """opencode run (구독). 토큰은 OpenCode 자체 지시문 몫이 섞인 값 그대로 돌려준다(빼는 것은 compare_run)."""
+    exe = shutil.which("opencode")
+    if exe is None:
+        raise ToolError("opencode 실행 파일을 찾지 못했습니다")
+    prompt = (f"{system}\n\n출력 형식: 아래 JSON Schema를 지키는 JSON 객체 하나만 출력한다. 코드 블록·설명 없이.\n"
+              f"{json.dumps(ITEMS_SCHEMA, ensure_ascii=False)}\n\n[페이지 HTML]\n{user}")
+    cmd = [exe, "run", "-m", OPENCODE_MODEL, "--variant", OPENCODE_VARIANT, "--format", "json", "--pure"]
+    env = {**os.environ, "OPENCODE_CONFIG_CONTENT": OPENCODE_CONFIG}
+    try:
+        with tempfile.TemporaryDirectory(prefix="gwittim-board-read-") as workdir:
+            proc = subprocess.run(
+                cmd, input=prompt, capture_output=True, text=True, encoding="utf-8",
+                timeout=TIMEOUT_SECONDS, check=False, cwd=workdir, env=env,
+            )
+    except subprocess.TimeoutExpired:
+        raise ToolError("opencode 호출 시간이 초과되었습니다") from None
+    except OSError:
+        raise ToolError("opencode 실행에 실패했습니다") from None
+    texts, tin, tout, failed = [], 0, 0, False
+    for line in (proc.stdout or "").splitlines():
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue
+        part = ev.get("part") or {}
+        if ev.get("type") == "text":
+            texts.append(part.get("text", ""))
+        elif ev.get("type") == "step_finish":
+            tok = part.get("tokens") or {}
+            tin += tok.get("input", 0) + (tok.get("cache") or {}).get("read", 0)
+            tout += tok.get("output", 0) + tok.get("reasoning", 0)
+        elif ev.get("type") == "error":
+            failed = True
+    if failed or proc.returncode != 0 or not texts:
+        raise ToolError(f"opencode 호출이 실패했습니다(종료 코드 {proc.returncode})")
+    return {"text": "".join(texts), "input_tokens": tin, "output_tokens": tout}
+
+
+def opencode_overhead() -> int:
+    """OpenCode가 덧붙이는 입력 토큰(짧은 기준 호출 2번 중 작은 값)."""
+    vals = []
+    for _ in range(2):
+        out = call_opencode('{"items":[]}를 그대로 출력한다.', "(빈 페이지)")
+        vals.append(out["input_tokens"])
+    return min(vals)
+
+
 def fake_predict(gold: list[dict]) -> dict:
     """정답을 일부 흔든 가짜 (흐름 확인용): 3번째마다 놓침, 4번째 날짜 형식 변경, 메뉴 오탐 1개 추가."""
     items = []
@@ -309,10 +374,11 @@ def aggregate(parts: list[dict]) -> dict:
     }
 
 
-def cost_krw(tin: int | None, tout: int | None) -> float | None:
+def cost_krw(tin: int | None, tout: int | None, price: tuple[float, float] | None = None) -> float | None:
     if tin is None or tout is None:
         return None
-    usd = (tin * PRICE_INPUT_USD_PER_MTOK + tout * PRICE_OUTPUT_USD_PER_MTOK) / 1_000_000
+    pin, pout = price or (PRICE_INPUT_USD_PER_MTOK, PRICE_OUTPUT_USD_PER_MTOK)
+    usd = (tin * pin + tout * pout) / 1_000_000
     return round(usd * KRW_PER_USD, 2)
 
 
@@ -351,7 +417,15 @@ def compare_run(run_dir: Path, pages_dir: Path | None = None) -> dict:
     parts = [p for ps in board_parts.values() for p in ps]
     pages = len(parts)
     known = tokens_known and pages > 0
-    total = cost_krw(tin_sum, tout_sum) if known else None
+    meta_path = run_dir / "_meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+    overhead = int(meta.get("overhead_input_tokens") or 0)
+    if known and overhead:  # OpenCode 자체 지시문 몫을 빼서 공고 페이지 몫만 남긴다
+        tin_sum = max(tin_sum - overhead * pages, 0)
+    is_opencode = run_dir.name.startswith("opencode")
+    price = DEEPSEEK_PRICE_OFF_PEAK if is_opencode else None
+    total = cost_krw(tin_sum, tout_sum, price) if known else None
+    total_peak = cost_krw(tin_sum, tout_sum, DEEPSEEK_PRICE_PEAK) if known and is_opencode else None
     summary = {
         "pages": pages,
         "errors": errors,
@@ -362,7 +436,13 @@ def compare_run(run_dir: Path, pages_dir: Path | None = None) -> dict:
             "output_tokens": tout_sum if known else None,
             "total_krw": total,
             "per_page_krw": round(total / pages, 2) if total is not None else None,
-            "price": f"입력 ${PRICE_INPUT_USD_PER_MTOK}·출력 ${PRICE_OUTPUT_USD_PER_MTOK} /MTok, {KRW_PER_USD}원/$",
+            "total_krw_peak": total_peak,
+            "per_page_krw_peak": round(total_peak / pages, 2) if total_peak is not None else None,
+            "overhead_input_tokens_per_call": overhead or None,
+            "price": (f"DeepSeek 환산 할인 ${DEEPSEEK_PRICE_OFF_PEAK[0]}·${DEEPSEEK_PRICE_OFF_PEAK[1]}, "
+                      f"피크 ${DEEPSEEK_PRICE_PEAK[0]}·${DEEPSEEK_PRICE_PEAK[1]} /MTok (실제 청구는 정액 구독), "
+                      f"{KRW_PER_USD}원/$" if is_opencode else
+                      f"입력 ${PRICE_INPUT_USD_PER_MTOK}·출력 ${PRICE_OUTPUT_USD_PER_MTOK} /MTok, {KRW_PER_USD}원/$"),
         },
         "elapsed_seconds_total": round(elapsed, 1),
         "elapsed_seconds_per_page": round(elapsed / pages, 1) if pages else None,
@@ -396,9 +476,13 @@ def render(summary: dict) -> str:
         lines.append(
             f"토큰 입력 {c['input_tokens']:,} / 출력 {c['output_tokens']:,}, "
             f"추정 {c['total_krw']}원 (페이지당 {c['per_page_krw']}원)"
+            + (f", 피크 단가면 {c['total_krw_peak']}원 (페이지당 {c['per_page_krw_peak']}원)"
+               if c.get("total_krw_peak") is not None else "")
         )
+        if c.get("overhead_input_tokens_per_call"):
+            lines.append(f"  (OpenCode 자체 지시문 입력 {c['overhead_input_tokens_per_call']:,}토큰/호출은 뺀 값)")
     else:
-        lines.append("토큰 수 없음(api가 아님): 비용 추정 안 함")
+        lines.append("토큰 수 없음(cli·fake): 비용 추정 안 함")
     lines.append(f"걸린 시간 합계 {summary['elapsed_seconds_total']}초 (페이지당 {summary['elapsed_seconds_per_page']}초)")
     if summary["truncated_pages"]:
         lines.append("길이 상한으로 잘린 페이지: " + ", ".join(summary["truncated_pages"]))
@@ -441,7 +525,12 @@ def _predict(provider: str, html: str) -> dict:
         return fake_predict(gold_rows(html))
     text, truncated = preprocess(html)
     user = text + ("\n\n[참고: 입력이 길이 상한으로 뒤가 잘렸음]" if truncated else "")
-    out = call_api(SYSTEM_PROMPT, user) if provider == "api" else call_cli(SYSTEM_PROMPT, user)
+    if provider == "api":
+        out = call_api(SYSTEM_PROMPT, user)
+    elif provider == "opencode":
+        out = call_opencode(SYSTEM_PROMPT, user)
+    else:
+        out = call_cli(SYSTEM_PROMPT, user)
     out["truncated"] = truncated
     return out
 
@@ -459,6 +548,14 @@ def cmd_run(args) -> int:
         return 2
     run_dir = RUNS_DIR / f"{args.provider}_{datetime.now():%Y%m%d_%H%M%S}"
     run_dir.mkdir(parents=True)
+    if args.provider == "opencode":
+        try:
+            overhead = opencode_overhead()
+        except ToolError as e:
+            print(f"OpenCode 기준 호출 실패: {e}")
+            return 2
+        (run_dir / "_meta.json").write_text(json.dumps({"overhead_input_tokens": overhead}), encoding="utf-8")
+        print(f"OpenCode 자체 지시문 입력 약 {overhead:,}토큰/호출 (비용 환산에서 뺌)")
     for path in pages:
         html = path.read_text(encoding="utf-8")
         rec: dict = {"page": path.stem}
@@ -493,7 +590,7 @@ def main(argv=None) -> int:
     f.add_argument("--refresh", action="store_true")
     f.set_defaults(func=cmd_fetch)
     r = sub.add_parser("run")
-    r.add_argument("--provider", required=True, choices=("fake", "cli", "api"))
+    r.add_argument("--provider", required=True, choices=("fake", "cli", "api", "opencode"))
     r.add_argument("--limit-pages", type=int, default=0, help="앞에서부터 N페이지만 (0이면 전부)")
     r.set_defaults(func=cmd_run)
     c = sub.add_parser("compare")
