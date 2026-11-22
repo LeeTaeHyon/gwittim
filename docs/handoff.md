@@ -1,6 +1,6 @@
 # 인수인계 (handoff)
 
-마지막 갱신: 2026-11-14
+마지막 갱신: 2026-11-21
 
 ## 현재 상태
 
@@ -545,3 +545,8 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 - 사전(학과·카테고리·관심사·직무)은 draft 상태입니다. 실공고에서 "전공심화과정 포함" 표기를 확인했으므로 grade 1~4는 유지합니다.
 
 - 대회 마감일 공식 공지 변경 여부 팀장 확인 필요.
+
+## 교외 공고 수집기 1차 (2026-11-21, D-038)
+
+- 위비티(`wevity_contest`)·콘테스트코리아(`contestkorea_contest`) 어댑터와 예의 바른 요청기(`backend/collectors/common/http_polite.py`: robots·3초 간격·429/403 멈춤·실행당 상한). `uv run python -m backend.collectors.wevity`, `... contestkorea` (`--dry-run`으로 건수만 확인).
+- 아직 안 한 것: 정기 배치(`scripts/run_batch.ps1`) 연결, 앱의 출처 이름 표시(`report_screen.dart`의 `_sourceNames`에 두 출처 없음), 주최 측 공식 페이지 따라가기, Gemma 대상 판별, 링커리어 등 나머지 출처, 두 출처 사이 같은 공고 묶기.

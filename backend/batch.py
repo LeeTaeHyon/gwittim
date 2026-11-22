@@ -155,3 +155,48 @@ def run_kakao(
 
 def _past(notice: dict, today: date) -> bool:
     return notice["lifecycle_status"] in ("closed", "removed") or is_stale(notice, today)
+
+
+def run_external(
+    raws: Iterable[dict],
+    *,
+    source_id: str,
+    store: PipelineStore,
+    sink: NoticeSink,
+    notices: dict[str, dict],
+    today: date,
+    analyzer: Analyzer | None = None,
+) -> BatchReport:
+    """교외 출처(D-038) RawNotice 처리: 파이프라인 → 분석·검증 → 게시. 게시 규칙은 명지 공고와 같다.
+
+    검증을 통과하면 게시하고 아니면 review_pending으로 검토 대기에 둔다(publish). 이미 끝난 공고(closed, 마감 미상으로 오래된 공고)는
+    처음부터 게시하지 않는다(run_kakao와 같은 규칙). 어댑터는 새 공고만 상세를 열어 RawNotice를 만들므로
+    이번에 안 보인 기존 공고는 네트워크 없이 날짜만 다시 따진다(마감이 지나면 closed로 바꿔 게시). 원문 확인 시각은 바꾸지 않는다.
+    목록에서 사라진 공고 확인(probe)은 하지 않는다: 목록 2페이지만 보므로 밀려난 것과 삭제를 구분할 수 없다.
+    """
+    report = BatchReport()
+    seen: set[str] = set()
+    for raw in raws:
+        report.collected += 1
+        result = ingest(raw, store)
+        report.outcomes[result.outcome.value] += 1
+        if result.outcome is Outcome.REJECTED or result.key is None:
+            continue
+        seen.add(result.key)
+        _external_notice(result.key, store, sink, notices, today, analyzer, report)
+
+    prefix = source_id + ":"
+    for key in [k for k in notices if k.startswith(prefix) and k not in seen]:
+        if store.get(key) is not None:
+            _external_notice(key, store, sink, notices, today, analyzer, report)
+    return report
+
+
+def _external_notice(key, store, sink, notices, today, analyzer, report: BatchReport) -> None:
+    previous = notices.get(key)
+    notice, issues = build_notice(store.get(key), today=today, previous=previous, analyzer=analyzer)
+    notices[key] = notice
+    if _past(notice, today) and (previous is None or _past(previous, today)) and sink.get_public(notice["notice_id"]) is None:
+        report.held_past += 1  # 처음부터 끝난 공고(또는 공개본이 없는 끝난 공고)는 게시하지 않는다
+        return
+    _publish(notice, issues, sink, report)
