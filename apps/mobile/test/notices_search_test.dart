@@ -93,9 +93,10 @@ void main() {
     // 칩이 먼저 나온다 (카드 첫 줄에도 같은 분류 글자가 있음)
     await tester.tap(chip('공모전·경진대회'));
     await tester.pumpAndSettle();
-    expect(findText('2건'), findsOneWidget);
+    expect(findText('3건'), findsOneWidget); // 교외 공모전 샘플 포함
     expect(findTextContaining('발표회'), findsNothing);
     expect(findTextContaining('글쓰기 공모전'), findsOneWidget);
+    expect(findTextContaining('대학생 아이디어 공모전'), findsOneWidget);
 
     // 검색 칩 → 검색 칸 (띄어쓰기 무시)
     await tester.tap(chip('검색'));
