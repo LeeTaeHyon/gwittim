@@ -287,7 +287,8 @@ def test_major_only_profile_ranks_by_major_stats(notices):
 def test_major_prior_table_covers_dictionary():
     majors = json.loads((ROOT / "contracts/dictionaries/majors.json").read_text(encoding="utf-8"))["items"]
     table = load_prior()
-    missing = sorted(m["id"] for m in majors if m["id"] not in table)
+    # 숭의(sewu.*)는 학과 통계를 넣지 않는다 (D-045)
+    missing = sorted(m["id"] for m in majors if m["id"] not in table and m["university_id"] != "sewu")
     assert missing == ["mjc.undeclared"]  # 자유전공학과는 대응하는 커리어넷 학과가 없다
 
 
