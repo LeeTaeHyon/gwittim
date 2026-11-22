@@ -93,6 +93,16 @@ class SavedRepository implements NoticeRepository {
   }) => throw UnimplementedError();
 
   @override
+  Future<ExternalSearchResult> requestExternalSearch({
+    required String requestId,
+    String? category,
+    List<String> interests = const [],
+    String? period,
+    List<String> regions = const [],
+    String query = '',
+  }) => throw UnimplementedError();
+
+  @override
   Future<AnalysisResponse?> getAnalysis(String noticeId) async => null;
 
   @override

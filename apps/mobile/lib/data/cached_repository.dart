@@ -103,6 +103,23 @@ class CachedNoticeRepository implements NoticeRepository {
   }) => _inner.requestAnalysis(noticeId: noticeId, requestId: requestId, chips: chips);
 
   @override
+  Future<ExternalSearchResult> requestExternalSearch({
+    required String requestId,
+    String? category,
+    List<String> interests = const [],
+    String? period,
+    List<String> regions = const [],
+    String query = '',
+  }) => _inner.requestExternalSearch(
+    requestId: requestId,
+    category: category,
+    interests: interests,
+    period: period,
+    regions: regions,
+    query: query,
+  );
+
+  @override
   Future<AnalysisResponse?> getAnalysis(String noticeId) => _inner.getAnalysis(noticeId);
 
   @override

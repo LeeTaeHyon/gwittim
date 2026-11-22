@@ -48,6 +48,19 @@ abstract class NoticeRepository {
     AnalysisChips chips = const AnalysisChips(),
   });
 
+  /// 외부 공고 찾기 (D-047, docs/agent-privacy-spec.md §2.3). 결과가 있을 때만 크레딧 2개를 차감한다.
+  /// 비어 있는 조건은 보내지 않는다. [query]는 앞뒤 공백을 떼고 50자까지만 보낸다. 서버는 결과를 저장하지 않는다.
+  /// [requestId]는 요청마다 새로 만들고 재시도 때만 같은 값을 쓴다.
+  /// 오류: consentRequired, insufficientCredits, requestInProgress, notFound, unavailable(차감 안 됨)
+  Future<ExternalSearchResult> requestExternalSearch({
+    required String requestId,
+    String? category,
+    List<String> interests = const [],
+    String? period,
+    List<String> regions = const [],
+    String query = '',
+  });
+
   /// 받은 분석(저장본). 없으면 null. 크레딧을 쓰지 않는다.
   Future<AnalysisResponse?> getAnalysis(String noticeId);
 
@@ -319,6 +332,56 @@ class SampleNoticeRepository implements NoticeRepository {
       fromCache: true,
     );
     return response;
+  }
+
+  /// 외부 공고 찾기 샘플: 합성 결과 3건(출처 확인 안 된 1건 포함)을 주고 2크레딧을 차감한다.
+  @override
+  Future<ExternalSearchResult> requestExternalSearch({
+    required String requestId,
+    String? category,
+    List<String> interests = const [],
+    String? period,
+    List<String> regions = const [],
+    String query = '',
+  }) async {
+    if (!(await getProfile()).hasAgentConsent) {
+      throw const RepositoryException(RepositoryErrorKind.consentRequired, fromServer: true);
+    }
+    if (_balance < 2) throw const RepositoryException(RepositoryErrorKind.insufficientCredits, fromServer: true);
+    if (analysisDelay > Duration.zero) await Future<void>.delayed(analysisDelay);
+    final now = DateTime.now().toUtc();
+    _balance -= 2;
+    _ledger.insert(0, CreditEntry(kind: 'external_search', amount: -2, at: now, ref: null));
+    return ExternalSearchResult(
+      items: const [
+        ExternalSearchItem(
+          title: '합성 소프트웨어 공모전',
+          url: 'https://contest.example.invalid/view/1',
+          sourceName: '합성 공모전 사이트',
+          deadline: '2026-12-31',
+          reason: '합성 예시입니다. 관심 분야와 이어지는 공모전입니다.',
+          verified: true,
+        ),
+        ExternalSearchItem(
+          title: '합성 AI 아이디어 해커톤',
+          url: 'https://list.example.invalid/contests',
+          sourceName: '합성 목록 사이트',
+          deadline: null,
+          reason: '합성 예시입니다. 온라인으로 참여할 수 있습니다.',
+          verified: true,
+        ),
+        ExternalSearchItem(
+          title: '출처에 없는 합성 대회',
+          url: 'https://nowhere.example.invalid/',
+          sourceName: 'nowhere.example.invalid',
+          deadline: null,
+          reason: '합성 예시입니다.',
+          verified: false,
+        ),
+      ],
+      charged: true,
+      searchedAt: now,
+    );
   }
 
   @override

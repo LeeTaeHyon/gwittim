@@ -552,7 +552,7 @@ class _Question extends StatelessWidget {
             runSpacing: 8,
             children: [
               for (final item in items)
-                _AnswerChip(label: item.name, selected: isSelected(item.id), onTap: () => onTap(item.id)),
+                AnswerChip(label: item.name, selected: isSelected(item.id), onTap: () => onTap(item.id)),
             ],
           ),
         ],
@@ -561,9 +561,9 @@ class _Question extends StatelessWidget {
   }
 }
 
-/// 고르는 칩: 높이 44, 테두리 1.5, 고르면 cta 면 (체크 아이콘 없음 — 폭이 바뀌어 줄바꿈이 달라지지 않게)
-class _AnswerChip extends StatelessWidget {
-  const _AnswerChip({required this.label, required this.selected, required this.onTap});
+/// 고르는 칩 (외부 공고 찾기 화면도 씀): 높이 44, 테두리 1.5, 고르면 cta 면 (체크 아이콘 없음 — 폭이 바뀌어 줄바꿈이 달라지지 않게)
+class AnswerChip extends StatelessWidget {
+  const AnswerChip({super.key, required this.label, required this.selected, required this.onTap});
 
   final String label;
   final bool selected;
