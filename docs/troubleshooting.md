@@ -32,6 +32,7 @@
 | 스크립트 안에서 `uv run`을 다시 부르면 `Failed to initialize cache ... 액세스가 거부` | 실행 환경(샌드박스)에서 uv 캐시 폴더 쓰기 제한 | 바깥 `uv run`의 파이썬(`sys.executable`)으로 자식 프로세스 실행 |
 | `data/local/` 아래 스크립트에서 `ModuleNotFoundError: backend` | 스크립트 폴더가 경로 기준이 됨 | `sys.path.insert(0, 저장소 루트)` |
 | `%TEMP%`에 파일 쓰기 `PermissionError` | 실행 환경의 쓰기 제한 | 작업 폴더의 `data/local/`(git 제외)에 씀. 끝나면 지움 |
+| 로컬 수집 요약은 `held_past`가 있는데 `notices.json`은 전부 `publication_status: published` | `notices.json`은 분석 결과 캐시(변경 비교용)이고 게시 기록이 아님. `publication_status`는 검증 결과(published/review_pending)이며, 보류(`held_past`)는 게시 단계에서만 걸러 어디에도 기록하지 않음. 로컬 모드의 요약 건수는 메모리 싱크 기준 | 의도된 동작. 보류분은 `lifecycle_status`가 closed/removed이거나 마감 미상으로 오래된 공고라 추천에서 어차피 제외됨. 게시 여부는 Firestore `notices`(published)만 기준 |
 | 실제 학교 공고로 시험하고 싶음 | `backend.api.local`은 합성 fixtures만 씀 | `data/local/notices.json`에서 공고 1건을 `InMemoryNotices`에 넣어 `create_app`. 프로필은 합성값만 |
 
 ## 3. git·worktree·PR
