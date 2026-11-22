@@ -29,6 +29,9 @@ _YY = re.compile(
 _WEEKDAYS = "월화수목금토일"
 _TIME = re.compile(_CLOCK)
 _RANGE_SEP = re.compile(r"\s*[~∼～\-–]\s*")
+# 'A, 10:00부터 B, 23:59까지' 꼴 범위: 시작 쪽 시각(쉼표로 떨어져도)과 '부터'가 구분자 (신청 기간의 끝 날짜를 마감으로 읽기 위해)
+_FROM_SEP = re.compile(r"\s*,?\s*(?:" + _CLOCK + r")?\s*부터\s*")
+_COMMA_CLOCK = re.compile(r"\s*,\s*(?:" + _CLOCK + r")")
 
 
 @dataclass(frozen=True)
@@ -77,17 +80,29 @@ def parse_line(line: str) -> tuple[Point | None, Point | None]:
         return None, None
     rest = line[first.end():]
     sep = _RANGE_SEP.match(rest)
+    if not sep and (sep := _FROM_SEP.match(rest)):
+        if start.time is None and (clock := _clock(sep)) not in (None, False):
+            start = Point(start.day, clock)
+        return _range_end(start, rest[sep.end():], from_range=True)
     if not sep:
         return start, None
-    tail = rest[sep.end():]
+    return _range_end(start, rest[sep.end():])
+
+
+def _range_end(start: Point, tail: str, *, from_range: bool = False) -> tuple[Point, Point | None]:
+    """범위 구분자 뒤 끝 날짜. '부터 … 까지' 꼴(from_range)이면 쉼표로 떨어진 끝 시각도 붙인다."""
     for pattern in (_FULL, _YY, _SHORT):
         m = pattern.match(tail)
         if m and (pattern is not _SHORT or m["wd"] or tail[m.end(): m.end() + 1] in ("", " ", ".", ",", ")", "까")):
             end = _dated_point(m) if pattern is not _SHORT else _point(m, start.day.year)
             if end and pattern is _SHORT and end.day < start.day:  # 12.30 ~ 01.05: 다음 해
                 end = _point(m, start.day.year + 1)
+            if end and from_range and end.time is None and (c := _COMMA_CLOCK.match(tail[m.end():])):
+                end = Point(end.day, _clock(c)) if _clock(c) is not False else end
             if end:
                 return start, end
+    if from_range:
+        return start, None
     m = _TIME.match(tail)
     if m and start.time:  # 같은 날 시각 범위: 15:00 ~ 17:00
         return start, _point_time(start.day, m)
