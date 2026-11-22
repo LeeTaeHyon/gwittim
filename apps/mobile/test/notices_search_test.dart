@@ -68,6 +68,21 @@ Future<void> pumpNotices(WidgetTester tester, SampleNoticeRepository repo) async
 Finder chip(String label) => find.ancestor(of: findText(label), matching: find.byType(InkWell)).first;
 
 void main() {
+  testWidgets('학교를 고르지 않았으면 안내 한 줄 (rank-0.8)', (tester) async {
+    // updateProfile은 runAsync 밖에서 부른다(안에서 만든 Future는 테스트 시계로 끝나지 않음)
+    final none = SampleNoticeRepository();
+    await none.updateProfile(const UserProfile(majorId: 'mjc.computer_engineering', interestIds: ['software']));
+    await pumpNotices(tester, none);
+    expect(findText('학교를 고르면 학교 공지도 볼 수 있습니다.'), findsOneWidget);
+  });
+
+  testWidgets('학교를 고른 학생에게는 안내 없음', (tester) async {
+    final mjc = SampleNoticeRepository();
+    await mjc.updateProfile(const UserProfile(universityId: 'mjc', interestIds: ['software']));
+    await pumpNotices(tester, mjc);
+    expect(findText('학교를 고르면 학교 공지도 볼 수 있습니다.'), findsNothing);
+  });
+
   testWidgets('제목 아래 칩 줄이 늘 있고, 칩·검색으로 거른다 (D-026)', (tester) async {
     await pumpNotices(tester, SampleNoticeRepository());
     expect(findText('나에게 맞는 공고'), findsOneWidget);

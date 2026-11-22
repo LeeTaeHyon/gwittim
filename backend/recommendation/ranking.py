@@ -13,7 +13,6 @@ from .config import (
     RANKING_VERSION,
     STALE_UNKNOWN_DAYS,
 )
-from backend.dictionaries import UNLISTED_UNIVERSITY
 from backend.sources import source_config
 
 from .eligibility import evaluate
@@ -47,12 +46,10 @@ def has_personal_input(profile: dict) -> bool:
 
 
 def is_school_notice_hidden(notice: dict, profile: dict) -> bool:
-    """'목록에 없는 학교'(unlisted) 학생에게는 학교 출처(university_id가 있는 출처)의 공지를 보이지 않는다.
-    학교를 입력하지 않았거나(null) 다른 학교면 판단하지 않는다(D-043, 2026-11-22)."""
-    return (
-        profile.get("university_id") == UNLISTED_UNIVERSITY
-        and source_config(notice["source_id"]).university_id is not None
-    )
+    """학교 출처(university_id가 있는 출처) 공지는 프로필 학교가 그 학교인 학생에게만 보인다.
+    학교를 고르지 않았거나(null) 목록에 없는 학교(unlisted)면 교외 공고만 남는다(D-043, 2026-11-22)."""
+    school = source_config(notice["source_id"]).university_id
+    return school is not None and profile.get("university_id") != school
 
 
 def _compact(text: str | None) -> str:
@@ -79,7 +76,7 @@ def recommend(
 ) -> dict:
     """list_recommendations 응답을 만든다.
 
-    - 프로필 학교가 unlisted(목록에 없는 학교)면 학교 출처 공지는 제외하고 교외 공고만 남긴다
+    - 학교 출처 공지는 프로필 학교가 같은 학생에게만. 학교를 고르지 않았거나 unlisted면 교외 공고만 남긴다
     - review_pending, closed, removed, not_met, 행정 공지(admin_notice), 오래된 마감 미상 공고는 기본 추천에서 제외
     - 프로필에 관심사·직무·전공이 없으면 mode=latest: 점수 없이 게시일 내림차순
     - 정렬: 점수 내림차순(점수 없음은 뒤) → 게시일 내림차순(미상은 뒤) → notice_id

@@ -128,6 +128,7 @@ def test_recommendations_personalized_after_profile(client):
 def test_recommendations_search_and_category(client):
     """공고 탭 검색·분류 칩 (D-026): 추천 후보 전체에서 거르고, 제외 규칙은 그대로다."""
     ids = lambda r: [i["notice"]["notice_id"] for i in r.json()["items"]]
+    assert client.put("/v1/profile", headers=ALICE, json=profile_body()).status_code == 200  # 학교 공지는 같은 학교 학생에게만 (rank-0.8)
     assert ids(client.get("/v1/recommendations?q=해외연수", headers=ALICE)) == ["n_synthetic_0002"]  # 띄어쓰기 무시
     contest = client.get("/v1/recommendations?category=contest", headers=ALICE)
     assert schema_errors("recommendation_list_response", contest.json()) == []

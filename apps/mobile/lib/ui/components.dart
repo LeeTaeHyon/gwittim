@@ -331,6 +331,19 @@ class ScreenHeader extends StatelessWidget {
 }
 
 /// 캡션 (13, 보조 글자)
+/// 학교를 고르지 않은 학생에게 보이는 한 줄 (홈·공고 탭). 학교 공지는 같은 학교 학생에게만 보인다 (rank-0.8, D-043)
+class SchoolHint extends StatelessWidget {
+  const SchoolHint({super.key});
+
+  static const text = '학교를 고르면 학교 공지도 볼 수 있습니다.';
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 2),
+    child: Text(keepAll(text), style: captionStyle(context)),
+  );
+}
+
 TextStyle captionStyle(BuildContext context) => TextStyle(fontSize: 13, height: 1.6, color: context.gw.muted);
 
 /// 하단 탭 하나. 고르면 채운 아이콘을 쓴다.
