@@ -395,7 +395,7 @@ class AnalysisChips {
 class AnalysisReport {
   const AnalysisReport({required this.fit, required this.eligibility, required this.todo, required this.skills});
 
-  /// 나에게 맞는 점·안 맞는 점
+  /// 나와 이 공고 (맞는 점·안 맞는 점·확인할 점)
   final String fit;
 
   /// 지원 자격

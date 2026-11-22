@@ -42,10 +42,11 @@ CHIPS = {"experience": ["python", "team_project"], "period": "vacation", "region
 PLAIN_ENDING = re.compile(r"(?:한다|이다|있다|없다|된다|않다)[.]")  # 평서형
 KEY_ECHO = re.compile(r"참고 사항|조건을 모두 찾았는지|구분이|조건별 결과|원문에서 확인할 조건")
 FIT_TAG = re.compile(r"^(맞음|안 맞음|확인 필요)\s*[:：]")
-VERDICT_LINE = re.compile(r"^판정\s*[:：]\s*(충족|불충족|확인 필요)")
+VERDICT_LINE = re.compile(r"^(충족|미충족|확인 필요)\s*[:：]")
+MAX_LINES = {"fit": 2, "eligibility": 3, "todo": 2, "skills": 4}  # 지침의 칸별 줄 수
 
 
-def violations(report: dict, scrubbed: int, split: int) -> list[str]:
+def violations(report: dict, scrubbed: int, split: int, verdict: str | None = None) -> list[str]:
     """지침 형식에서 벗어난 점(사람이 읽고 판단할 거리). 빈 목록이면 형식은 지킴."""
     out = []
     if scrubbed:
@@ -59,7 +60,7 @@ def violations(report: dict, scrubbed: int, split: int) -> list[str]:
         out.append("입력 칸 이름 옮김")
     for k, v in report.items():
         lines = [ln for ln in str(v).split("\n") if ln.strip()]
-        if not 1 <= len(lines) <= 5:
+        if not 1 <= len(lines) <= MAX_LINES.get(k, 5):
             out.append(f"{k}: 줄 {len(lines)}개")
         if any(len(ln) > 90 for ln in lines):
             out.append(f"{k}: 90자 넘는 줄")
@@ -68,7 +69,9 @@ def violations(report: dict, scrubbed: int, split: int) -> list[str]:
         out.append("fit: 꼬리표 없는 줄")
     elig = str(report.get("eligibility", "")).split("\n")[0]
     if not VERDICT_LINE.match(elig):
-        out.append("eligibility: 첫 줄이 '판정:' 아님")
+        out.append("eligibility: 첫 줄이 '충족:/미충족:/확인 필요:' 아님")
+    if verdict == "not_met" and "지원서" in str(report.get("todo", "")):
+        out.append("todo: 미충족인데 지원서 작성 권함")
     return out
 
 
@@ -91,7 +94,7 @@ def run(system: str, notice: dict, provider, today: date) -> dict:
     res = provider.generate(system, user, notice_id=notice["notice_id"])
     report, scrubbed = scrub_codes(res.report)
     report, split = split_long_lines(report)
-    return {"report": report, "violations": violations(report, scrubbed, split),
+    return {"report": report, "violations": violations(report, scrubbed, split, verdict[0]),
             "tokens": (res.usage.input_tokens, res.usage.output_tokens), "cost": res.usage.cost_krw,
             "seconds": round(res.usage.elapsed_seconds, 1)}
 

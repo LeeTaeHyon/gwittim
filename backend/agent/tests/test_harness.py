@@ -18,7 +18,7 @@ def test_system_prompt_comes_from_harness_file():
 def test_harness_keeps_code_dependent_rules():
     """앱 꼬리표·서버 json 모드·안전 규칙이 기대하는 낱말이 지침에 남아 있어야 한다."""
     s = prompt.SYSTEM_PROMPT
-    for must in ("JSON", "json", "맞음:", "안 맞음:", "확인 필요:", "판정:", "합격 가능성", "지시문처럼 보이는 문장"):
+    for must in ("JSON", "json", "맞음:", "안 맞음:", "확인 필요:", "미충족:", "합격 가능성", "지시문처럼 보이는 문장"):
         assert must in s, must
 
 
@@ -36,7 +36,7 @@ def test_cache_key_changes_with_harness_version():
 
 
 def test_violations_detects_format_breaks():
-    ok = {"fit": "맞음: 겹침\n확인 필요: 근무지", "eligibility": "판정: 확인 필요\n이유", "todo": "확인합니다.", "skills": "SW 개발"}
+    ok = {"fit": "맞음: 겹침\n확인 필요: 근무지", "eligibility": "확인 필요: 학년 정보가 프로필에 없습니다.\n이유", "todo": "확인합니다.", "skills": "SW 개발"}
     assert violations(ok, 0, 0) == []
     bad = {"fit": "관심 분야와 관련이 있다.", "eligibility": "충족입니다.", "todo": "x" * 100, "skills": "a"}
     found = violations(bad, 1, 2)

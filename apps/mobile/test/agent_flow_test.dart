@@ -196,7 +196,7 @@ void main() {
       await tester.tap(find.byTooltip('뒤로'));
       await tester.pumpAndSettle();
       await _tap(tester, findText('받은 분석 보기'));
-      expect(findText('나에게 맞는 점·안 맞는 점'), findsOneWidget);
+      expect(findText('나와 이 공고'), findsOneWidget);
     });
   });
 
@@ -206,7 +206,7 @@ void main() {
       await _tap(tester, findText('내 기준으로 자세히 보기'));
       await _tap(tester, find.text('건너뛰고 분석'));
       double top(String t) => tester.getTopLeft(findText(t)).dy;
-      expect(top('나에게 맞는 점·안 맞는 점'), lessThan(top('지원 자격')));
+      expect(top('나와 이 공고'), lessThan(top('지원 자격')));
       expect(top('지원 자격'), lessThan(top('지원 전 할 일')));
       await tester.scrollUntilVisible(findText('필요한 역량'), 200, scrollable: find.byType(Scrollable).first);
       expect(top('지원 전 할 일'), lessThan(top('필요한 역량')));
@@ -244,7 +244,7 @@ void main() {
       expect(find.byIcon(Icons.check_rounded), findsNWidgets(2)); // 앞 두 단계는 끝난 모양으로 고정
       await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
-      expect(findText('나에게 맞는 점·안 맞는 점'), findsOneWidget);
+      expect(findText('나와 이 공고'), findsOneWidget);
     });
 
     testWidgets('AI 실패: 차감되지 않았다는 안내, 다시 시도는 같은 요청 id', (tester) async {
@@ -257,7 +257,7 @@ void main() {
       expect(await _balance(repo), 5);
       repo.failWith = null;
       await _tap(tester, find.text('다시 시도'));
-      expect(findText('나에게 맞는 점·안 맞는 점'), findsOneWidget);
+      expect(findText('나와 이 공고'), findsOneWidget);
       expect(repo.sentIds.toSet().length, 1); // 재시도 때만 같은 값
       expect(await _balance(repo), 4);
     });
@@ -319,7 +319,7 @@ void main() {
       expect(findTextContaining('상세 분석 · $_title'), findsOneWidget);
       // 줄을 누르면 받은 분석으로
       await _tap(tester, findTextContaining('상세 분석 · '));
-      expect(findText('나에게 맞는 점·안 맞는 점'), findsOneWidget);
+      expect(findText('나와 이 공고'), findsOneWidget);
     });
 
     testWidgets('최대 보유 문구', (tester) async {

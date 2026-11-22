@@ -921,7 +921,7 @@ class _ReportSkeletons extends StatelessWidget {
 
 // ───────────────────────── 리포트 ─────────────────────────
 
-/// 상세 분석 리포트 (명세 §11.2): 나에게 맞는 점·안 맞는 점 → 지원 자격 → 지원 전 할 일 → 필요한 역량.
+/// 상세 분석 리포트 (명세 §11.2): 나와 이 공고 → 지원 자격 → 지원 전 할 일 → 필요한 역량. 서버 판정이 미충족이면 지원 자격이 맨 위.
 /// 서버가 준 글을 그대로 보이고, 지원 자격을 앱이 다시 판정하지 않는다.
 class AnalysisReportScreen extends StatelessWidget {
   const AnalysisReportScreen({
@@ -930,9 +930,14 @@ class AnalysisReportScreen extends StatelessWidget {
     this.title,
     this.receivedAt,
     this.skippedExperience = false,
+    this.eligibilityStatus,
   });
 
   final AnalysisResponse response;
+
+  /// 서버가 계산한 지원 자격 판정(met / not_met / needs_check). 추천 목록에서 들어온 공고만 있다.
+  /// not_met일 때만 '지원 자격' 칸을 맨 위로 올린다. 리포트 글(LLM 문장)을 보고 순서를 정하지 않는다.
+  final String? eligibilityStatus;
 
   /// 공고 제목. 모르면 null
   final String? title;
@@ -947,6 +952,7 @@ class AnalysisReportScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gw;
     final r = response.report;
+    final eligibilityCard = _ReportCard(title: '지원 자격', text: r.eligibility, style: _BodyStyle.bullets);
     return Scaffold(
       appBar: GwTopBar(title: title),
       body: ListView(
@@ -987,8 +993,10 @@ class AnalysisReportScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 15, height: 1.6, color: c.body),
               ),
             ),
-          _ReportCard(title: '나에게 맞는 점·안 맞는 점', text: r.fit, style: _BodyStyle.bullets),
-          _ReportCard(title: '지원 자격', text: r.eligibility, style: _BodyStyle.bullets),
+          // 기본 순서: 나와 이 공고 → 지원 자격 → 지원 전 할 일 → 필요한 역량 (명세 §11.2)
+          if (eligibilityStatus == 'not_met') eligibilityCard,
+          _ReportCard(title: '나와 이 공고', text: r.fit, style: _BodyStyle.bullets),
+          if (eligibilityStatus != 'not_met') eligibilityCard,
           _ReportCard(title: '지원 전 할 일', text: r.todo, style: _BodyStyle.todo),
           _ReportCard(title: '필요한 역량', text: r.skills, style: _BodyStyle.chips),
           Padding(
@@ -1021,7 +1029,10 @@ List<String> reportLines(String text) => [
 ];
 
 /// 줄 앞 꼬리표('맞음:', '안 맞음:', '확인 필요:', '판정: …'). 서버 지시문(prompt.py)과 같은 낱말
-final _lineTag = RegExp(r'^(맞음|안 맞음|확인 필요|판정)\s*[:：]\s*');
+final _lineTag = RegExp(r'^(맞음|안 맞음|확인 필요|미충족|불충족|충족|판정)\s*[:：]\s*');
+
+/// 공고 자료로 역량을 알 수 없을 때 지침이 쓰는 문장(backend/agent/harness/detail_analysis.md)
+const skillsUnknown = '요구 역량을 확인하기 어렵습니다';
 
 /// (꼬리표, 나머지 글). 꼬리표가 없으면 (null, 줄 그대로)
 (String?, String) splitLineTag(String line) {
@@ -1045,7 +1056,7 @@ class _ReportCard extends StatelessWidget {
     final Widget content;
     if (lines.length <= 1) {
       content = _TaggedLine(line: lines.firstOrNull ?? '', style: body);
-    } else if (style == _BodyStyle.chips && lines.every((l) => l.length <= 20)) {
+    } else if (style == _BodyStyle.chips && lines.every((l) => l.length <= 20 && !l.contains(skillsUnknown))) {
       content = Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -1126,7 +1137,7 @@ class _ReportCard extends StatelessWidget {
 }
 
 /// 리포트 한 줄. '맞음:' 같은 꼬리표가 있으면 작은 색 꼬리표 + 나머지 글로 보인다.
-/// '판정: 충족' 줄은 판정 낱말 자체를 꼬리표로 보인다(충족·불충족·확인 필요).
+/// 지원 자격 첫 줄은 '미충족: …'처럼 판정 낱말이 꼬리표가 된다. 예전 저장본의 '판정: …'과 '불충족'도 같은 꼬리표로 보인다(ui-style: 충족·미충족·확인 필요).
 class _TaggedLine extends StatelessWidget {
   const _TaggedLine({required this.line, required this.style});
 
@@ -1141,12 +1152,17 @@ class _TaggedLine extends StatelessWidget {
     if (tag == '판정') {
       // '판정: 확인 필요' → 꼬리표 '확인 필요', 뒤 글은 남은 말만
       final verdict = rest.trim();
-      tag = verdict.startsWith('불충족') ? '불충족' : verdict.startsWith('충족') ? '충족' : '확인 필요';
-      rest = verdict.replaceFirst(RegExp(r'^(불충족|충족|확인 필요)[.\s]*'), '');
+      tag = verdict.startsWith('불충족') || verdict.startsWith('미충족')
+          ? '미충족'
+          : verdict.startsWith('충족')
+          ? '충족'
+          : '확인 필요';
+      rest = verdict.replaceFirst(RegExp(r'^(불충족|미충족|충족|확인 필요)[.\s]*'), '');
     }
+    if (tag == '불충족') tag = '미충족';
     final (bg, fg) = switch (tag) {
       '맞음' || '충족' => (c.chip, c.onChip),
-      '안 맞음' || '불충족' => (c.urgentSoft, c.urgent),
+      '안 맞음' || '미충족' => (c.urgentSoft, c.urgent),
       _ => (c.checkSoft, c.check),
     };
     final pill = Container(

@@ -36,7 +36,7 @@ def load_harness(path: Path | None = None) -> str:
 HARNESS_VERSION = (HARNESS_DIR / "VERSION").read_text(encoding="utf-8").strip()
 SYSTEM_PROMPT = load_harness()
 
-VERDICT_KO = {"met": "충족", "not_met": "불충족", "needs_check": "확인 필요", "unknown": "확인 필요"}
+VERDICT_KO = {"met": "충족", "not_met": "미충족", "needs_check": "확인 필요", "unknown": "확인 필요"}
 FIELD_KO = {"university_id": "학교", "major_id": "학과", "grade": "학년", "enrollment_status": "학적 상태"}
 ENROLLMENT_KO = {"enrolled": "재학", "on_leave": "휴학", "graduated": "졸업·졸업 예정"}
 UNKNOWN_REASON_KO = {"condition_unresolved": "공고 조건을 자동으로 해석하지 못함", "profile_missing": "학생 정보 없음"}
@@ -189,8 +189,8 @@ def _code_patterns() -> tuple[re.Pattern, re.Pattern, re.Pattern]:
     codes = "|".join(re.escape(c) for c in sorted(_code_table(), key=len, reverse=True))
     edge_l, edge_r = r"(?<![A-Za-z0-9_./-])", r"(?![A-Za-z0-9_/-])"  # URL·영어 낱말 안쪽은 건드리지 않음
     code = rf"`?{edge_l}({codes}){edge_r}`?"
-    gloss_after = re.compile(rf"{code}\s*\(([^()]{{1,20}})\)")  # not_met(불충족) -> 불충족
-    gloss_before = re.compile(rf"\s*\(\s*{code}\s*\)")  # 불충족(not_met) -> 불충족
+    gloss_after = re.compile(rf"{code}\s*\(([^()]{{1,20}})\)")  # not_met(미충족) -> 미충족
+    gloss_before = re.compile(rf"\s*\(\s*{code}\s*\)")  # 미충족(not_met) -> 미충족
     bare = re.compile(code)
     return gloss_after, gloss_before, bare
 
