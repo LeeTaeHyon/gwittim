@@ -14,7 +14,9 @@
   2) 키 없이 cli로 맛보기 (구독 사용량 소량):
        uv run python tools/llm_board_read.py run --provider cli --limit-pages 2
   3) OpenCode 구독(DeepSeek V4.1 Flash, 생각 끔)으로 전체:
-       uv run python tools/llm_board_read.py run --provider opencode
+       PYTHONPATH=.venv/Lib/site-packages <기본 파이썬> tools/llm_board_read.py run --provider opencode
+     `uv run`(.venv 파이썬) 아래에서는 opencode가 로그 파일을 못 열어 실패한다(2026-11-22 확인).
+     .venv의 바탕 파이썬(이 PC는 C:/AI/Anime-Llasa/Python312/python.exe)으로 직접 실행한다.
      도구를 전부 끈 설정으로 빈 임시 폴더에서 실행한다. 비용은 DeepSeek 공식 단가로 환산(실제 청구는 정액 구독)
   4) Anthropic 키가 생기면:
        ANTHROPIC_API_KEY=... uv run python tools/llm_board_read.py run --provider api
