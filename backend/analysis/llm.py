@@ -150,6 +150,11 @@ class OllamaAnalyzer:
             return {**fields, "_analysis_version": self.base.version}
 
         source_text = _normalize(title + " " + raw["body_text"])
+        if fields["category"] == "admin_notice":
+            # 업체·교직원 대상 행정 공지: 학생 지원 자격·마감을 LLM에게서도 받지 않는다. 요약만 쓴다
+            year = int(raw["published"]["date"][:4]) if raw.get("published") else None
+            fields["summary"] = self._checked_summary(out.get("summary"), source_text, year, [title, *raw["body_text"].splitlines()])
+            return fields
 
         def grounded(evidence) -> bool:
             ok = isinstance(evidence, str) and evidence.strip() and _normalize(evidence) in source_text
@@ -218,7 +223,8 @@ class OllamaAnalyzer:
         if operator == "eq" and isinstance(value, list):
             return False
         if field == "grade":
-            return all(isinstance(v, int) and 1 <= v <= 4 for v in values)
+            # 1~4학년 전체는 학년 제한이 아니다
+            return all(isinstance(v, int) and 1 <= v <= 4 for v in values) and set(values) != {1, 2, 3, 4}
         if field == "enrollment_status":
             return all(v in ("enrolled", "on_leave", "graduated") for v in values)
         dictionary = "universities" if field == "university_id" else "majors"

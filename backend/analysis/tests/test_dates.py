@@ -67,3 +67,10 @@ def test_minute_precision_uses_source_timezone():
 )
 def test_points_near(line, anchor, expected):
     assert points_near(line, anchor) == expected
+
+
+def test_parse_line_from_until_range():
+    line = "※ 수강신청 실시 기간 : 2026. 11. 30. (월), 10:00부터 2026. 12. 03. (목), 23:59까지"
+    assert parse_line(line) == (Point(date(2026, 11, 30), "10:00"), Point(date(2026, 12, 3), "23:59"))
+    assert parse_line("접수 2026.11.30.부터 2026.12.3.까지") == (Point(date(2026, 11, 30), None), Point(date(2026, 12, 3), None))
+    assert parse_line("신청 2026.11.30.(월)부터 12.3.(목)까지") == (Point(date(2026, 11, 30), None), Point(date(2026, 12, 3), None))
