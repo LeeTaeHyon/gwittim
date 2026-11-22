@@ -114,7 +114,7 @@ def test_recommendations_search_and_category(client):
     assert ids(client.get("/v1/recommendations?q=해외연수", headers=ALICE)) == ["n_synthetic_0002"]  # 띄어쓰기 무시
     contest = client.get("/v1/recommendations?category=contest", headers=ALICE)
     assert schema_errors("recommendation_list_response", contest.json()) == []
-    assert sorted(ids(contest)) == ["n_synthetic_0001", "n_synthetic_0003"]  # 0005는 검토 대기라 빠짐
+    assert sorted(ids(contest)) == ["n_synthetic_0001", "n_synthetic_0003", "n_synthetic_0101"]  # 0005는 검토 대기라 빠짐, 0101은 교외 공모전 샘플
     assert ids(client.get("/v1/recommendations?category=contest&q=글쓰기", headers=ALICE)) == ["n_synthetic_0003"]
     assert ids(client.get("/v1/recommendations?q=없는말", headers=ALICE)) == []
     assert_error(client.get("/v1/recommendations?category=nope", headers=ALICE), 400, "invalid_argument")
