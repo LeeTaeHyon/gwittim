@@ -10,7 +10,7 @@
 - `api`는 Anthropic Messages API를 urllib로 부른다. 키(`ANTHROPIC_API_KEY`)가 없으면 호출하지 않고 `ProviderNotReady`.
 - `deepseek`는 DeepSeek Platform 공식 API(Chat Completions, 모델 `deepseek-flash` = V4.1 Flash)를 urllib로 부른다.
   키(`DEEPSEEK_API_KEY`)가 없으면 호출하지 않고 `ProviderNotReady`. JSON 스키마 강제가 없어 `json_object` 모드만 쓰고
-  4칸은 `parse_report`로 검사한다. 추론 내용(reasoning_content)은 버린다. 생각 정도는 `reasoning_effort: low`.
+  4칸은 `parse_report`로 검사한다. 추론 내용(reasoning_content)은 버린다. 생각은 끈다(`reasoning_effort: none`, 2026-11-22 비교: low 대비 약 3배 싸고 빠르며 품질 차이 없음).
 - 공식 SDK는 쓰지 않음(2026-11-21). 요청 종류가 늘거나 스트리밍·도구 호출이 필요하면 SDK로 바꿈(새 라이브러리 승인 필요).
 - 프롬프트·응답 원문과 키 값은 로그·예외 메시지에 넣지 않는다.
   로그에는 명세 §3의 요청 시각·공고 id·토큰 수·비용·성공 여부와 제공자 이름·소요 시간만 남긴다.
@@ -66,7 +66,7 @@ DEEPSEEK_KEY_ENV = "DEEPSEEK_API_KEY"
 DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
 DEEPSEEK_MODEL = "deepseek-flash"  # DeepSeek-V4.1-Flash-1017
 DEEPSEEK_MAX_TOKENS = 8000  # 추론 토큰도 이 안에서 쓴다
-DEEPSEEK_EFFORT = "low"
+DEEPSEEK_EFFORT = "none"  # 판정은 서버 규칙이 내리고 모델은 문장 정리만 하므로 생각을 끈다
 # 단가(USD/MTok, 입력은 캐시 미적중 기준으로 넉넉히). 피크는 평일 UTC 01-04시·06-10시, 나머지는 절반.
 # 중국 공휴일은 할인이지만 달력을 두지 않고 피크로 계산한다(월 상한 쪽으로 보수적).
 DEEPSEEK_PRICE_PEAK = (0.30, 1.20)

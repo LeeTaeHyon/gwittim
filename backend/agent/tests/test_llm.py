@@ -426,7 +426,7 @@ def test_deepseek_request_body_and_headers(monkeypatch):
     assert sent["model"] == "deepseek-flash"
     assert sent["messages"] == [{"role": "system", "content": SYSTEM}, {"role": "user", "content": PROMPT}]
     assert sent["response_format"] == {"type": "json_object"}
-    assert sent["reasoning_effort"] == "low"
+    assert sent["reasoning_effort"] == "none"
     assert sent["max_tokens"] == 8000
     assert "tools" not in sent  # 상세 분석에는 웹 검색을 붙이지 않는다
 

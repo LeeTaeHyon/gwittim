@@ -272,7 +272,7 @@ def test_build_messages_passes_rule_verdict():
     system, user = build_messages(notice, {"grade": 2}, verdict, date(2026, 11, 21))
     assert '"오늘": "2026-11-21"' in user
     assert json.loads(user)["공고"]["지원 자격 판정"]["결과"] == "불충족"
-    assert "해요체는 쓰지 않습니다" in system
+    assert "해요체(~해요)와 평서형(~이다, ~한다)은 쓰지 않습니다" in system
 
 
 # ---------- 다시 보기·크레딧 ----------
