@@ -5,9 +5,10 @@
 출처 검증 (2026-11-23 시험 호출: 모델 답 3개 중 주소가 검색 출처와 같은 것은 1개, 1개는 주소를, 1개는 주최를 지어냄)
 - 주소가 검색 출처에 있으면 그대로 둔다
 - 주소는 없지만 공고 이름이 어떤 출처의 제목·요약에 있으면 그 출처 페이지로 주소를 바꾼다(목록 사이트 등)
-- 둘 다 아니면 버린다
-- 마감일은 그 출처의 제목·요약에 같은 날짜가 있을 때만 보인다. 확인된 마감이 오늘보다 앞이면 버린다
-- 주최는 보이지 않는다(출처로 확인할 수 없음). 대신 출처 사이트 이름을 보인다
+- 둘 다 아니면 버리지 않고 verified=false('출처 확인 안 됨')로 모델이 낸 주소 그대로 보인다(2026-11-23 팀장).
+  주소가 http(s)가 아니면 열 수 없어 버린다. 확인된 결과를 먼저, 확인 안 된 결과를 뒤에 둔다
+- 마감일은 그 출처의 제목·요약에 같은 날짜가 있을 때만 보인다(확인 안 된 결과는 마감을 보이지 않음). 확인된 마감이 오늘보다 앞이면 버린다
+- 주최는 보이지 않는다(출처로 확인할 수 없음). 대신 출처 사이트 이름(확인 안 된 결과는 주소의 사이트 이름)을 보인다
 
 개인정보: 학생이 적은 한 줄(최대 50자)은 프롬프트에만 넣고 저장·로그·내역에 남기지 않는다. 결과도 서버에 저장하지 않는다.
 """
@@ -76,7 +77,7 @@ def _parse_day(value) -> date | None:
 
 
 def ground_items(text: str, sources: list[dict], today: date) -> tuple[list[dict], dict]:
-    """모델 답을 검색 출처로 검증한다. (결과, 집계 {'answered', 'kept', 'relinked', 'dropped_unsourced', 'dropped_past'})."""
+    """모델 답을 검색 출처로 검증한다. (결과, 집계 {'answered', 'kept', 'relinked', 'unverified', 'dropped_past', 'dropped_bad_url'})."""
     try:
         data = extract_json(text)
     except ReportFormatError:
@@ -86,8 +87,8 @@ def ground_items(text: str, sources: list[dict], today: date) -> tuple[list[dict
     for s in sources:
         if isinstance(s.get("url"), str) and s["url"].startswith(("http://", "https://")):
             by_url.setdefault(_norm_url(s["url"]), s)
-    stats = {"answered": len(raw), "kept": 0, "relinked": 0, "dropped_unsourced": 0, "dropped_past": 0}
-    out, seen = [], set()
+    stats = {"answered": len(raw), "kept": 0, "relinked": 0, "unverified": 0, "dropped_past": 0, "dropped_bad_url": 0}
+    verified, unverified, seen = [], [], set()
     for item in raw:
         if not isinstance(item, dict):
             continue
@@ -103,8 +104,17 @@ def ground_items(text: str, sources: list[dict], today: date) -> tuple[list[dict
                             if key in _norm_text(f"{s.get('title') or ''} {s.get('snippet') or ''}")), None)
                 if src is not None:
                     stats["relinked"] += 1
+        reason = " ".join(str(item.get("reason") or "").split())[:REASON_MAX] or "검색 결과에서 찾은 공고입니다."
         if src is None:
-            stats["dropped_unsourced"] += 1
+            # 출처로 확인 못 함: 버리지 않고 표시를 붙여 모델 주소 그대로. 마감은 확인 못 했으므로 보이지 않는다
+            if not url.startswith(("http://", "https://")) or not urlsplit(url).netloc:
+                stats["dropped_bad_url"] += 1
+                continue
+            if _norm_url(url) in seen:
+                continue
+            seen.add(_norm_url(url))
+            unverified.append({"title": title[:120], "url": url, "source_name": urlsplit(url).netloc[:60],
+                               "deadline": None, "reason": reason, "verified": False})
             continue
         evidence = f"{src.get('title') or ''} {src.get('snippet') or ''}"
         day = _parse_day(item.get("deadline"))
@@ -117,17 +127,17 @@ def ground_items(text: str, sources: list[dict], today: date) -> tuple[list[dict
         if _norm_url(link) in seen:
             continue
         seen.add(_norm_url(link))
-        reason = " ".join(str(item.get("reason") or "").split())[:REASON_MAX]
-        out.append({
+        verified.append({
             "title": title[:120],
             "url": link,
             "source_name": (src.get("site_name") or urlsplit(link).netloc or "출처")[:60],
             "deadline": day.isoformat() if day else None,
-            "reason": reason or "검색 결과에서 찾은 공고입니다.",
+            "reason": reason,
+            "verified": True,
         })
-        if len(out) >= MAX_ITEMS:
-            break
-    stats["kept"] = len(out)
+    out = (verified + unverified)[:MAX_ITEMS]
+    stats["kept"] = sum(i["verified"] for i in out)
+    stats["unverified"] = len(out) - stats["kept"]
     return out, stats
 
 

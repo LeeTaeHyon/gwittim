@@ -30,7 +30,7 @@ def test_url_in_sources_is_kept_and_deadline_checked_against_source():
     out, st = ground_items(answer(item("합성 소프트웨어 공모전", "https://contest.example.invalid/view/1", "2026-12-31")),
                            SOURCES, TODAY)
     assert out == [{"title": "합성 소프트웨어 공모전", "url": "https://contest.example.invalid/view/1/",
-                    "source_name": "합성 공모전 사이트", "deadline": "2026-12-31", "reason": "합성 이유입니다."}]
+                    "source_name": "합성 공모전 사이트", "deadline": "2026-12-31", "reason": "합성 이유입니다.", "verified": True}]
     assert st["kept"] == 1 and st["relinked"] == 0
 
 
@@ -42,9 +42,19 @@ def test_made_up_url_is_relinked_to_source_page_with_the_title():
     assert st["relinked"] == 1
 
 
-def test_unsourced_item_is_dropped():
-    out, st = ground_items(answer(item("출처에 없는 합성 대회", "https://nowhere.example.invalid/")), SOURCES, TODAY)
-    assert out == [] and st["dropped_unsourced"] == 1
+def test_unsourced_item_is_kept_as_unverified_after_verified_ones():
+    """출처로 확인 못 한 결과는 버리지 않고 '출처 확인 안 됨'으로 뒤에 둔다. 마감은 보이지 않는다 (2026-11-23 팀장)."""
+    out, st = ground_items(answer(item("출처에 없는 합성 대회", "https://nowhere.example.invalid/x", "2026-12-20"),
+                                  item("합성 소프트웨어 공모전", "https://contest.example.invalid/view/1")), SOURCES, TODAY)
+    assert [i["verified"] for i in out] == [True, False]
+    assert out[1] == {"title": "출처에 없는 합성 대회", "url": "https://nowhere.example.invalid/x",
+                      "source_name": "nowhere.example.invalid", "deadline": None, "reason": "합성 이유입니다.", "verified": False}
+    assert st["kept"] == 1 and st["unverified"] == 1
+
+
+def test_unverified_without_openable_url_is_dropped():
+    out, st = ground_items(answer(item("출처에 없는 합성 대회", "공식 홈페이지"), item("또 다른 합성 대회", "")), SOURCES, TODAY)
+    assert out == [] and st["dropped_bad_url"] == 2
 
 
 def test_deadline_not_in_source_is_hidden_and_english_date_is_read():
@@ -71,7 +81,7 @@ def test_duplicates_bad_json_and_limit():
 
 def test_non_http_source_is_ignored():
     bad = [{"url": "javascript:alert(1)", "title": "합성 소프트웨어 공모전", "snippet": "", "site_name": "x"}]
-    assert ground_items(answer(item("합성 소프트웨어 공모전", "javascript:alert(1)")), bad, TODAY)[0] == []
+    assert ground_items(answer(item("합성 소프트웨어 공모전", "javascript:alert(1)")), bad, TODAY)[0] == []  # 확인 안 됨으로도 안 보임
 
 
 def test_messages_use_allowed_profile_fields_and_query_only_in_prompt():

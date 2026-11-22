@@ -11,7 +11,8 @@
         "source_name": "합성",
         "deadline": null,
         "reason": "합성 예시입니다.",
-        "organizer": "지어낸 주최"
+        "organizer": "지어낸 주최",
+        "verified": true
       }
     ],
     "charged": true,

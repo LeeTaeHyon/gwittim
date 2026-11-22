@@ -83,8 +83,10 @@ def test_found_results_are_grounded_and_cost_two_credits(provider):
     assert resp.status_code == 200
     data = resp.json()
     assert schema_errors("external_search_response", data) == []
-    # 합성 답 3개: 출처 주소 1, 목록 페이지로 다시 연결 1, 출처 없음 1(빠짐)
-    assert [i["url"] for i in data["items"]] == ["https://contest.example.invalid/view/1", "https://list.example.invalid/contests"]
+    # 합성 답 3개: 출처 주소 1, 목록 페이지로 다시 연결 1, 출처 없음 1('출처 확인 안 됨'으로 맨 뒤)
+    assert [i["url"] for i in data["items"]] == ["https://contest.example.invalid/view/1", "https://list.example.invalid/contests",
+                                                 "https://nowhere.example.invalid/"]
+    assert [i["verified"] for i in data["items"]] == [True, True, False]
     assert data["items"][0]["deadline"] == "2026-12-31" and data["charged"] is True
     assert balance(client) == 3
     assert deps.spend.get("2026-11") > 0
