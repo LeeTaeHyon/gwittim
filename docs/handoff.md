@@ -155,7 +155,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 작업 이름 | Windows 작업 스케줄러 `Gwittim 수집 배치 (하루 2회)`: 평일 09:00·18:00, 주말 09:00만 (D-006 보완, 2026-11-21 주말 18:00 제외). 2026-11-17부터 `scripts\run_batch.ps1`(게시판 + 알림톡) 실행 |
+| 작업 이름 | Windows 작업 스케줄러 `Gwittim 수집 배치 (하루 2회)`: 평일 09:00·18:00, 주말 09:00만 (D-006 보완, 2026-11-21 주말 18:00 제외). 2026-11-17부터 `scripts\run_batch.ps1`(게시판 + 알림톡, `Gwittim-batch` 갱신 뒤로는 교외 공모전도) 실행 |
 | 실행 조건 | 팀장 계정으로 로그인해 있을 때만 (비밀번호 저장 안 함, ADC 로그인 사용). 놓친 실행은 가능할 때 바로 실행, 겹치면 건너뜀, 1시간 제한 |
 | 코드 | `Code_Project\Gwittim-batch` (main 고정 worktree). 메인 체크아웃의 브랜치 작업과 무관 |
 | 데이터 | `Gwittim\data\local` (파이프라인 기록·notices.json, 커밋 안 됨) |
@@ -549,4 +549,5 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 ## 교외 공고 수집기 1차 (2026-11-21, D-038)
 
 - 위비티(`wevity_contest`)·콘테스트코리아(`contestkorea_contest`) 어댑터와 예의 바른 요청기(`backend/collectors/common/http_polite.py`: robots·3초 간격·429/403 멈춤·실행당 상한). `uv run python -m backend.collectors.wevity`, `... contestkorea` (`--dry-run`으로 건수만 확인).
-- 아직 안 한 것: 정기 배치(`scripts/run_batch.ps1`) 연결, 앱의 출처 이름 표시(`report_screen.dart`의 `_sourceNames`에 두 출처 없음), 주최 측 공식 페이지 따라가기, Gemma 대상 판별, 링커리어 등 나머지 출처, 두 출처 사이 같은 공고 묶기.
+- 앱 출처 이름 표시는 #120에서 추가. 정기 배치 연결(2026-11-22, #124): `scripts/run_batch.ps1`이 게시판 다음, 알림톡 앞에 위비티 → 콘테스트코리아를 차례로 돈다. 실패해도 배치는 이어가고 완료 알림에 '교외 게시 N'을 붙인다. `-NoExternal`로 끈다. 적용하려면 `Gwittim-batch`를 갱신해야 한다
+- 아직 안 한 것: 주최 측 공식 페이지 따라가기, Gemma 대상 판별, 링커리어 등 나머지 출처, 두 출처 사이 같은 공고 묶기.
