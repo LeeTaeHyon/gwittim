@@ -43,6 +43,14 @@ class SearchProvider:
                                    llm.Usage("search", 1.0, 10000, 500, 0.15, 0.60))
 
 
+class ReadingProvider(SearchProvider):
+    """검색 + 원문 읽기(FakeProvider 합성: 첫 출처만 열림, 대학생 재학·휴학)."""
+
+    def read_pages(self, system, user):
+        r = llm.FakeProvider(env={}).read_pages(system, user)
+        return llm.WebSearchResult(r.text, [], llm.Usage("search", 1.0, 2000, 300, 0.15, 0.60), r.read_urls)
+
+
 def make_client(provider):
     deps = Deps(
         verifier=FakeTokenVerifier({"token-alice": "alice"}),
@@ -156,3 +164,27 @@ def test_provider_without_web_search_is_unavailable():
     consent(client)
     assert code(search(client)) == "unavailable"
     assert balance(client) == 5
+
+
+def test_reading_adds_verdict_target_and_organizer():
+    client, _ = make_client(ReadingProvider())
+    consent(client)
+    data = search(client).json()
+    assert schema_errors("external_search_response", data) == []
+    first = data["items"][0]
+    assert first["read"] is True and first["verdict"] == "met"  # 프로필(재학)과 '재학생·휴학생' 조건
+    assert first["organizer"] == "합성 주최 기관" and "대학생" in first["target"]
+    assert all(i["read"] is False and i["verdict"] is None for i in data["items"][1:])
+    assert data["excluded_not_met"] == 0
+
+
+def test_read_failure_still_returns_search_results():
+    class BrokenRead(SearchProvider):
+        def read_pages(self, system, user):
+            raise llm.ProviderCallError("읽기 실패")
+
+    client, _ = make_client(BrokenRead())
+    consent(client)
+    data = search(client).json()
+    assert data["charged"] is True and len(data["items"]) == 3
+    assert all(i["verdict"] is None for i in data["items"])

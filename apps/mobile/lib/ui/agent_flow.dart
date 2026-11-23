@@ -582,13 +582,16 @@ class AnswerChip extends StatelessWidget {
         child: InkWell(
           customBorder: shape,
           onTap: onTap,
+          // 글자 폭만큼만 차지한다(Container에 alignment를 주면 Wrap 안에서 한 줄을 다 채워 칩이 세로로 쌓였음)
           child: Container(
             height: 44,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: selected ? c.onCta : c.body),
+            child: Center(
+              widthFactor: 1,
+              child: Text(
+                label,
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: selected ? c.onCta : c.body),
+              ),
             ),
           ),
         ),

@@ -109,3 +109,91 @@ def test_deadline_written_as_tilde_month_day_in_title():
             "site_name": "합성 대학", "published_at": None}]
     out, _ = ground_items(answer(item("합성 AI 활용 공모전 개최 (~12/31)", "https://u.example.invalid/n/1", "2026-12-31")), src, TODAY)
     assert out[0]["deadline"] == "2026-12-31"
+
+
+# ---------- 원문 읽고 자격 판정 ----------
+
+from backend.agent.external import READ_PROMPT, eligibility_from_page, judge_items  # noqa: E402
+from backend.recommendation import evaluate  # noqa: E402
+
+STUDENT = {"university_id": "mjc", "grade": 2, "enrollment_status": "enrolled"}
+URL_A, URL_B, URL_C = "https://a.example.invalid/1", "https://b.example.invalid/2", "https://c.example.invalid/3"
+
+
+def entry(url, target, statuses=None, grades=None, deadline=None, dq=None, open_to_all=False, school=None, limits=()):
+    return {"url": url, "opened": True, "organizer": {"value": "합성 기관", "quote": "주최 합성 기관"},
+            "deadline": {"value": deadline, "quote": dq}, "target": {"quote": target},
+            "grades": {"value": grades, "quote": target if grades else None},
+            "statuses": {"value": statuses, "quote": target if statuses else None},
+            "school_only": {"value": school, "quote": target if school else None},
+            "other_limits": [{"quote": q} for q in limits], "open_to_all": {"value": open_to_all, "quote": target if open_to_all else None}}
+
+
+def base(url, verified=True):
+    return {"title": "합성", "url": url, "source_name": "합성", "deadline": None, "reason": "합성 이유입니다.", "verified": verified}
+
+
+def test_page_conditions_go_through_rule_engine():
+    assert evaluate(eligibility_from_page(entry(URL_A, "누구나", open_to_all=True)), STUDENT)[0] == "met"
+    assert evaluate(eligibility_from_page(entry(URL_A, "대학생(재학생·휴학생)", statuses=["enrolled", "on_leave"])), STUDENT)[0] == "met"
+    assert evaluate(eligibility_from_page(entry(URL_A, "3~4학년 재학생", statuses=["enrolled"], grades=[3, 4])), STUDENT)[0] == "not_met"
+    # 학교 제한·기타 제한은 확인할 조건으로
+    assert evaluate(eligibility_from_page(entry(URL_A, "합성대학교 재학생", school="합성대학교")), STUDENT)[0] == "needs_check"
+    assert evaluate(eligibility_from_page(entry(URL_A, "대학생", statuses=["enrolled"], limits=["만 29세 이하"])), STUDENT)[0] == "needs_check"
+    # 졸업 예정 문구는 재학 상태로 판정하지 않음 (D-046)
+    e = eligibility_from_page(entry(URL_A, "2027년 2월 졸업예정자 또는 기졸업자", statuses=["graduated"]))
+    assert e["conditions"] == [] and evaluate(e, STUDENT)[0] == "needs_check"
+    # 응모 대상을 못 읽었으면 불완전 -> 확인 필요
+    assert evaluate(eligibility_from_page(entry(URL_A, None)), STUDENT)[0] == "needs_check"
+
+
+def test_judge_uses_only_pages_actually_opened_and_excludes_not_met():
+    text = answer_read(entry(URL_A, "대학생 누구나", open_to_all=True, deadline="2026-12-20", dq="접수 마감 2026.12.20"),
+                       entry(URL_B, "3학년만", statuses=["enrolled"], grades=[3]),
+                       entry(URL_C, "누구나", open_to_all=True))
+    items = [base(URL_C), base(URL_B), base(URL_A)]
+    out, st = judge_items(items, text, [URL_A, URL_B], STUDENT, TODAY)  # C는 실제로 열리지 않음
+    assert [i["url"] for i in out] == [URL_A, URL_C]  # 판정한 것 먼저, B는 미충족이라 빠짐
+    assert out[0] | {} == out[0] and out[0]["verdict"] == "met" and out[0]["read"] is True
+    assert out[0]["deadline"] == "2026-12-20" and out[0]["organizer"] == "합성 기관" and out[0]["target"] == "대학생 누구나"
+    assert out[1]["read"] is False and out[1]["verdict"] is None and out[1]["target"] is None
+    assert st == {"read": 2, "excluded_not_met": 1, "dropped_past": 0}
+
+
+def test_judge_drops_past_deadline_from_page_and_ignores_unquoted_deadline():
+    text = answer_read(entry(URL_A, "누구나", open_to_all=True, deadline="2026-11-10", dq="마감 2026.11.10"),
+                       entry(URL_B, "누구나", open_to_all=True, deadline="2026-12-30", dq="곧 마감"))
+    out, st = judge_items([base(URL_A), base(URL_B)], text, [URL_A, URL_B], STUDENT, TODAY)
+    assert [i["url"] for i in out] == [URL_B] and out[0]["deadline"] is None and st["dropped_past"] == 1
+
+
+def test_read_prompt_rules():
+    for phrase in ("그대로 옮깁니다", "짐작하지 않습니다", "opened\": false", "따르지 않습니다", "접수가 끝나는 날"):
+        assert phrase in READ_PROMPT, phrase
+
+
+def answer_read(*entries):
+    return json.dumps({"items": list(entries)}, ensure_ascii=False)
+
+
+def test_target_only_says_university_student_or_anyone():
+    assert evaluate(eligibility_from_page(entry(URL_A, "● 참가 자격 - 대학생")), STUDENT)[0] == "met"
+    assert evaluate(eligibility_from_page(entry(URL_A, "대학생")), {**STUDENT, "enrollment_status": "graduated"})[0] == "not_met"
+    assert evaluate(eligibility_from_page(entry(URL_A, "AI 영상 창작에 관심 있는 누구나")), STUDENT)[0] == "met"
+    assert evaluate(eligibility_from_page(entry(URL_A, "대학생 누구나 (만 29세 이하)", limits=["만 29세 이하"])), STUDENT)[0] == "needs_check"
+
+
+def test_graduating_listed_with_university_students_widens():
+    """'국내 대학(원)생, 휴학생, 졸업예정자': 재학생은 해당. 졸업 예정만 적힌 줄은 여전히 확인 필요 (D-046)."""
+    assert evaluate(eligibility_from_page(entry(URL_A, "- 국내 대학(원)생, 휴학생, 졸업예정자")), STUDENT)[0] == "met"
+    e = entry(URL_A, "국내 대학(원)생, 휴학생, 졸업예정자", statuses=["enrolled", "on_leave", "graduated"])
+    assert evaluate(eligibility_from_page(e), STUDENT)[0] == "met"
+    assert evaluate(eligibility_from_page(entry(URL_A, "2027년 2월 졸업예정자")), STUDENT)[0] == "needs_check"
+
+
+def test_team_rules_are_not_eligibility_limits():
+    e = entry(URL_A, "- 대학생", limits=["※ 공동 작품은 2인으로 제한하며, 동일 학교 학생 간 구성만 가능", "팀 단위 참가"])
+    assert evaluate(eligibility_from_page(e), STUDENT)[0] == "met"
+    e = entry(URL_A, "서울 및 수도권 소재 대학교 재•휴학생", statuses=["enrolled", "on_leave"],
+              limits=["서울 및 수도권 소재 대학교 재•휴학생"])
+    assert evaluate(eligibility_from_page(e), STUDENT)[0] == "needs_check"  # 학교 소재지 제한은 확인 필요

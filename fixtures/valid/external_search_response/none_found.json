@@ -1,5 +1,6 @@
 {
   "items": [],
   "charged": false,
-  "searched_at": "2026-11-23T03:00:00Z"
+  "searched_at": "2026-11-23T03:00:00Z",
+  "excluded_not_met": 0
 }

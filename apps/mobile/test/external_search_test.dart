@@ -24,6 +24,10 @@ const _found = {
       'deadline': '2026-12-31',
       'reason': '합성 예시입니다. 관심 분야인 소프트웨어 개발과 이어지는 공모전입니다.',
       'verified': true,
+      'verdict': 'met',
+      'target': '전국 대학생(재학생·휴학생) 누구나',
+      'organizer': '합성 주최 기관',
+      'read': true,
     },
     {
       'title': '합성 AI 아이디어 해커톤',
@@ -32,6 +36,10 @@ const _found = {
       'deadline': null,
       'reason': '합성 예시입니다. 온라인으로 참여할 수 있습니다.',
       'verified': true,
+      'verdict': 'needs_check',
+      'target': '국내 대학생 (만 29세 이하)',
+      'organizer': null,
+      'read': true,
     },
     {
       'title': '출처에 없는 합성 대회',
@@ -40,9 +48,14 @@ const _found = {
       'deadline': null,
       'reason': '합성 예시입니다.',
       'verified': false,
+      'verdict': null,
+      'target': null,
+      'organizer': null,
+      'read': false,
     },
   ],
   'charged': true,
+  'excluded_not_met': 1,
   'searched_at': '2026-11-23T03:00:00Z',
 };
 
@@ -266,16 +279,38 @@ void main() {
       await _open(tester, repo);
       await _search(tester);
 
-      expect(findText('AI가 웹에서 찾은 결과입니다. 지원 자격과 마감은 원문에서 확인하십시오.'), findsOneWidget);
+      expect(findTextContaining('원문을 읽어, 응모 대상을 귀띔 규칙으로 판정했습니다'), findsOneWidget);
+      expect(findTextContaining('지원 자격이 맞지 않는 1건은 뺐습니다'), findsOneWidget);
       expect(findText('합성 소프트웨어 공모전'), findsOneWidget);
-      expect(findText('출처 · 합성 공모전 사이트'), findsOneWidget);
+      expect(findText('주최 · 합성 주최 기관   출처 · 합성 공모전 사이트'), findsOneWidget);
       expect(findText('마감 2026-12-31'), findsOneWidget);
-      expect(findText('마감은 원문에서 확인'), findsNWidgets(2));
+      expect(findText('마감 원문 확인'), findsNWidgets(2));
+      // 판정 꼬리표: 원문 조건으로 충족 1, 확인 필요 1, 확인 안 된 결과 1
+      expect(findText('충족'), findsOneWidget);
+      expect(findText('확인 필요'), findsOneWidget);
+      expect(findText('응모 대상 · 전국 대학생(재학생·휴학생) 누구나'), findsOneWidget);
+      await tester.scrollUntilVisible(findText('출처 확인 안 됨'), 300);
       expect(findText('출처 확인 안 됨'), findsOneWidget);
 
       // 표시는 확인 안 된 카드 안에만 있다
       final card = find.ancestor(of: findText('출처 확인 안 됨'), matching: find.byType(Material)).first;
       expect(find.descendant(of: card, matching: findText('출처에 없는 합성 대회')), findsOneWidget);
+    });
+
+    testWidgets('원문을 못 읽은 결과는 판정 없이 원문 미확인', (tester) async {
+      final notRead = ExternalSearchResult.fromJson({
+        ..._found,
+        'items': [
+          {...(_found['items'] as List).first as Map<String, dynamic>, 'verdict': null, 'target': null, 'organizer': null, 'read': false},
+        ],
+        'excluded_not_met': 0,
+      });
+      await _open(tester, _Repo(result: notRead));
+      await _search(tester);
+      expect(findText('원문 미확인'), findsOneWidget);
+      expect(findText('충족'), findsNothing);
+      expect(findTextContaining('응모 대상 ·'), findsNothing);
+      expect(findTextContaining('건은 뺐습니다'), findsNothing);
     });
 
     testWidgets('모두 확인된 결과에는 출처 확인 안 됨이 없다', (tester) async {

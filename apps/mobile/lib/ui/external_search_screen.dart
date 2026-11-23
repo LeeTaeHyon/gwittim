@@ -15,6 +15,19 @@ import 'theme.dart';
 // 조건(모두 선택) → (처음만) 동의 화면 → 웹에서 찾는 중 → 결과 카드.
 // 결과가 있을 때만 크레딧 2개가 차감된다. 결과는 서버에도 앱에도 저장하지 않고, 화면을 닫으면 사라진다.
 
+/// 외부 공고 찾기에서 고를 수 있는 공고 분류 (사전 순서 그대로 보인다)
+const _externalCategories = {
+  'contest',
+  'internship',
+  'education_program',
+  'extracurricular',
+  'global',
+  'startup',
+  'volunteer',
+  'job',
+  'scholarship',
+};
+
 /// 같은 질문의 다른 칩과 함께 고를 수 없는 칩 ('상관없음')
 const _anyRegion = 'any';
 
@@ -67,7 +80,8 @@ class _ExternalSearchScreenState extends State<ExternalSearchScreen> {
 
   Future<_Choices> _load() async {
     final r = widget.repository;
-    final categories = [for (final i in await r.dictionary('categories')) if (i.id != 'admin_notice') i];
+    // 학교 밖에서 학생이 직접 지원하는 기회만. 학사 안내·행사·행정 공지·기타는 교내 공지용 분류라 뺀다
+    final categories = [for (final i in await r.dictionary('categories')) if (_externalCategories.contains(i.id)) i];
     final interests = await r.dictionary('interests');
     final period = await r.dictionary('period_chips');
     final regions = await r.dictionary('region_chips');
@@ -421,8 +435,9 @@ class _ExternalSearchScreenState extends State<ExternalSearchScreen> {
 
   Widget _resultView(ExternalSearchResult result) {
     if (result.items.isEmpty) {
+      final excluded = result.excludedNotMet > 0 ? ' 원문을 읽어 보니 지원 자격이 맞지 않는 ${result.excludedNotMet}건은 뺐습니다.' : '';
       return _withBack(
-        const MessageView(title: '결과 없음', detail: '조건에 맞는 공고를 찾지 못했습니다. 크레딧은 차감되지 않았습니다.'),
+        MessageView(title: '결과 없음', detail: '조건에 맞는 공고를 찾지 못했습니다.$excluded 크레딧은 차감되지 않았습니다.'),
       );
     }
     final c = context.gw;
@@ -433,7 +448,10 @@ class _ExternalSearchScreenState extends State<ExternalSearchScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 14, 4, 14),
           child: Text(
-            keepAll('AI가 웹에서 찾은 결과입니다. 지원 자격과 마감은 원문에서 확인하십시오.'),
+            keepAll(
+              'AI가 웹에서 찾고 원문을 읽어, 응모 대상을 귀띔 규칙으로 판정했습니다. 지원 전에 원문을 확인하십시오.'
+              '${result.excludedNotMet > 0 ? ' 지원 자격이 맞지 않는 ${result.excludedNotMet}건은 뺐습니다.' : ''}',
+            ),
             style: TextStyle(fontSize: 14, height: 1.6, color: c.sub),
           ),
         ),
@@ -589,16 +607,33 @@ class _ResultCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          // 판정 꼬리표: 원문을 읽었으면 충족·확인 필요, 못 읽었으면 '원문 미확인', 검색 출처에도 없으면 '출처 확인 안 됨'
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              if (item.verdict == 'met') const Pill('충족', tone: PillTone.chip),
+              if (item.verdict == 'needs_check') const Pill('확인 필요', tone: PillTone.check),
+              if (!item.read && item.verified) const Pill('원문 미확인', tone: PillTone.neutral),
+              if (!item.verified) const Pill('출처 확인 안 됨', tone: PillTone.check),
+              Pill(item.deadline == null ? '마감 원문 확인' : '마감 ${item.deadline}', tone: PillTone.neutral),
+            ],
+          ),
+          if (item.target != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              keepAll('응모 대상 · ${item.target}'),
+              style: TextStyle(fontSize: 14, height: 1.55, fontWeight: FontWeight.w600, color: c.sub),
+            ),
+          ],
           const SizedBox(height: 6),
-          Text('출처 · ${item.sourceName}', style: TextStyle(fontSize: 13, color: c.muted)),
-          const SizedBox(height: 2),
           Text(
-            item.deadline == null ? '마감은 원문에서 확인' : '마감 ${item.deadline}',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.sub),
+            [if (item.organizer != null) '주최 · ${item.organizer}', '출처 · ${item.sourceName}'].join('   '),
+            style: TextStyle(fontSize: 13, color: c.muted),
           ),
           const SizedBox(height: 10),
           Text(keepAll(item.reason), style: TextStyle(fontSize: 15, height: 1.65, color: c.body)),
-          if (!item.verified) ...[const SizedBox(height: 10), const Pill('출처 확인 안 됨', tone: PillTone.check)],
         ],
       ),
     );
