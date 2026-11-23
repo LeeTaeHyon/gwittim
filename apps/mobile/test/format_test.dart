@@ -102,6 +102,12 @@ void main() {
         painter.dispose();
       }
     });
+
+    test('keepTogether: 짧은 라벨은 띄어쓰기에서도 줄을 바꾸지 않는다', () {
+      expect(keepTogether('조건 확인 필요'), '조$wj건$nbsp확$wj인$nbsp필$wj요');
+      expect(plain(keepTogether('여러 개 선택')), '여러 개 선택');
+      expect(keepTogether('D-3'), 'D-3');
+    });
   });
 }
 

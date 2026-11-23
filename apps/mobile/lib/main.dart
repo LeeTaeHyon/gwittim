@@ -101,6 +101,10 @@ class DataSourceBanner extends StatelessWidget {
 
 Future<bool> _openExternal(Uri url) => launchUrl(url, mode: LaunchMode.externalApplication);
 
+/// 기기 글자 크기는 이 배율까지만 따른다. 더 키우면 카드·버튼·막대가 넘치거나 잘린다.
+/// 화면 배율(디스플레이 크기)은 막을 수 없어 좁은 폭에서도 넘치지 않게 만든다.
+const maxTextScale = 1.3;
+
 /// 라이트·다크 테마와 고른 화면 설정(themeMode)을 연결한 MaterialApp.
 class GwMaterialApp extends StatelessWidget {
   const GwMaterialApp({super.key, required this.themeController, required this.home});
@@ -117,6 +121,8 @@ class GwMaterialApp extends StatelessWidget {
         theme: gwittimTheme(),
         darkTheme: gwittimTheme(Brightness.dark),
         themeMode: mode,
+        // 팝업·스낵바까지 모든 화면에 걸리도록 Navigator 바깥에서 막는다.
+        builder: (context, child) => MediaQuery.withClampedTextScaling(maxScaleFactor: maxTextScale, child: child!),
         home: child,
       ),
       child: home,

@@ -84,7 +84,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _openCredits() async {
     await Navigator.of(context).push(gwRoute(context, (_) => CreditsScreen(repository: widget.repository)));
-    if (mounted) setState(() => _credits = _loadCredits());
+    // 화살표 함수로 쓰면 setState가 Future를 돌려받아 디버그 단언에 걸린다.
+    if (mounted) {
+      setState(() {
+        _credits = _loadCredits();
+      });
+    }
   }
 
   /// 확인 창 → 동의 기록 지우기. 서버가 받은 분석도 함께 지운다.

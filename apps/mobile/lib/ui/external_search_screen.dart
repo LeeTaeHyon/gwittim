@@ -545,19 +545,22 @@ class _Group extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 좁은 폭·큰 글자에서 한 줄에 안 들어가면 안내('여러 개 선택')가 통째로 아랫줄로 간다.
           Semantics(
             header: true,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, letterSpacing: -0.5, color: c.ink),
-                ),
-                const SizedBox(width: 8),
-                Text(hint, style: TextStyle(fontSize: 13, color: c.muted)),
-              ],
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: keepAll(title),
+                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, letterSpacing: -0.5, color: c.ink),
+                  ),
+                  TextSpan(
+                    text: '  ${keepTogether(hint)}',
+                    style: TextStyle(fontSize: 13, color: c.muted),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 10),
