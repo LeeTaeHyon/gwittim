@@ -270,6 +270,67 @@ class SoftButton extends StatelessWidget {
   }
 }
 
+/// 고르는 칩 (상세 분석 질문, 학교 밖 기회 찾기, 프로필 관심 분야·희망 직무).
+/// 보이는 칩은 높이 36·테두리 1이고, 위아래 4씩도 누르는 영역이라 누를 수 있는 높이는 44다.
+/// 고르면 cta 면. 체크 아이콘은 두지 않는다(폭이 바뀌어 줄바꿈이 달라지지 않게).
+/// 여러 개는 [AnswerChipWrap]으로 늘어놓는다.
+class AnswerChip extends StatelessWidget {
+  const AnswerChip({super.key, required this.label, required this.selected, required this.onTap});
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final shape = StadiumBorder(side: BorderSide(color: selected ? c.cta : c.line));
+    return Semantics(
+      button: true,
+      selected: selected,
+      // 칩 위아래 여백을 눌러도 고른다. 칩 위를 누르면 안쪽 InkWell이 받아 물결이 보인다.
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Material(
+            color: selected ? c.cta : c.card,
+            shape: shape,
+            child: InkWell(
+              customBorder: shape,
+              onTap: onTap,
+              // 글자 폭만큼만 차지한다(Container에 alignment를 주면 Wrap 안에서 한 줄을 다 채워 칩이 세로로 쌓였음)
+              child: Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Center(
+                  widthFactor: 1,
+                  child: Text(
+                    label,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: selected ? c.onCta : c.body),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// [AnswerChip] 묶음. 가로 간격 8, 줄 사이 8(칩 안 위아래 여백 4씩이라 runSpacing은 0).
+class AnswerChipWrap extends StatelessWidget {
+  const AnswerChipWrap({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Wrap(spacing: 8, children: children);
+}
+
 class SectionTitle extends StatelessWidget {
   const SectionTitle(this.text, {super.key, this.trailing});
 
