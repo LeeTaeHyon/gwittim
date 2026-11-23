@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from backend.analysis import build_notice
+from backend.analysis.external_match import find_preferred_same
 from backend.analysis.kakao_match import match_board
 from backend.analysis.rules import Analyzer
 from backend.collectors.common import Outcome, PipelineStore, ingest, record_probe
@@ -30,7 +31,7 @@ class BatchReport:
     removed: int = 0
     fetch_errors: list[str] = field(default_factory=list)
     held_past: int = 0  # 알림톡: 이미 끝난 공고라 게시하지 않음
-    duplicates: int = 0  # 알림톡: 게시판 공고와 같은 공고라 게시하지 않음 (D-025)
+    duplicates: int = 0  # 알림톡: 게시판 공고와 같은 공고(D-025), 교외: 앞 출처와 같은 공고(D-048)라 게시하지 않음
 
 
 def _publish(notice: dict, issues: list[str], sink: NoticeSink, report: BatchReport) -> None:
@@ -173,6 +174,7 @@ def run_external(
     처음부터 게시하지 않는다(run_kakao와 같은 규칙). 어댑터는 새 공고만 상세를 열어 RawNotice를 만들므로
     이번에 안 보인 기존 공고는 네트워크 없이 날짜만 다시 따진다(마감이 지나면 closed로 바꿔 게시). 원문 확인 시각은 바꾸지 않는다.
     목록에서 사라진 공고 확인(probe)은 하지 않는다: 목록 2페이지만 보므로 밀려난 것과 삭제를 구분할 수 없다.
+    앞 출처(위비티)에 같은 공고가 있으면 게시하지 않고, 이미 게시했으면 내린다(D-048). notices는 출처끼리 함께 쓴다.
     """
     report = BatchReport()
     seen: set[str] = set()
@@ -198,5 +200,9 @@ def _external_notice(key, store, sink, notices, today, analyzer, report: BatchRe
     notices[key] = notice
     if _past(notice, today) and (previous is None or _past(previous, today)) and sink.get_public(notice["notice_id"]) is None:
         report.held_past += 1  # 처음부터 끝난 공고(또는 공개본이 없는 끝난 공고)는 게시하지 않는다
+        return
+    if find_preferred_same(notice, notices) is not None:
+        report.duplicates += 1  # 앞 출처에 같은 공고가 있음 (D-048)
+        sink.delete_public(notice["notice_id"])
         return
     _publish(notice, issues, sink, report)

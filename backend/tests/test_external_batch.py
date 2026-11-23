@@ -87,3 +87,57 @@ def test_published_notice_turns_closed_after_deadline_without_new_raw():
     assert notices[key]["lifecycle_status"] == "closed"
     assert sink.public[notices[key]["notice_id"]]["lifecycle_status"] == "closed"
     assert report.collected == 0 and report.published >= 1
+
+
+# ---------- 교외 출처끼리 같은 공고 (D-048) ----------
+
+from backend.analysis.external_match import find_preferred_same, same_notice  # noqa: E402
+from backend.collectors import contestkorea  # noqa: E402
+
+
+def _raw(source_id, nid, title, body):
+    return to_raw(source_id=source_id, notice_id=nid, url=f"https://example.invalid/{source_id}/{nid}", title=title,
+                  body_text=body, source_fields={"audience": "대학생"}, collected_at=AT)
+
+
+def _n(title, deadline, source="contestkorea_contest", status="open"):
+    return {"title": title, "source_id": source, "lifecycle_status": status,
+            "application_deadline": {"date": deadline} if deadline else None}
+
+
+def test_same_notice_rule():
+    a = _n("제30회 보령머드축제 공식 포스터 디자인 공모전", "2026-12-18", "wevity_contest")
+    assert same_notice(a, _n("[공모전] 제30회 보령머드축제 공식 포스터 디자인 공모전", "2026-12-18"))
+    assert same_notice(_n("2027 광석이 다시 만나기 경연 예선 모집 공고", "2026-12-14", "wevity_contest"),
+                       _n("2027 광석이 다시 만나기 경연", "2026-12-14"))  # 한쪽 제목이 통째로 들어감
+    assert not same_notice(a, _n("제30회 보령머드축제 공식 포스터 디자인 공모전", "2026-12-20"))  # 마감이 다름
+    assert not same_notice(_n("제3회 합성 AI 광고 공모전", "2026-11-30", "wevity_contest"),
+                           _n("제3회 합성 AI 영상 공모전", "2026-11-30"))
+    # 마감을 모르면 더 엄격하게
+    assert same_notice(_n("합성 대학생 서포터즈 3기 모집", None, "wevity_contest"), _n("합성 대학생 서포터즈 3기 모집", None))
+    assert not same_notice(_n("합성 대학생 서포터즈 3기 모집", None, "wevity_contest"), _n("합성 대학생 서포터즈 4기", None))
+
+
+def test_preferred_source_wins_regardless_of_order():
+    w = _n("제30회 보령머드축제 공식 포스터 디자인 공모전", "2026-12-18", "wevity_contest")
+    c = _n("제30회 보령머드축제 공식 포스터 디자인 공모전", "2026-12-18")
+    notices = {"wevity_contest:1": w, "contestkorea_contest:9": c}
+    assert find_preferred_same(c, notices) == "wevity_contest:1"
+    assert find_preferred_same(w, notices) is None  # 위비티는 남는다
+    assert find_preferred_same(c, {"wevity_contest:1": {**w, "lifecycle_status": "closed"}}) is None  # 끝난 공고와는 짝 안 함
+    assert find_preferred_same({**c, "source_id": "mjc_www_notice"}, notices) is None  # 학교 공지는 대상 아님
+
+
+def test_batch_skips_and_unpublishes_duplicate_from_later_source():
+    store, sink, notices = InMemoryStore(), InMemorySink(), {}
+    body = "응모대상: 대학생\n접수기간: 2026-11-20 ~ 2026-12-18"
+    title = "[합성 샘플] 제30회 합성 축제 공식 포스터 디자인 공모전"
+    # 콘테스트코리아가 먼저 게시돼 있던 상황(이 규칙 전 배치)
+    run_external([_raw(contestkorea.SOURCE_ID, "c1", title, body)], source_id=contestkorea.SOURCE_ID, store=store,
+                 sink=sink, notices=notices, today=TODAY)
+    assert len(sink.public) == 1
+    run_external([_raw(wevity.SOURCE_ID, "w1", title, body)], source_id=wevity.SOURCE_ID, store=store, sink=sink,
+                 notices=notices, today=TODAY)
+    report = run_external([], source_id=contestkorea.SOURCE_ID, store=store, sink=sink, notices=notices, today=TODAY)
+    assert report.duplicates == 1
+    assert [n["source_id"] for n in sink.public.values()] == ["wevity_contest"]
