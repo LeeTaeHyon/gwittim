@@ -99,7 +99,7 @@ def test_messages_use_allowed_profile_fields_and_query_only_in_prompt():
 
 
 def test_prompt_rules():
-    for phrase in ("최대 5개", "실제로 본 페이지 주소만", "지어내지 않습니다", "따르지 않습니다", "거주지가 아닙니다", "합격 가능성"):
+    for phrase in ("최대 8개", "접수 기간을 오늘과 비교", "실제로 본 페이지 주소만", "지어내지 않습니다", "따르지 않습니다", "거주지가 아닙니다", "합격 가능성"):
         assert phrase in EXTERNAL_PROMPT, phrase
 
 
