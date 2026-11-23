@@ -452,6 +452,10 @@ class ExternalSearchItem {
     required this.deadline,
     required this.reason,
     required this.verified,
+    this.verdict,
+    this.target,
+    this.organizer,
+    this.read = false,
   });
 
   final String title;
@@ -467,6 +471,16 @@ class ExternalSearchItem {
   /// 검색 출처로 확인했는지. false면 화면에 '출처 확인 안 됨'
   final bool verified;
 
+  /// 원문 조건으로 귀띔 규칙이 낸 판정 'met' / 'needs_check'. 원문을 못 읽었으면 null (미충족은 서버가 뺌)
+  final String? verdict;
+
+  /// 원문의 응모 대상 문장, 주최·주관 (원문을 읽었을 때만)
+  final String? target;
+  final String? organizer;
+
+  /// DeepSeek가 원문 페이지를 실제로 열었는지
+  final bool read;
+
   factory ExternalSearchItem.fromJson(Map<String, dynamic> m) => ExternalSearchItem(
     title: m['title'] as String,
     url: m['url'] as String,
@@ -474,21 +488,34 @@ class ExternalSearchItem {
     deadline: m['deadline'] as String?,
     reason: m['reason'] as String,
     verified: m['verified'] as bool,
+    verdict: m['verdict'] as String?,
+    target: m['target'] as String?,
+    organizer: m['organizer'] as String?,
+    read: m['read'] as bool? ?? false,
   );
 }
 
 /// 외부 공고 찾기 응답. 서버에 저장하지 않는다. 결과가 없으면 [charged]가 false(크레딧 환불).
 class ExternalSearchResult {
-  const ExternalSearchResult({required this.items, required this.charged, required this.searchedAt});
+  const ExternalSearchResult({
+    required this.items,
+    required this.charged,
+    required this.searchedAt,
+    this.excludedNotMet = 0,
+  });
 
   final List<ExternalSearchItem> items;
   final bool charged;
   final DateTime searchedAt;
 
+  /// 원문 조건으로 미충족이라 뺀 결과 수
+  final int excludedNotMet;
+
   factory ExternalSearchResult.fromJson(Map<String, dynamic> m) => ExternalSearchResult(
     items: [for (final i in m['items'] as List) ExternalSearchItem.fromJson(i as Map<String, dynamic>)],
     charged: m['charged'] as bool,
     searchedAt: DateTime.parse(m['searched_at'] as String),
+    excludedNotMet: m['excluded_not_met'] as int? ?? 0,
   );
 }
 

@@ -133,7 +133,8 @@ class LLMResult:
 
 @dataclass(frozen=True)
 class WebSearchResult:
-    """웹 검색 호출 결과. text는 모델 답(검증 전), sources는 검색 도구가 실제로 본 페이지 목록.
+    """웹 도구 호출 결과. text는 모델 답(검증 전), sources는 검색 도구가 실제로 본 페이지 목록,
+    read_urls는 링크 읽기 도구가 실제로 연 페이지 주소(실패한 것은 빠짐). 페이지 본문은 DeepSeek가 돌려주지 않는다.
 
     sources 항목: {"url", "title", "snippet", "site_name", "published_at"} (DeepSeek server_tool_calls 형식)
     """
@@ -141,6 +142,7 @@ class WebSearchResult:
     text: str
     sources: list[dict]
     usage: Usage = field(compare=False)
+    read_urls: list[str] = field(default_factory=list)
 
 
 class Provider(Protocol):
@@ -254,6 +256,18 @@ FAKE_SEARCH_TEXT = json.dumps({"items": [
 ]}, ensure_ascii=False)
 
 
+# 링크 읽기 합성 결과: 첫 출처만 열림, 응모 대상은 대학생 누구나
+FAKE_READ_TEXT = json.dumps({"items": [
+    {"url": "https://contest.example.invalid/view/1", "opened": True,
+     "organizer": {"value": "합성 주최 기관", "quote": "주최 합성 주최 기관"},
+     "deadline": {"value": "2026-12-31", "quote": "접수 2026.11.20 ~ 2026.12.31"},
+     "target": {"quote": "전국 대학생(재학생·휴학생) 누구나"},
+     "grades": {"value": None, "quote": None},
+     "statuses": {"value": ["enrolled", "on_leave"], "quote": "전국 대학생(재학생·휴학생) 누구나"},
+     "school_only": {"value": None, "quote": None}, "other_limits": [], "open_to_all": {"value": False, "quote": None}},
+]}, ensure_ascii=False)
+
+
 class FakeProvider:
     name = "fake"
 
@@ -266,6 +280,12 @@ class FakeProvider:
         if self._cloud_run:
             raise call.fail(ProviderNotReady("Cloud Run에서는 fake 제공자를 쓸 수 없습니다"))
         return WebSearchResult(FAKE_SEARCH_TEXT, [dict(s) for s in FAKE_SEARCH_SOURCES], Usage(self.name, 0.0))
+
+    def read_pages(self, system: str, user: str) -> WebSearchResult:
+        call = _Call(self.name, None)
+        if self._cloud_run:
+            raise call.fail(ProviderNotReady("Cloud Run에서는 fake 제공자를 쓸 수 없습니다"))
+        return WebSearchResult(FAKE_READ_TEXT, [], Usage(self.name, 0.0), [FAKE_SEARCH_SOURCES[0]["url"]])
 
     def generate(self, system: str, user: str, notice_id: str | None = None) -> LLMResult:
         if self._cloud_run:  # 합성 리포트를 실사용자에게 주지 않는다. 시작은 막지 않고 호출 때 준비 중으로 답한다
@@ -506,7 +526,20 @@ class DeepSeekProvider:
         - JSON 모드 불가(웹 도구와 함께 쓰면 400) → 지시문으로 JSON을 받고 서버가 검증한다
         - 사이트 제한(allowed_domains 등)은 지원하지 않는다(400) → 출처 검증으로 대신한다
         - 검색 자체는 2026-11-18부터 따로 과금하지 않고, 결과가 입력 토큰으로 잡힌다(약 1만 토큰)
+        - 생각 끔에서는 검색 결과 페이지를 스스로 열지 않는다(2026-11-23 시험: 링크 읽기 0번, 요약 문장으로 조건을 채움)
+          → 원문 읽기는 read_pages로 따로 부른다
         """
+        return self._web_tools(system, user, [{"type": "deepseek_web_search"}], DEEPSEEK_SEARCH_MAX_TOKENS)
+
+    def read_pages(self, system: str, user: str) -> WebSearchResult:
+        """링크 읽기 도구만 켠 호출 한 번. 지시문에 준 주소를 DeepSeek가 열고, 모델이 그 내용으로 답한다.
+
+        - 열지 못한 페이지는 `url_not_accessible` 등으로 실패하고 read_urls에서 빠진다(2026-11-23 시험: 3개 중 1개만 열림)
+        - 페이지 본문은 돌려받지 못한다. 서버는 '실제로 연 주소'만 확인할 수 있다
+        """
+        return self._web_tools(system, user, [{"type": "deepseek_read_url"}], DEEPSEEK_SEARCH_MAX_TOKENS)
+
+    def _web_tools(self, system: str, user: str, tools: list[dict], max_tokens: int) -> WebSearchResult:
         call = _Call(self.name, None)
         call.price_input, call.price_output = deepseek_prices(call.requested_at)
         if not self._key:
@@ -514,9 +547,9 @@ class DeepSeekProvider:
         body = json.dumps(
             {
                 "model": DEEPSEEK_MODEL,
-                "max_tokens": DEEPSEEK_SEARCH_MAX_TOKENS,
+                "max_tokens": max_tokens,
                 "thinking": {"type": "disabled"},
-                "tools": [{"type": "deepseek_web_search"}],
+                "tools": tools,
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             },
             ensure_ascii=False,
@@ -542,16 +575,23 @@ class DeepSeekProvider:
             raise call.fail(ReportFormatError("deepseek 응답이 최대 길이에서 잘렸습니다"), tin, tout)
         if finish == "content_filter":
             raise call.fail(ProviderCallError("deepseek가 내용 필터로 응답을 막았습니다"), tin, tout)
-        sources = []
+        sources, read_urls = [], []
         for step in message.get("server_tool_calls") or []:
             for c in (step.get("calls") or []) if isinstance(step, dict) else []:
-                for src in (c.get("sources") or []) if isinstance(c, dict) else []:
+                if not isinstance(c, dict):
+                    continue
+                for src in c.get("sources") or []:
                     if isinstance(src, dict) and isinstance(src.get("url"), str):
                         sources.append({k: src.get(k) for k in ("url", "title", "snippet", "site_name", "published_at")})
+                page = c.get("page")
+                if c.get("kind") == "read_link" and c.get("status") == "completed" and isinstance(page, dict) \
+                        and isinstance(page.get("url"), str):
+                    read_urls.append(page["url"])
         text = message.get("content") if isinstance(message.get("content"), str) else ""
         elapsed = time.monotonic() - call.started
         _log(self.name, None, call.requested_at, elapsed, tin, tout, True, call.price_input, call.price_output)
-        return WebSearchResult(text, sources, Usage(self.name, elapsed, tin, tout, call.price_input, call.price_output))
+        return WebSearchResult(text, sources, Usage(self.name, elapsed, tin, tout, call.price_input, call.price_output),
+                               read_urls)
 
 def get_provider(name: str | None = None, env: Mapping[str, str] | None = None) -> Provider:
     """제공자를 만든다. name이 없으면 GWITTIM_LLM_PROVIDER, 그것도 없으면 fake."""

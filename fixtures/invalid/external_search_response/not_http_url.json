@@ -11,10 +11,15 @@
         "source_name": "합성",
         "deadline": null,
         "reason": "합성 예시입니다.",
-        "verified": true
+        "verified": true,
+        "verdict": null,
+        "target": null,
+        "read": false,
+        "organizer": null
       }
     ],
     "charged": true,
-    "searched_at": "2026-11-23T03:00:00Z"
+    "searched_at": "2026-11-23T03:00:00Z",
+    "excluded_not_met": 0
   }
 }

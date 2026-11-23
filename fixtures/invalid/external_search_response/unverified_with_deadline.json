@@ -11,10 +11,15 @@
         "source_name": "x.example.invalid",
         "deadline": "2026-12-31",
         "reason": "합성 예시입니다.",
-        "verified": false
+        "verified": false,
+        "verdict": null,
+        "target": null,
+        "read": false,
+        "organizer": null
       }
     ],
     "charged": true,
-    "searched_at": "2026-11-23T03:00:00Z"
+    "searched_at": "2026-11-23T03:00:00Z",
+    "excluded_not_met": 0
   }
 }

@@ -361,6 +361,10 @@ class SampleNoticeRepository implements NoticeRepository {
           deadline: '2026-12-31',
           reason: '합성 예시입니다. 관심 분야와 이어지는 공모전입니다.',
           verified: true,
+          verdict: 'met',
+          target: '전국 대학생(재학생·휴학생) 누구나',
+          organizer: '합성 주최 기관',
+          read: true,
         ),
         ExternalSearchItem(
           title: '합성 AI 아이디어 해커톤',
@@ -381,6 +385,7 @@ class SampleNoticeRepository implements NoticeRepository {
       ],
       charged: true,
       searchedAt: now,
+      excludedNotMet: 1,
     );
   }
 

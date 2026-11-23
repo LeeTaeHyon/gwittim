@@ -1,21 +1,25 @@
 {
   "_expect": {
-    "keyword": "additionalProperties",
-    "path": "items/0"
+    "keyword": "const",
+    "path": "items/0/verdict"
   },
   "data": {
     "items": [
       {
         "title": "합성",
         "url": "https://x.example.invalid/",
-        "source_name": "합성",
+        "source_name": "x",
         "deadline": null,
         "reason": "합성 예시입니다.",
-        "organizer": "지어낸 주최",
-        "verified": true
+        "verified": true,
+        "verdict": "met",
+        "target": null,
+        "organizer": null,
+        "read": false
       }
     ],
     "charged": true,
+    "excluded_not_met": 0,
     "searched_at": "2026-11-23T03:00:00Z"
   }
 }
