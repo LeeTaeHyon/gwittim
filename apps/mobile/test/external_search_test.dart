@@ -253,8 +253,9 @@ void main() {
       expect(findText('AI가 웹에서 학생 조건에 맞는 공모전·대외활동을 찾습니다.'), findsOneWidget);
       expect(findText('적은 문장은 AI(DeepSeek)에 보내집니다. 이름·연락처 같은 개인정보는 적지 마십시오.'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, '찾기 · 크레딧 2개'), findsOneWidget);
-      expect(findText('공고 분류'), findsOneWidget);
-      expect(findText('갈 수 있는 지역'), findsOneWidget);
+      // 묶음 제목과 안내는 한 문단이라 큰 글자에서 안내가 통째로 아랫줄로 간다.
+      expect(findText('공고 분류  하나 선택'), findsOneWidget);
+      expect(findText('갈 수 있는 지역  여러 개 선택'), findsOneWidget);
     });
 
     testWidgets('개인정보 안내는 입력 칸 바로 아래에 있다', (tester) async {

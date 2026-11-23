@@ -115,6 +115,9 @@ final _sentenceEnd = RegExp(r'[.!?]$');
 /// - 끝 문장이 짧으면(14자 이하) 통째로, 아니면 끝 두 어절을 묶어 다음 줄에 한 어절만 남지 않게 한다.
 String keepAll(String text) => text.split('\n').map(_keepAllLine).join('\n');
 
+/// 짧은 라벨('조건 확인 필요', '여러 개 선택')을 한 덩어리로 둔다. 줄이 모자라면 라벨 앞에서 통째로 줄을 바꾼다.
+String keepTogether(String label) => keepAll(label).replaceAll(' ', _noBreakSpace);
+
 String _keepAllLine(String line) {
   final words = line.split(' ');
   var bind = 2;

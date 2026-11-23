@@ -567,11 +567,13 @@ class _BriefingCard extends StatelessWidget {
                 children: [
                   const GwBadge(),
                   const SizedBox(width: 8),
-                  Text(
-                    briefingDay(today),
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.loginSub),
+                  // 좁은 폭·큰 글자에서는 날짜가 어절 단위로 줄을 바꾼다('새 소식'을 밀어내지 않게).
+                  Expanded(
+                    child: Text(
+                      keepAll(briefingDay(today)),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.loginSub),
+                    ),
                   ),
-                  const Spacer(),
                   if (!opened) const _NewMark(),
                 ],
               ),
@@ -811,9 +813,10 @@ class _UpcomingRow extends StatelessWidget {
                           ].join(' · '),
                           style: TextStyle(fontWeight: FontWeight.w600, color: urgent ? c.urgent : c.sub),
                         ),
-                        TextSpan(text: ' · $category'),
+                        // 큰 글자에서 줄이 넘어가도 '조건 확인 필/요'처럼 라벨 중간에서 끊기지 않게
+                        TextSpan(text: ' · ${keepTogether(category)}'),
                         if (entry.recommendation.eligibilityStatus != 'met')
-                          TextSpan(text: ' · ${eligibilityShort(entry.recommendation.eligibilityStatus)}'),
+                          TextSpan(text: ' · ${keepTogether(eligibilityShort(entry.recommendation.eligibilityStatus))}'),
                       ],
                     ),
                     style: TextStyle(fontSize: 13, color: c.muted),

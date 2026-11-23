@@ -549,7 +549,7 @@ void main() {
     expect(find.text('전체 보기'), findsOneWidget);
     expect(find.textContaining('합격 가능성'), findsNothing); // 홈 끝 문구는 뺐다 (브리핑·리포트에만)
     expect(findText(projectTitle), findsNWidgets(2)); // 다가오는 마감 + 나에게 맞는 공고
-    expect(find.text('D-13 · 17:00 마감 · 행사'), findsOneWidget); // 다가오는 마감: 남은 날·시각이 앞
+    expect(findText('D-13 · 17:00 마감 · 행사'), findsOneWidget); // 다가오는 마감: 남은 날·시각이 앞
     expect(findText('행사 · 10월 30일 17:00 마감 · D-13'), findsOneWidget); // 카드 첫 줄: 분류 옆 마감, 7일 넘게 남으면 칩 없이
     expect(find.text('D-13'), findsNothing);
     expect(find.text('오늘 확인할'), findsOneWidget); // 라임 면 + ' 공고 N건'(겹치지 않는 수)
