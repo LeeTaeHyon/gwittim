@@ -679,7 +679,7 @@ class _DayRow extends StatelessWidget {
                           text: _lead(deadline).join(' · '),
                           style: TextStyle(fontWeight: FontWeight.w600, color: urgent ? c.urgent : c.sub),
                         ),
-                        TextSpan(text: ' · $category'),
+                        TextSpan(text: ' · ${keepTogether(category)}'),
                         if (status != null && status != 'met') TextSpan(text: ' · ${eligibilityShort(status)}'),
                       ],
                     ),

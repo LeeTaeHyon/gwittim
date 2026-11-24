@@ -455,8 +455,8 @@ class _SavedRow extends StatelessWidget {
               ? null
               : TextStyle(fontWeight: FontWeight.w600, color: left <= urgentDays ? c.urgent : c.sub),
         ),
-        const TextSpan(text: ' · '),
-        TextSpan(text: category),
+        // 분류 이름은 단어 중간에서 끊지 않는다(홈 메타 줄과 같은 방식)
+        TextSpan(text: ' · ${keepTogether(category)}'),
       ],
     );
   }

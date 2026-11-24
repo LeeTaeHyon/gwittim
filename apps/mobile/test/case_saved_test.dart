@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gwittim/data/application_case.dart';
 import 'package:gwittim/ui/saved_screen.dart';
+import 'package:gwittim/ui/format.dart';
 import 'package:gwittim/ui/theme.dart';
 
 import 'case_fakes.dart';
@@ -75,9 +76,14 @@ void main() {
         'applied': caseOf('applied', CaseState.applied),
       },
     );
-    expect(find.text('D-3 · 11월 27일 마감 · 공모전'), findsOneWidget);
+    expect(findText('D-3 · 11월 27일 마감 · 공모전'), findsOneWidget);
     expect(findText('지원 조건 직접 확인'), findsOneWidget); // saved + 확인 필요
-    expect(find.text('D-7 · 12월 1일 10:00 마감 · 공모전'), findsOneWidget);
+    expect(findText('D-7 · 12월 1일 10:00 마감 · 공모전'), findsOneWidget);
+    // 분류 이름은 단어 중간에서 끊기지 않게 한 덩어리(큰 글자에서 '인턴·현/장실습'처럼 끊기던 문제)
+    expect(
+      find.byWidgetPredicate((w) => w is Text && (w.textSpan?.toPlainText() ?? '').endsWith(' · ${keepTogether('공모전')}')),
+      findsNWidgets(3),
+    );
     expect(find.text('준비 중'), findsOneWidget);
     expect(findText('원문에서 신청 방법 확인'), findsOneWidget); // preparing의 다음 할 일
     expect(find.text('신청함'), findsOneWidget);

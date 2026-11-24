@@ -197,9 +197,9 @@ void main() {
 
       expect(find.text('마감일이 바뀐 공고 1개'), findsOneWidget);
       expect(findText('공고 soon · 10월 21일(수) → 10월 23일(금)'), findsOneWidget);
-      expect(find.text('D-3 · 10월 23일 마감 · 공모전'), findsOneWidget); // 남은 날은 지원 건 문구(모든 화면 같음, D-052)
-      expect(find.text('마감일 미상 · 공모전'), findsOneWidget); // 마감 설명 원문은 리포트 일정에만
-      expect(find.text('모집 끝남 · 공모전'), findsOneWidget);
+      expect(findText('D-3 · 10월 23일 마감 · 공모전'), findsOneWidget); // 남은 날은 지원 건 문구(모든 화면 같음, D-052)
+      expect(findText('마감일 미상 · 공모전'), findsOneWidget); // 마감 설명 원문은 리포트 일정에만
+      expect(findText('모집 끝남 · 공모전'), findsOneWidget);
       expect(find.text('학교 공지에서 삭제됨'), findsOneWidget);
       expect(find.text('목록에서 지우기'), findsOneWidget);
       expect(findText('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 갱신됩니다.'), findsOneWidget);

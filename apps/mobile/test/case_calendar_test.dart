@@ -5,6 +5,7 @@ import 'package:gwittim/data/application_case.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/ui/calendar_screen.dart';
 import 'package:gwittim/ui/components.dart';
+import 'package:gwittim/ui/format.dart';
 import 'package:gwittim/ui/theme.dart';
 
 import 'case_fakes.dart';
@@ -85,7 +86,7 @@ void main() {
     expect(find.descendant(of: start, matching: find.byKey(const ValueKey('dot-saved'))), findsNothing);
     await tester.tap(start);
     await tester.pumpAndSettle();
-    expect(find.text('신청 시작 · 09:00 · 공모전'), findsOneWidget);
+    expect(findText('신청 시작 · 09:00 · 공모전'), findsOneWidget);
     expect(find.widgetWithText(Pill, '신청 시작'), findsOneWidget);
 
     final deadline = find.byKey(const ValueKey('day-11-27'));
@@ -93,7 +94,12 @@ void main() {
     expect(find.descendant(of: deadline, matching: find.byKey(const ValueKey('dot-related'))), findsOneWidget);
     await tester.tap(deadline);
     await tester.pumpAndSettle();
-    expect(find.text('D-3 · 11월 27일 마감 · 공모전'), findsNWidgets(2)); // 준비 중·신청함 줄(남은 날 문구)
+    expect(findText('D-3 · 11월 27일 마감 · 공모전'), findsNWidgets(2)); // 준비 중·신청함 줄(남은 날 문구)
+    // 분류 이름은 단어 중간에서 끊기지 않게 한 덩어리
+    expect(
+      find.byWidgetPredicate((w) => w is Text && (w.textSpan?.toPlainText() ?? '').contains(' · ${keepTogether('공모전')}')),
+      findsNWidgets(3), // 준비 중·신청함·맞춤 공고 줄
+    );
     expect(find.widgetWithText(Pill, '준비 중'), findsOneWidget);
     expect(find.widgetWithText(Pill, '신청함'), findsOneWidget);
     expect(findText('가 맞춤 공고'), findsOneWidget);

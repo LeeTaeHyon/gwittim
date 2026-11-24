@@ -118,7 +118,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('10월 30일(금) 마감'), findsOneWidget);
     expect(findText(projectTitle), findsOneWidget);
-    expect(find.text('D-13 · 17:00 마감 · 행사'), findsOneWidget);
+    expect(findText('D-13 · 17:00 마감 · 행사'), findsOneWidget);
 
     await tester.tap(find.byTooltip('다음 달'));
     await tester.pumpAndSettle();

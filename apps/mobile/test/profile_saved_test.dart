@@ -128,7 +128,7 @@ void main() {
     expect(findText(title), findsOneWidget);
     expect(find.text('1개'), findsOneWidget);
     expect(find.text('그 이후'), findsOneWidget); // 10/17(토) 기준 10/30은 다다음 주
-    expect(find.text('D-13 · 10월 30일 17:00 마감 · 행사'), findsOneWidget);
+    expect(findText('D-13 · 10월 30일 17:00 마감 · 행사'), findsOneWidget);
     expect(find.text('마감일이 바뀐 공고 1개'), findsOneWidget);
     expect(findText('$title · 10월 28일(수) 17:00 → 10월 30일(금) 17:00'), findsOneWidget);
     expect(find.text('마감일 바뀜'), findsOneWidget);
