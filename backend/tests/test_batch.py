@@ -149,3 +149,19 @@ def test_probe_detects_error_redirect_and_404():
     assert probe("https://x/view.do", opener=raises(404)) == "not_found"
     assert probe("https://x/view.do", opener=raises(500)) == "error"
     assert probe("https://x/view.do", opener=offline) == "error"
+
+
+def test_batch_writes_body_with_publish_and_skips_rewrite():
+    site = Site([("BD3", "2026-10-15"), ("BD2", "2026-10-14")])
+    store, sink, notices = InMemoryStore(), InMemorySink(), {}
+    writes, reads = [], []
+    put_body, get_body = sink.put_body, sink.get_body
+    sink.put_body = lambda doc: (writes.append(doc["notice_id"]), put_body(doc))
+    sink.get_body = lambda notice_id: (reads.append(notice_id), get_body(notice_id))[1]
+    run(site, store, sink, notices)
+    assert set(sink.bodies) == set(sink.public) and len(sink.bodies) == 2
+    for key, notice in notices.items():
+        assert sink.bodies[notice["notice_id"]]["body_text"] == store.get(key).raw["body_text"].strip()
+    first_reads = len(reads)
+    run(site, store, sink, notices)  # 같은 내용이면 본문을 읽지도 다시 쓰지도 않는다
+    assert len(writes) == 2 and len(reads) == first_reads

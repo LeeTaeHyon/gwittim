@@ -251,6 +251,13 @@ class _AgentConsentScreenState extends State<AgentConsentScreen> {
                   style: TextStyle(fontSize: 15, height: 1.65, fontWeight: FontWeight.w700, color: c.ink),
                 ),
               ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(2, 8, 2, 0),
+                child: Text(
+                  keepAll('상세 분석을 요청하면 공고 본문과 고른 조건을 외부 AI로 보냅니다.'),
+                  style: TextStyle(fontSize: 15, height: 1.65, color: c.body),
+                ),
+              ),
               Container(
                 margin: const EdgeInsets.only(top: 16),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),

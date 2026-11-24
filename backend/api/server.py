@@ -9,6 +9,7 @@ import os
 from backend.agent.llm import check_startup
 from backend.firebase_store import (
     FirebaseTokenVerifier,
+    FirestoreBodies,
     FirestoreCredits,
     FirestoreKakaoInbox,
     FirestoreNotices,
@@ -38,6 +39,7 @@ app = create_app(
         credits=FirestoreCredits(_firebase),
         reports=FirestoreReports(_firebase),
         spend=FirestoreSpend(_firebase),
+        bodies=FirestoreBodies(_firebase),
         # 수집 토큰이 없으면 /v1/ingest/kakao는 404 (D-036). 토큰은 Cloud Run 환경변수로만 둔다
         kakao_inbox=FirestoreKakaoInbox(_firebase),
         ingest_token=os.environ.get("GWITTIM_INGEST_TOKEN") or None,

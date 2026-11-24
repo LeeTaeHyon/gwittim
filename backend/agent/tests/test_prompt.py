@@ -143,7 +143,7 @@ def test_split_keeps_short_lines_and_numbers():
 def test_prompt_first_card_rules():
     """첫 칸(나와 이 공고)·지원 자격·할 일·역량 규칙 (2026-11-23 리포트 개선)."""
     s = SYSTEM_PROMPT
-    assert "나와 이 공고" in s and "지원 결정을 가장 크게 바꾸는 사실부터" in s and "최대 2개만" in s
+    assert "나와 이 공고" in s and "지원 결정을 가장 크게 바꾸는 사실부터" in s and "최대 4개만" in s  # 2026-11-24 줄 수 상한 2 -> 4 (D3)
     assert "첫 줄은 마감이 지났다는 사실" in s and "요약·제목에만 있는 내용은 근거가 아닙니다" in s
     assert "어디서 어떻게 쌓았는지" in s and "'방학에만 가능'처럼 넓히거나" in s  # 선택값·경위 추정 금지
     assert "강의 주제, 배울 내용, 모집 대상" in s  # 역량이 아닌 것

@@ -59,12 +59,13 @@ def test_verdict_must_match_server():
 
 def test_old_format_verdict_is_read_but_format_is_separate():
     """예전 '판정: 불충족' 줄도 판정은 읽는다. 첫 줄 모양은 형식 점검으로만 잡힌다."""
-    old = {"fit": "관심 분야와 이어집니다.\n일정 확인이 필요합니다.\n지역 확인이 필요합니다.",
+    old = {"fit": "관심 분야와 이어집니다.\n일정 확인이 필요합니다.\n지역 확인이 필요합니다.\n장소 확인이 필요합니다.\n"
+                  "시간 확인이 필요합니다.",
            "eligibility": "판정: 불충족\n학년 조건", "todo": "확인합니다.", "skills": "SW 개발"}
     assert report_verdict(old) == "미충족"
     quality, form = check(old, 0, 0, "not_met")
     assert quality == []
-    assert any("fit: 줄 3개" in f for f in form) and any("eligibility: 첫 줄" in f for f in form)
+    assert any("fit: 줄 5개" in f for f in form) and any("eligibility: 첫 줄" in f for f in form)
 
 
 def test_deadline_stretch_and_skill_length_checks():

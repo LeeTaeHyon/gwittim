@@ -1,4 +1,5 @@
 from .publisher import (
+    NOTICE_BODIES,
     NOTICES,
     PIPELINE_FAILURES,
     RAW_NOTICES,
@@ -12,6 +13,7 @@ from .publisher import (
 )
 
 __all__ = [
+    "NOTICE_BODIES",
     "NOTICES",
     "PIPELINE_FAILURES",
     "RAW_NOTICES",

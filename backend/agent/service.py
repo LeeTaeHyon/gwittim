@@ -19,7 +19,7 @@ from backend.recommendation import evaluate
 from .credits import DETAIL_ANALYSIS, current_state, next_refill_at, reserve, settle, signup
 from .llm import generate_report
 from .payload import build_payload
-from .prompt import HARNESS_VERSION, build_messages, ground_report, scrub_codes, split_long_lines
+from .prompt import HARNESS_VERSION, body_for_model, build_messages, ground_report, scrub_codes, split_long_lines
 from .report_cache import cache_key, is_expired, report_expires_at
 
 if TYPE_CHECKING:
@@ -74,6 +74,15 @@ def _live(doc: dict | None, now: datetime) -> dict | None:
     return doc if doc is not None and not is_expired(doc["expires_at"], now) else None
 
 
+def _read_body(deps: Deps, notice_id: str) -> str | None:
+    """공고 본문 1건. 읽기 실패·없음은 본문 없이 예전처럼 분석한다(요청을 실패시키지 않음). 본문은 로그에 남기지 않는다."""
+    try:
+        return deps.bodies.get(notice_id)
+    except Exception as exc:
+        log.warning("notice body read failed notice_id=%s error=%s", notice_id, type(exc).__name__)
+        return None
+
+
 def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
     if not isinstance(body, dict) or schema_errors("analysis_request", body):
         raise AgentError("invalid_argument")
@@ -123,14 +132,16 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
     spent = False
     try:
         verdict = evaluate(notice["eligibility"], profile)
-        system, user = build_messages(notice, payload, verdict, deps.today_kst())
+        body = _read_body(deps, notice_id)  # 저장본 재사용 때는 읽지 않는다. 새 분석에만 1건 읽음
+        body_text, body_state = body_for_model(body)
+        system, user = build_messages(notice, payload, verdict, deps.today_kst(), body=body)
         result = generate_report(system, user, provider=deps.llm, notice_id=notice_id)
         _add_spend(deps, month, result.usage.cost_krw)
         spent = True
         report, scrubbed = scrub_codes(result.report)  # 지시문을 어기고 새어 나온 내부 코드를 한국어로
         report, split = split_long_lines(report)  # 한 문단으로 온 칸은 문장 끝에서 줄로 나눔(화면은 줄 = 항목)
         # 역량은 원문 근거가 있는 줄만, 마감 지남·미충족 할 일은 판단을 바꿀 행동만
-        report, grounded = ground_report(report, notice, verdict[0], deps.today_kst())
+        report, grounded = ground_report(report, notice, verdict[0], deps.today_kst(), body=body_text)
         if grounded:
             log.info("report grounded notice_id=%s %s", notice_id,
                      " ".join(f"{k}={v}" for k, v in sorted(grounded.items())))
@@ -148,8 +159,8 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
             "request_id": request_id,
         }
         deps.reports.put(uid, doc)
-        log.info("analysis created notice_id=%s harness=%s provider=%s cost_krw=%s",
-                 notice_id, HARNESS_VERSION, result.usage.provider, result.usage.cost_krw)
+        log.info("analysis created notice_id=%s harness=%s provider=%s cost_krw=%s body=%s",
+                 notice_id, HARNESS_VERSION, result.usage.provider, result.usage.cost_krw, body_state)
     except Exception as exc:  # LLM 실패·저장 실패 모두 환불. 원문은 로그에 남기지 않는다
         log.warning("analysis failed notice_id=%s harness=%s error=%s", notice_id, HARNESS_VERSION, type(exc).__name__)
         usage = getattr(exc, "usage", None)  # 실패한 호출도 토큰이 있으면 비용이 든 것으로 센다

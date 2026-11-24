@@ -34,8 +34,13 @@ class BatchReport:
     duplicates: int = 0  # 알림톡: 게시판 공고와 같은 공고(D-025), 교외: 앞 출처와 같은 공고(D-048)라 게시하지 않음
 
 
-def _publish(notice: dict, issues: list[str], sink: NoticeSink, report: BatchReport) -> None:
-    outcome = publish(notice, issues, sink)
+def _body(record) -> str | None:
+    """수집 원문 본문. 게시할 때 서버 전용 본문 저장소에 같이 쓴다 (docs/agent-detail-body-spec.md)."""
+    return ((record.raw if record is not None else None) or {}).get("body_text")
+
+
+def _publish(notice: dict, issues: list[str], sink: NoticeSink, report: BatchReport, body: str | None = None) -> None:
+    outcome = publish(notice, issues, sink, body)
     if outcome is PublishOutcome.PUBLISHED:
         report.published += 1
     elif outcome is PublishOutcome.QUEUED:
@@ -79,7 +84,7 @@ def run_batch(
                 record = store.get(result.key)
             notice, issues = build_notice(record, today=today, previous=notices.get(result.key), analyzer=analyzer)
             notices[result.key] = notice
-            _publish(notice, issues, sink, report)
+            _publish(notice, issues, sink, report, _body(record))
 
         # 이번에 본 목록 범위 안에 있어야 할 공고가 빠졌을 때만 원문 존재를 확인한다.
         # 범위 = 마지막 목록 행(고정 공지가 아닌 가장 오래된 글)의 게시일 이후. 오래돼서 밀려난 글은 확인하지 않는다.
@@ -105,7 +110,7 @@ def run_batch(
                 report.removed += 1
                 notice, issues = build_notice(store.get(key), today=today, previous=notices[key], analyzer=analyzer)
                 notices[key] = notice
-                _publish(notice, issues, sink, report)
+                _publish(notice, issues, sink, report, _body(store.get(key)))
     return report
 
 
@@ -144,13 +149,13 @@ def run_kakao(
             if sink.get_public(notice["notice_id"]) is None:
                 report.held_past += 1
                 continue
-            _publish(notice, issues, sink, report)
+            _publish(notice, issues, sink, report, _body(store.get(result.key)))
             continue
         if same:
             report.duplicates += 1
             sink.delete_public(notice["notice_id"])
             continue
-        _publish(notice, issues, sink, report)
+        _publish(notice, issues, sink, report, _body(store.get(result.key)))
     return report
 
 
@@ -205,4 +210,4 @@ def _external_notice(key, store, sink, notices, today, analyzer, report: BatchRe
         report.duplicates += 1  # 앞 출처에 같은 공고가 있음 (D-048)
         sink.delete_public(notice["notice_id"])
         return
-    _publish(notice, issues, sink, report)
+    _publish(notice, issues, sink, report, _body(store.get(key)))

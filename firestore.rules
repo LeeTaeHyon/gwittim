@@ -25,6 +25,11 @@ service cloud.firestore {
       }
     }
 
+    // 공고 본문(AI 상세 분석 입력): 서버(관리자 권한)만 읽고 쓴다. 아래 기본 거부와 같지만 의도를 드러내려고 따로 적음
+    match /notice_bodies/{noticeId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

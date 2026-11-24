@@ -14,7 +14,7 @@ from firebase_admin import auth, credentials, firestore
 from google.auth.credentials import AnonymousCredentials
 
 from backend.agent.credits import CreditState, Hold, LedgerEntry
-from backend.publish import NOTICES, REVIEW_QUEUE, SAVED, USERS
+from backend.publish import NOTICE_BODIES, NOTICES, REVIEW_QUEUE, SAVED, USERS
 from backend.collectors.mjc_kakao.inbox import INBOX as KAKAO_INBOX
 
 _PROFILE_FIELDS = ("university_id", "major_id", "grade", "enrollment_status", "interest_ids", "target_role_ids", "updated_at", "agent_consent")
@@ -229,6 +229,7 @@ class FirestoreSink(_Base):
 
     def delete_public(self, notice_id):
         self.db.collection(NOTICES).document(notice_id).delete()
+        self.delete_body(notice_id)  # 공개본을 내리면 본문도 함께 지운다
 
     def touch_public(self, notice_id, fields):
         self.db.collection(NOTICES).document(notice_id).update(fields)
@@ -238,6 +239,26 @@ class FirestoreSink(_Base):
 
     def delete_review(self, notice_id):
         self.db.collection(REVIEW_QUEUE).document(notice_id).delete()
+
+    # notice_bodies/{notice_id}: 서버 전용. firestore.rules가 앱 접근을 막는다
+    def get_body(self, notice_id):
+        snap = self.db.collection(NOTICE_BODIES).document(notice_id).get()
+        return snap.to_dict() if snap.exists else None
+
+    def put_body(self, doc):
+        self.db.collection(NOTICE_BODIES).document(doc["notice_id"]).set(doc)
+
+    def delete_body(self, notice_id):
+        self.db.collection(NOTICE_BODIES).document(notice_id).delete()
+
+
+class FirestoreBodies(_Base):
+    """BodyReader: 상세 분석 요청 때만 본문 1건을 읽는다. 없으면 None."""
+
+    def get(self, notice_id):
+        snap = self.db.collection(NOTICE_BODIES).document(notice_id).get()
+        text = (snap.to_dict() or {}).get("body_text") if snap.exists else None
+        return text if isinstance(text, str) and text.strip() else None
 
 
 class FirestoreKakaoInbox(_Base):

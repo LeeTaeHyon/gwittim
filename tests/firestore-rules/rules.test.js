@@ -25,6 +25,7 @@ beforeEach(async () => {
     await setDoc(doc(db, "review_queue/n2"), { issues: ["x"] });
     await setDoc(doc(db, "raw_notices/k1"), { body_text: "원문" });
     await setDoc(doc(db, "pipeline_failures/f1"), { reason: "x" });
+    await setDoc(doc(db, "notice_bodies/n1"), { notice_id: "n1", body_text: "본문" });
     await setDoc(doc(db, "users/alice"), { major_id: "mjc.computer_engineering" });
     await setDoc(doc(db, "users/alice/saved/n1"), { saved_notice_version: 1 });
   });
@@ -52,9 +53,14 @@ test("앱 클라이언트는 공고를 쓰거나 지우지 못한다", async () 
 });
 
 test("원문·검토 대기·실패 기록은 클라이언트가 읽지 못한다", async () => {
-  for (const path of ["raw_notices/k1", "review_queue/n2", "pipeline_failures/f1"]) {
+  for (const path of ["raw_notices/k1", "review_queue/n2", "pipeline_failures/f1", "notice_bodies/n1"]) {
     await assertFails(getDoc(doc(alice(), path)));
   }
+});
+
+test("공고 본문은 클라이언트가 쓰지도 못한다", async () => {
+  await assertFails(setDoc(doc(alice(), "notice_bodies/n9"), { notice_id: "n9", body_text: "x" }));
+  await assertFails(deleteDoc(doc(alice(), "notice_bodies/n1")));
 });
 
 test("본인 프로필과 저장 목록만 읽는다", async () => {

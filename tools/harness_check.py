@@ -9,6 +9,8 @@
 
 - 키: 환경변수 DEEPSEEK_API_KEY. 없으면(Windows) 사용자 환경변수 레지스트리에서 읽는다. 키는 출력하지 않는다
 - 공고: data/local/notices.json(git 제외)의 실제 공고. 학생은 합성 프로필
+- 본문: data/local/pipeline/records.json의 원문 본문을 운영과 같이 넣는다(2026-11-24, agent-detail-body-spec). --no-body면 빼고
+- worktree에는 data/가 없으니 --data로 메인 폴더의 data/local을 준다
 - 결과: data/local/harness_check/<시각>.md (git 제외). 공고 1건당 약 0.5~1원
 """
 from __future__ import annotations
@@ -27,7 +29,7 @@ sys.path.insert(0, str(ROOT))
 from backend.agent import llm  # noqa: E402
 from backend.agent.payload import build_payload  # noqa: E402
 from backend.agent.prompt import (  # noqa: E402
-    HARNESS_FILE, HARNESS_VERSION, build_messages, deadline_passed, ground_report, load_harness, scrub_codes,
+    HARNESS_FILE, HARNESS_VERSION, body_for_model, build_messages, deadline_passed, ground_report, load_harness, scrub_codes,
     split_long_lines,
 )
 from backend.recommendation import evaluate  # noqa: E402
@@ -49,7 +51,7 @@ VERDICT_LINE = re.compile(r"^(충족|미충족|확인 필요)\s*[:：]")
 VERDICT_WORD = re.compile(r"^(?:판정\s*[:：]\s*)?(충족|미충족|불충족|확인 필요)")
 SERVER_VERDICT = {"met": "충족", "not_met": "미충족", "needs_check": "확인 필요"}
 SKILLS_UNKNOWN = "요구 역량을 확인하기 어렵습니다"
-MAX_LINES = {"fit": 2, "eligibility": 3, "todo": 2, "skills": 4}  # 지금 지침의 칸별 줄 수
+MAX_LINES = {"fit": 4, "eligibility": 3, "todo": 4, "skills": 4}  # 지금 지침의 칸별 줄 수(2026-11-24 본문 입력과 함께 fit·todo 4줄)
 
 
 def report_verdict(report: dict) -> str | None:
@@ -181,18 +183,19 @@ def notice_verdict(notice: dict) -> str:
     return evaluate(notice["eligibility"], PROFILE)[0]
 
 
-def run(system: str, notice: dict, provider, today: date) -> dict:
+def run(system: str, notice: dict, provider, today: date, body: str | None = None) -> dict:
     verdict = evaluate(notice["eligibility"], PROFILE)
-    _, user = build_messages(notice, build_payload(PROFILE, CHIPS), verdict, today)
+    _, user = build_messages(notice, build_payload(PROFILE, CHIPS), verdict, today, body=body)
     res = provider.generate(system, user, notice_id=notice["notice_id"])
     report, scrubbed = scrub_codes(res.report)
     report, split = split_long_lines(report)
     raw_skills, raw_todo = report.get("skills"), report.get("todo")
-    report, grounded = ground_report(report, notice, verdict[0], today)  # 운영(service.py)과 같은 후처리
+    report, grounded = ground_report(report, notice, verdict[0], today, body=body_for_model(body)[0])  # 운영과 같은 후처리
     passed = deadline_passed(notice, today)
     quality, form = check(report, scrubbed, split, verdict[0], passed)
     return {"report": report, "quality": quality, "format": form, "verdict": verdict[0], "grounded": grounded,
             "model": {"skills": raw_skills, "todo": raw_todo},
+            "body": body_for_model(body)[1],
             "tokens": (res.usage.input_tokens, res.usage.output_tokens), "cost": res.usage.cost_krw,
             "seconds": round(res.usage.elapsed_seconds, 1)}
 
@@ -204,8 +207,11 @@ def main(argv=None) -> int:
     ap.add_argument("--ids", nargs="*", default=DEFAULT_IDS)
     ap.add_argument("--provider", choices=("deepseek", "opencode"), default="deepseek",
                     help="deepseek: 서비스와 같은 API(유료) / opencode: 팀장 구독(내부 시험, JSON 모드 없음)")
+    ap.add_argument("--data", type=Path, default=NOTICES.parent, help="data/local 위치 (worktree에서는 메인 폴더 것)")
+    ap.add_argument("--no-body", action="store_true", help="공고 본문을 넣지 않음(본문 저장 전 경로)")
     args = ap.parse_args(argv)
-    notices = json.loads(NOTICES.read_text(encoding="utf-8"))
+    notices = json.loads((args.data / "notices.json").read_text(encoding="utf-8"))
+    records = {} if args.no_body else json.loads((args.data / "pipeline/records.json").read_text(encoding="utf-8"))
     if args.provider == "opencode":
         provider = OpencodeProvider()
     else:
@@ -229,7 +235,7 @@ def main(argv=None) -> int:
         lines.append(f"서버 판정: {SERVER_VERDICT.get(notice_verdict(notice), '?')}")
         lines.append("")
         for name, system, current in sets:
-            r = run(system, notice, provider, today)
+            r = run(system, notice, provider, today, ((records.get(nid) or {}).get("raw") or {}).get("body_text"))
             total += r["cost"] or 0
             q = ", ".join(r["quality"]) or "없음"
             f = ", ".join(r["format"]) or "없음"
@@ -237,7 +243,7 @@ def main(argv=None) -> int:
             if current:
                 tally[name]["format"] += len(r["format"])
             form_label = "형식" if current else "형식(참고, 이전 지침이라 세지 않음)"
-            head = (f"### {name} — 품질 오류: {q} · {form_label}: {f} · "
+            head = (f"### {name} — 본문 {r['body']} · 품질 오류: {q} · {form_label}: {f} · "
                     f"토큰 {r['tokens'][0]}/{r['tokens'][1]} · {r['cost']}원 · {r['seconds']}초")
             print(f"[{nid}] {name}: 품질 {q} / {form_label} {f}")
             lines += [head, ""] + [f"**{k}**\n{v}\n" for k, v in r["report"].items()]
@@ -249,8 +255,9 @@ def main(argv=None) -> int:
         lines.append(f"- {name}: 품질 오류 {t['quality']}건, 형식 점검 {t['format']}건")
         print(f"합계 {name}: 품질 오류 {t['quality']}건, 형식 점검 {t['format']}건")
     lines.append(f"- 비용 약 {round(total, 2)}원")
-    OUT.mkdir(parents=True, exist_ok=True)
-    path = OUT / f"{datetime.now():%Y%m%d_%H%M%S}.md"
+    out_dir = args.data / "harness_check"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{datetime.now():%Y%m%d_%H%M%S}.md"
     path.write_text("\n".join(lines), encoding="utf-8")
     print(f"결과: {path} (합계 약 {round(total, 2)}원)")
     return 0

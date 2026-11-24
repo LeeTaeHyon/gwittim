@@ -13,6 +13,11 @@ build_messages는 (system, user) 문자열 둘을 만든다.
 근거 맞추기 (2026-11-23, 지침만으로는 역량에 모집 부문·강의 주제가 들어가고 마감 지난 공고에 '다음 모집' 할 일이 나옴)
 - ground_report가 역량 줄을 공고의 '원문에서 확인할 조건' 원문과 대조해 근거 없는 줄을 빼고, '(우대)'는 원문 구분으로 다시 붙인다.
 - 마감이 지났으면 할 일은 고정 문장, 미충족이면 지원서·근거 없는 일정 줄을 뺀다.
+
+공고 본문 입력 (2026-11-24, docs/agent-detail-body-spec.md)
+- 서버 전용 저장소(notice_bodies)에서 읽은 공고 본문을 user JSON의 '공고.본문'으로 넣는다. 없으면 칸을 뺀다.
+- 본문이 4,000자를 넘으면 앞 4,000자만 넣고 끝에 잘렸다는 표시를 붙인다. 본문은 로그에 남기지 않고 상태(있음·없음·잘림)만 남긴다.
+- 역량 줄 근거 대조는 '원문에서 확인할 조건' 뒤에 본문 줄을 덧붙여 본다. '(우대)'는 원래 조건에서만 붙인다.
 """
 from __future__ import annotations
 
@@ -45,6 +50,20 @@ FIELD_KO = {"university_id": "학교", "major_id": "학과", "grade": "학년", 
 ENROLLMENT_KO = {"enrolled": "재학", "on_leave": "휴학", "graduated": "졸업·졸업 예정"}
 UNKNOWN_REASON_KO = {"condition_unresolved": "공고 조건을 자동으로 해석하지 못함", "profile_missing": "학생 정보 없음"}
 UNKNOWN = "미상"
+
+BODY_MAX_CHARS = 4000  # 평가에서 확인한 최대 본문(3,073자)보다 조금 큰 값. 넘는 공고는 617건 중 5건
+BODY_TRUNCATED_MARK = "\n[이하 생략: 본문이 길어 앞 4,000자만 넣었음]"
+BODY_PRESENT, BODY_ABSENT, BODY_TRUNCATED = "present", "absent", "truncated"  # 로그에 남기는 본문 사용 상태
+
+
+def body_for_model(body: str | None) -> tuple[str | None, str]:
+    """저장된 본문 -> (모델에 넣을 본문, 상태). 비었으면 (None, 'absent'). 잘림 표시는 build_messages가 붙인다."""
+    text = body.strip() if isinstance(body, str) else ""
+    if not text:
+        return None, BODY_ABSENT
+    if len(text) > BODY_MAX_CHARS:
+        return text[:BODY_MAX_CHARS], BODY_TRUNCATED
+    return text, BODY_PRESENT
 
 
 @cache
@@ -119,9 +138,12 @@ def _notes(el: dict) -> list[str]:
 
 
 def build_messages(
-    notice: dict, payload: dict, eligibility: tuple[str, list[dict]], today: date,
+    notice: dict, payload: dict, eligibility: tuple[str, list[dict]], today: date, body: str | None = None,
 ) -> tuple[str, str]:
-    """eligibility는 backend.recommendation.evaluate의 결과 (상태, 조건별 결과). today는 한국 날짜."""
+    """eligibility는 backend.recommendation.evaluate의 결과 (상태, 조건별 결과). today는 한국 날짜.
+
+    body는 공고 원문 본문(서버 전용 저장소). 없으면 '본문' 칸을 빼고 예전처럼 만든다.
+    """
     status, results = eligibility
     el = notice["eligibility"]
     conditions = {c["field"]: c for c in el.get("conditions", [])}
@@ -165,6 +187,9 @@ def build_messages(
     if activity.get("start") or activity.get("end"):
         # 활동 기간을 못 뽑았을 때 '미상'으로 보내면 요약에 적힌 기간까지 모른다고 판단해서, 있을 때만 넣는다
         material["공고"]["활동 기간"] = f"{_date_ko(activity.get('start'))} ~ {_date_ko(activity.get('end'))}"
+    text, state = body_for_model(body)
+    if text is not None:
+        material["공고"]["본문"] = text + (BODY_TRUNCATED_MARK if state == BODY_TRUNCATED else "")
     return SYSTEM_PROMPT, json.dumps(material, ensure_ascii=False, indent=1)
 
 
@@ -290,15 +315,22 @@ def _best_evidence(line: str, evidence: list[dict]) -> dict | None:
     return best if score >= SKILL_MATCH else None
 
 
-def ground_report(report: dict, notice: dict, status: str, today: date) -> tuple[dict, dict]:
+def _evidence_with_body(notice: dict, body: str | None) -> list[dict]:
+    """역량 근거 후보: '원문에서 확인할 조건' 뒤에 본문 줄을 덧붙인다. 원래 조건이 앞이라 '(우대)' 구분은 그대로 살아 있다."""
+    evidence = list((notice.get("eligibility") or {}).get("unresolved_conditions") or [])
+    lines = [ln.strip() for ln in (body or "").split(BR) if len(ln.strip()) >= 2]
+    return evidence + [{"evidence": ln, "note": None} for ln in lines]
+
+
+def ground_report(report: dict, notice: dict, status: str, today: date, body: str | None = None) -> tuple[dict, dict]:
     """받은 리포트의 역량·할 일을 공고 자료에 맞춘다. (리포트, 바꾼 내용 {'skills_dropped': n, 'todo': 사유}).
 
-    - 역량: 공고의 '원문에서 확인할 조건' 원문에 근거가 있는 줄만 남긴다. '(우대)'는 모델 표시가 아니라 원문 구분으로 붙인다.
+    - 역량: 공고의 '원문에서 확인할 조건' 원문(본문이 있으면 본문 줄도)에 근거가 있는 줄만 남긴다. '(우대)'는 모델 표시가 아니라 원문 구분으로 붙인다.
       남는 줄이 없으면 '확인하기 어렵습니다' 문장.
     - 할 일: 마감이 지났으면 고정 문장. 미충족이면 지원서·근거 없는 일정 줄을 빼고, 남는 줄이 없으면 고정 문장.
     """
     out, changes = dict(report), {}
-    evidence = (notice.get("eligibility") or {}).get("unresolved_conditions") or []
+    evidence = _evidence_with_body(notice, body)
 
     skills = [ln.strip() for ln in str(report.get("skills", "")).split(BR) if ln.strip()]
     if not any("요구 역량을 확인하기 어렵습니다" in ln for ln in skills):

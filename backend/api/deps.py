@@ -23,6 +23,12 @@ class NoticeReader(Protocol):
     def list_published(self) -> list[dict]: ...
 
 
+class BodyReader(Protocol):
+    """공고 본문(서버 전용 notice_bodies). AI 상세 분석 요청 때만 1건 읽는다. 없으면 None."""
+
+    def get(self, notice_id: str) -> str | None: ...
+
+
 class ProfileStore(Protocol):
     def get(self, uid: str) -> dict | None: ...
     def put(self, uid: str, profile: dict) -> None: ...
@@ -107,6 +113,14 @@ class InMemoryNotices:
 
     def list_published(self):
         return [n for n in self.notices.values() if n["publication_status"] == "published"]
+
+
+@dataclass
+class InMemoryBodies:
+    bodies: dict[str, str] = field(default_factory=dict)
+
+    def get(self, notice_id):
+        return self.bodies.get(notice_id)
 
 
 class CachedNoticeReader:
@@ -240,6 +254,7 @@ class Deps:
     reports: ReportStore = field(default_factory=InMemoryReports)
     llm: Any = None
     spend: SpendStore = field(default_factory=InMemorySpend)
+    bodies: BodyReader = field(default_factory=InMemoryBodies)  # 공고 본문. 상세 분석 요청에서만 읽는다
 
     def today_kst(self) -> date:
         return self.clock.now().astimezone(KST).date()

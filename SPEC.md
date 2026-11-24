@@ -266,7 +266,7 @@ balance(0~5), next_refill_at(다음 충전 시각, 최대 보유면 `null`), ent
 | delete_saved_notice | 인증 사용자, notice_id | 삭제 결과. 반복 요청 안전 |
 | list_saved_notices | 인증 사용자, cursor | SavedNotice + 최신 공고 상태 |
 | delete_account_data | 인증 사용자 | 삭제 결과. 프로필·저장을 지우고 공개 공고는 유지. 반복 요청 안전 (D-024) |
-| request_detail_analysis | 인증 사용자, AnalysisRequest | AnalysisResponse. 동의가 없으면 consent_required, 크레딧이 모자라면 insufficient_credits, 같은 요청 id가 진행 중이면 request_in_progress. 성공해야 차감하고 실패는 돌려준다 |
+| request_detail_analysis | 인증 사용자, AnalysisRequest. 서버는 모델 입력에 공고 본문(서버 전용 `notice_bodies`, 앞 4,000자)을 더한다. 앱 계약은 그대로다 | AnalysisResponse. 동의가 없으면 consent_required, 크레딧이 모자라면 insufficient_credits, 같은 요청 id가 진행 중이면 request_in_progress. 성공해야 차감하고 실패는 돌려준다 |
 | get_detail_analysis | 인증 사용자, notice_id | 받은 분석(AnalysisResponse, from_cache=true) 또는 not_found. 크레딧 차감 없음 |
 | get_credits | 인증 사용자 | Credits |
 | ingest_kakao | 수집 토큰(사용자 로그인과 별개), 방·발송 분·가린 본문·폰 분류 | 저장 여부. 공통 공지가 아니면 저장하지 않음. 같은 알림은 한 건. 토큰이 설정되지 않은 서버에서는 not_found (D-036) |
