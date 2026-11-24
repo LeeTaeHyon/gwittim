@@ -15,8 +15,6 @@ import 'package:gwittim/ui/components.dart';
 import 'package:gwittim/ui/report_screen.dart';
 import 'package:gwittim/ui/theme.dart';
 
-import 'package:gwittim/ui/theme.dart';
-
 import 'app_test.dart' show OneNoticeRepository, notice;
 import 'auth_gate_test.dart' show FakeAuth;
 import 'finders.dart';
