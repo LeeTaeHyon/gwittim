@@ -46,6 +46,24 @@ class CaseItem {
   String toString() => 'CaseItem($text)';
 }
 
+/// 리포트를 열어 지금 마감을 이미 본 마감 변경인가 (저장함·홈·브리핑 공통, D-052).
+bool changeSeenFor(SavedEntry e, ApplicationCase? kase) =>
+    kase != null && kase.seenDeadline == deadlineKey(e.notice.applicationDeadline);
+
+/// 진행 중 지원 건(저장·준비 중)이고 신청 시작일이 오늘인가.
+bool startsToday(SavedEntry e, ApplicationCase? kase, DateTime now) {
+  final start = kase?.applicationStart;
+  if (kase == null || start == null || isEnded(effectiveState(kase, e.notice, now))) return false;
+  return start.day.year == now.year && start.day.month == now.month && start.day.day == now.day;
+}
+
+/// 지원 건 상태(기록이 아직 없으면 '저장'으로 본다).
+CaseState stateOfSaved(SavedEntry e, ApplicationCase? kase, DateTime now) => effectiveState(
+  kase ?? ApplicationCase(noticeId: e.notice.noticeId, state: CaseState.saved, changedAt: e.saved.savedAt),
+  e.notice,
+  now,
+);
+
 const _stateLabels = {
   CaseState.saved: '저장',
   CaseState.preparing: '준비 중',

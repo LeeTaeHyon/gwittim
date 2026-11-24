@@ -370,6 +370,7 @@ class ApplicationCaseStore extends ChangeNotifier {
 
   /// 오늘 강조(말풍선 건수·브리핑 카드)에 들어간 지원 건을 기록한다.
   Future<void> markEmphasized(Iterable<String> noticeIds, DateTime day) async {
+    _emphasizedThisRun.addAll(noticeIds);
     final key = _dayKey(day);
     final next = {..._cases};
     var changed = false;
@@ -384,6 +385,13 @@ class ApplicationCaseStore extends ChangeNotifier {
 
   /// 그날 이미 강조된 지원 건인가.
   bool emphasizedOn(String noticeId, DateTime day) => _cases[noticeId]?.emphasizedOn == _dayKey(day);
+
+  /// 이번 실행에서 강조한 지원 건. 같은 실행 안에서는 다시 그려도 계속 센다(말풍선 건수가 흔들리지 않게).
+  final _emphasizedThisRun = <String>{};
+
+  /// 오늘 앞선 실행에서 이미 강조해서, 오늘은 다시 세지 않을 지원 건인가 (하루 1번, care-loop-impl-spec §7).
+  bool emphasizedEarlier(String noticeId, DateTime day) =>
+      emphasizedOn(noticeId, day) && !_emphasizedThisRun.contains(noticeId);
 
   /// 추천 목록을 받을 때마다: 목록에 있는 지원 건의 판정 값과 시각을 갱신한다.
   Future<void> updateEligibility(RecommendationList list) async {

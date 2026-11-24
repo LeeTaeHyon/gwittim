@@ -1,5 +1,7 @@
+import '../data/application_case.dart';
 import '../data/models.dart';
 import 'briefing_data.dart';
+import 'case_view.dart';
 import 'format.dart';
 
 // 홈 한 목록 (D-050): 이번 주 마감 → 새 공고 → 마감이 먼 맞춤 공고. 같은 공고는 홈 줄에 한 번만 나온다.
@@ -22,7 +24,15 @@ const homeNextDays = 14;
 
 /// 홈 한 줄
 class HomeRow {
-  const HomeRow({required this.notice, this.recommendation, this.saved, this.majorPick = false, this.fresh = false});
+  const HomeRow({
+    required this.notice,
+    this.recommendation,
+    this.saved,
+    this.majorPick = false,
+    this.fresh = false,
+    this.view,
+    this.changeSeen = false,
+  });
 
   final NoticeSummary notice;
 
@@ -38,18 +48,31 @@ class HomeRow {
   /// 최근 3일 안에 게시된 관련 공고 (맞춤 추천일 때만)
   final bool fresh;
 
+  /// 지원 건 문구(상태 이름·다음 할 일·남은 날, D-052). 지원 건 기록을 쓰는 홈에서 저장한 공고만.
+  final CaseView? view;
+
+  /// 리포트를 열어 이미 본 마감 변경
+  final bool changeSeen;
+
   String get id => notice.noticeId;
 
-  /// 저장한 뒤 마감이 바뀐 공고
-  bool get deadlineChanged => saved?.deadlineChanged ?? false;
+  /// 저장한 뒤 마감이 바뀐 공고(리포트에서 이미 본 변경은 빼다)
+  bool get deadlineChanged => (saved?.deadlineChanged ?? false) && !changeSeen;
 }
 
 /// 홈 귀띔 말풍선의 건수 (§4.4). 셋 다 0이면 말풍선을 만들지 않는다.
 class HomeNudge {
-  const HomeNudge({this.dueToday = 0, this.changed = 0, this.fresh = 0});
+  const HomeNudge({this.dueToday = 0, this.startToday = 0, this.changed = 0, this.fresh = 0, this.caseIds = const {}});
 
   /// 오늘 마감: 저장한 공고와 마감 후보(관련 공고) 중 오늘 마감. 졸업생 진로 추천은 세지 않는다.
+  /// 끝난 지원 건과, 오늘 앞선 실행에서 이미 강조한 지원 건은 세지 않는다(D-052).
   final int dueToday;
+
+  /// 신청 시작: 저장한 공고(지원 건) 중 저장·준비 중이고 신청 시작일이 오늘인 것 (팀장 결정 2026-11-23)
+  final int startToday;
+
+  /// 건수에 들어간 지원 건. 홈이 그린 뒤 오늘 강조한 것으로 기록한다(하루 1번).
+  final Set<String> caseIds;
 
   /// 저장한 뒤 마감이 바뀐 모집 중 공고 (브리핑 '마감 변경'과 같은 규칙)
   final int changed;
@@ -100,13 +123,27 @@ class HomeSections {
 }
 
 /// [picks]·[majorId]: 졸업생 진로 추천을 보일지 정하는 기기 기록과 프로필 학과 (D-021).
+/// [cases]: 지원 건 기록(D-052). 있으면 끝난 지원 건은 홈 줄에서 빼고, 저장한 공고 줄에 지원 건 문구를 붙인다.
+/// [emphasizedEarlier]: 오늘 앞선 실행에서 이미 강조한 지원 건(말풍선 건수에서 빼다).
 HomeSections buildHomeSections(
   RecommendationList list,
   List<SavedEntry> saved,
   DateTime today, {
   MajorPickState picks = const MajorPickState(),
   String? majorId,
+  Map<String, ApplicationCase>? cases,
+  bool Function(String id)? emphasizedEarlier,
 }) {
+  final ended = <String>{};
+  final views = <String, CaseView>{};
+  if (cases != null) {
+    for (final s in saved) {
+      final id = s.notice.noticeId;
+      if (isEnded(stateOfSaved(s, cases[id], today))) ended.add(id);
+      views[id] = caseView(s.notice, cases[id], now: today);
+    }
+  }
+  bool early(String id) => cases?[id] != null && (emphasizedEarlier?.call(id) ?? false);
   final personalized = list.personalized;
   final rank = <String, int>{};
   for (final (i, e) in list.items.indexed) {
@@ -121,12 +158,15 @@ HomeSections buildHomeSections(
 
   HomeRow row(NoticeSummary notice) {
     final id = notice.noticeId;
+    final s = savedById[id];
     return HomeRow(
       notice: notice,
       recommendation: recs[id]?.recommendation,
-      saved: savedById[id],
+      saved: s,
       majorPick: pickIds.contains(id),
       fresh: freshIds.contains(id),
+      view: views[id],
+      changeSeen: s != null && cases != null && changeSeenFor(s, cases[id]),
     );
   }
 
@@ -139,6 +179,7 @@ HomeSections buildHomeSections(
       for (final e in candidates) e.notice,
       for (final e in pickEntries) e.notice,
     ]) {
+      if (ended.contains(n.noticeId)) continue; // 끝난 지원 건은 추천 목록에 있어도 뺀다 (D-052)
       final left = daysLeft(n, today);
       if (left != null && left >= from && left <= to) found.putIfAbsent(n.noticeId, () => n);
     }
@@ -164,7 +205,7 @@ HomeSections buildHomeSections(
     final out = <HomeRow>[];
     for (final e in list.items) {
       if (out.length >= count) break;
-      if (shown.contains(e.notice.noticeId) || !test(e)) continue;
+      if (shown.contains(e.notice.noticeId) || ended.contains(e.notice.noticeId) || !test(e)) continue;
       shown.add(e.notice.noticeId);
       out.add(row(e.notice));
     }
@@ -177,18 +218,36 @@ HomeSections buildHomeSections(
       ? pick((e) => isRelated(e) && !weekIds.contains(e.notice.noticeId), homeLaterRows)
       : const <HomeRow>[];
 
-  final changed = changedSaved(saved);
-  final dueToday = {
+  final changed = [
+    for (final s in changedSaved(saved))
+      if (cases == null || !changeSeenFor(s, cases[s.notice.noticeId])) s,
+  ];
+  final dueIds = {
     for (final s in saved)
       if (daysLeft(s.notice, today) == 0) s.notice.noticeId,
     // 최신 모드에서는 목록 전체가 후보라 저장한 공고만 센다.
     if (personalized)
       for (final e in candidates)
         if (daysLeft(e.notice, today) == 0) e.notice.noticeId,
-  }.length;
-  final nudge = dueToday + changed.length + freshIds.length == 0
+  }..removeWhere((id) => ended.contains(id) || early(id));
+  final startIds = {
+    if (cases != null)
+      for (final s in saved)
+        if (startsToday(s, cases[s.notice.noticeId], today) && !early(s.notice.noticeId)) s.notice.noticeId,
+  };
+  final caseIds = {
+    for (final id in {...dueIds, ...startIds})
+      if (cases?[id] != null) id,
+  };
+  final nudge = dueIds.length + startIds.length + changed.length + freshIds.length == 0
       ? null
-      : HomeNudge(dueToday: dueToday, changed: changed.length, fresh: freshIds.length);
+      : HomeNudge(
+          dueToday: dueIds.length,
+          startToday: startIds.length,
+          changed: changed.length,
+          fresh: freshIds.length,
+          caseIds: caseIds,
+        );
 
   // 홈 줄(마감·새 공고·마감이 먼 맞춤 공고)에 나온 공고는 줄 메타에 변경 문구를 두고 카드는 그리지 않는다.
   return HomeSections(
