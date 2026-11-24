@@ -13,6 +13,7 @@
   GET    /v1/analysis/{notice_id}  get_detail_analysis: 받은 분석 다시 보기 (차감 없음)
   POST   /v1/external-search       request_external_search: 외부 공고 찾기 (웹 검색, 동의·크레딧 2개, 결과 없으면 환불, D-047)
   GET    /v1/credits               get_credits: 잔액·다음 충전·사용 내역
+  POST   /v1/credits/demo-refill   시연용: 잔액을 5까지 채움. 서버 설정 GWITTIM_DEMO_CREDITS=1일 때만, 아니면 404
   POST   /v1/ingest/kakao          팀장 폰 수집기의 학교 채널 알림톡 올리기 (D-036). 수집 토큰(X-Ingest-Token)으로만.
                                    토큰이 설정되지 않은 서버에서는 없는 경로처럼 404
 """
@@ -222,6 +223,12 @@ def create_app(deps: Deps) -> FastAPI:
     @app.get("/v1/credits")
     def get_credits(uid: str = Depends(current_uid)):
         return agent.get_credits(uid, deps)
+
+    @app.post("/v1/credits/demo-refill")
+    def demo_refill_credits(uid: str = Depends(current_uid)):
+        if not agent.demo_credits_enabled():
+            raise ApiError("not_found")
+        return agent.demo_refill_credits(uid, deps)
 
     @app.post("/v1/ingest/kakao")
     def ingest_kakao(body: dict, x_ingest_token: str | None = Header(default=None)):

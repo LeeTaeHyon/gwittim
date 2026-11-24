@@ -66,6 +66,9 @@ abstract class NoticeRepository {
 
   /// 크레딧 잔액과 최근 90일 사용 내역. 앱은 읽기만 한다.
   Future<Credits> getCredits();
+
+  /// 시연용: 잔액을 5까지 채운다. 서버가 시연 설정을 켰을 때만 되고, 아니면 notFound.
+  Future<Credits> demoRefillCredits();
 }
 
 /// 다른 저장소를 감싸 기능을 더하는 저장소(지원 건 기록 등). 캐시 버리기 같은 일을 안쪽까지 전한다.
@@ -241,6 +244,16 @@ class SampleNoticeRepository implements NoticeRepository {
   /// 테스트용: 잔액을 바꾼다.
   @visibleForTesting
   void debugSetBalance(int value) => _balance = value;
+
+  @override
+  Future<Credits> demoRefillCredits() async {
+    final gap = Credits.max - _balance;
+    if (gap > 0) {
+      _balance = Credits.max;
+      _ledger.insert(0, CreditEntry(kind: 'demo', amount: gap, at: DateTime.now().toUtc(), ref: null));
+    }
+    return getCredits();
+  }
 
   /// 샘플 자료를 미리 읽어 둔다. 위젯 테스트에서는 tester.runAsync 안에서 부른다.
   Future<void> preload() async {

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from backend.contracts import schema_errors
 from backend.recommendation import evaluate
 
-from .credits import DETAIL_ANALYSIS, current_state, next_refill_at, reserve, settle, signup
+from .credits import DETAIL_ANALYSIS, current_state, demo_refill, next_refill_at, reserve, settle, signup
 from .llm import generate_report
 from .payload import build_payload
 from .prompt import HARNESS_VERSION, build_messages, ground_report, scrub_codes, split_long_lines
@@ -168,22 +168,45 @@ def get_analysis(uid: str, notice_id: str, deps: Deps) -> dict:
     return _response(doc, True)
 
 
+def _credit_view(current, now: datetime) -> dict:
+    refill = next_refill_at(current, now)
+    return {
+        "balance": current.balance,
+        "next_refill_at": utc_z(refill) if refill else None,
+        # 같은 시각이면 나중에 쌓인 것이 먼저 오도록 뒤집고 정렬한다
+        "entries": [
+            {"kind": e.kind, "amount": e.amount, "at": utc_z(e.at), "ref": e.ref}
+            for e in sorted(reversed(current.entries), key=lambda e: e.at, reverse=True)
+        ],
+    }
+
+
 def get_credits(uid: str, deps: Deps) -> dict:
     now = deps.clock.now()
 
     def fn(state):
         current = current_state(state or signup(now), now)
-        refill = next_refill_at(current, now)
-        view = {
-            "balance": current.balance,
-            "next_refill_at": utc_z(refill) if refill else None,
-            # 같은 시각이면 나중에 쌓인 것이 먼저 오도록 뒤집고 정렬한다
-            "entries": [
-                {"kind": e.kind, "amount": e.amount, "at": utc_z(e.at), "ref": e.ref}
-                for e in sorted(reversed(current.entries), key=lambda e: e.at, reverse=True)
-            ],
-        }
-        return current, view
+        return current, _credit_view(current, now)
+
+    return deps.credits.update(uid, fn)
+
+
+DEMO_ENV = "GWITTIM_DEMO_CREDITS"
+
+
+def demo_credits_enabled() -> bool:
+    """시연 기간에만 서버 설정 GWITTIM_DEMO_CREDITS=1로 켠다. 꺼져 있으면 채우기 경로가 없는 것처럼 404.
+    켜 두어도 월 비용 상한(GWITTIM_LLM_MONTHLY_CAP_KRW)은 그대로 막는다."""
+    return os.environ.get(DEMO_ENV, "").strip() == "1"
+
+
+def demo_refill_credits(uid: str, deps: Deps) -> dict:
+    """시연용: 잔액을 5까지 채우고 크레딧 페이지와 같은 모양으로 돌려준다."""
+    now = deps.clock.now()
+
+    def fn(state):
+        current = demo_refill(state or signup(now), now)
+        return current, _credit_view(current, now)
 
     return deps.credits.update(uid, fn)
 

@@ -64,7 +64,8 @@ CaseState stateOfSaved(SavedEntry e, ApplicationCase? kase, DateTime now) => eff
   now,
 );
 
-const _stateLabels = {
+/// 지원 건 상태 이름(모든 화면 공통)
+const stateLabels = {
   CaseState.saved: '저장',
   CaseState.preparing: '준비 중',
   CaseState.applied: '신청함',
@@ -83,7 +84,7 @@ CaseView caseView(NoticeSummary n, ApplicationCase? c, {required DateTime now}) 
   final ended = state != null && isEnded(state);
   final remaining = remainingText(n, now);
   if (ended) {
-    return CaseView(stateLabel: _stateLabels[state], next: null, items: const [], remaining: remaining, ended: true);
+    return CaseView(stateLabel: stateLabels[state], next: null, items: const [], remaining: remaining, ended: true);
   }
 
   final needsCheck = c?.eligibilityStatus == 'needs_check';
@@ -101,7 +102,7 @@ CaseView caseView(NoticeSummary n, ApplicationCase? c, {required DateTime now}) 
     items.add(CaseItem(text: '${_monthDay(deadline)} 마감', kind: '확인', evidence: deadline.evidence));
   }
   return CaseView(
-    stateLabel: state == null ? null : _stateLabels[state],
+    stateLabel: state == null ? null : stateLabels[state],
     next: next,
     items: List.unmodifiable(items),
     remaining: remaining,

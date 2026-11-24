@@ -322,6 +322,27 @@ void main() {
       expect(findText('나와 이 공고'), findsOneWidget);
     });
 
+    testWidgets('시연용 채우기: 일반 빌드엔 버튼이 없고, 시연용 빌드에선 눌러서 5로 채움', (tester) async {
+      final repo = _Repo()..debugSetBalance(1);
+      await tester.pumpWidget(MaterialApp(theme: gwittimTheme(), home: CreditsScreen(repository: repo)));
+      await tester.pumpAndSettle();
+      expect(findText('시연용 크레딧 채우기'), findsNothing);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: gwittimTheme(),
+          home: CreditsScreen(key: UniqueKey(), repository: repo, showDemoRefill: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(findText('1 / 5'), findsOneWidget);
+      await _tap(tester, findText('시연용 크레딧 채우기'));
+      expect(findText('5 / 5'), findsOneWidget);
+      expect(findText('크레딧을 5개로 채웠습니다.'), findsOneWidget);
+      await _reveal(tester, findText('시연용 채우기'));
+      expect(findText('시연용 채우기'), findsOneWidget); // 내역 줄
+      expect(findText('+4'), findsOneWidget);
+    });
+
     testWidgets('최대 보유 문구', (tester) async {
       final repo = _Repo();
       await _open(tester, repo, screen: (r) => CreditsScreen(repository: r));

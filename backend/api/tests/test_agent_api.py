@@ -594,3 +594,37 @@ def test_report_records_harness_version_in_doc_key_and_log(client, deps, caplog)
     assert doc["harness_version"] == HARNESS_VERSION
     assert doc["key"] != cache_key(NOTICE, {}) and len(doc["key"]) == 64
     assert f"harness={HARNESS_VERSION}" in caplog.text
+
+
+# ---------- 시연용 크레딧 채우기 ----------
+
+def test_demo_refill_is_404_unless_enabled(client, monkeypatch):
+    monkeypatch.delenv("GWITTIM_DEMO_CREDITS", raising=False)
+    assert client.post("/v1/credits/demo-refill", headers=ALICE).status_code == 404
+    monkeypatch.setenv("GWITTIM_DEMO_CREDITS", "0")
+    assert client.post("/v1/credits/demo-refill", headers=ALICE).status_code == 404
+
+
+def test_demo_refill_needs_login(client, monkeypatch):
+    monkeypatch.setenv("GWITTIM_DEMO_CREDITS", "1")
+    assert client.post("/v1/credits/demo-refill").status_code == 401
+
+
+def test_demo_refill_fills_to_max_and_logs_demo_entry(client, monkeypatch):
+    monkeypatch.setenv("GWITTIM_DEMO_CREDITS", "1")
+    consent(client)
+    analyze(client)
+    analyze(client, "r2", chips={"experience": ["java"]})
+    assert client.get("/v1/credits", headers=ALICE).json()["balance"] == 3
+    out = client.post("/v1/credits/demo-refill", headers=ALICE).json()
+    assert schema_errors("credits", out) == []
+    assert out["balance"] == 5
+    assert out["entries"][0] == {"kind": "demo", "amount": 2, "at": "2026-10-17T03:05:00Z", "ref": None}
+    # 이미 가득이면 내역을 더하지 않는다
+    again = client.post("/v1/credits/demo-refill", headers=ALICE).json()
+    assert again["balance"] == 5
+    assert [e["kind"] for e in again["entries"]].count("demo") == 1
+    # 다른 사용자 잔액은 그대로
+    assert client.get("/v1/credits", headers=BOB).json()["entries"] == [
+        {"kind": "signup", "amount": 5, "at": "2026-10-17T03:05:00Z", "ref": None}
+    ]

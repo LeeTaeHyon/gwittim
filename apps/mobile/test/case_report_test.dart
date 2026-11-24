@@ -64,7 +64,9 @@ void main() {
     expect(find.text('저장'), findsWidgets);
     expect(findText('D-7 · 12월 1일 10:00 마감'), findsOneWidget);
     expect(findText('원문에서 신청 방법 확인'), findsOneWidget);
-    expect(findText('12월 1일 10:00 마감'), findsOneWidget); // 나머지 항목
+    expect(findText('12월 1일 10:00 마감'), findsNothing); // 머리 줄과 겹치던 마감 줄은 없음
+    // 진행 단계: 세 단계 이름이 모두 보이고 지금은 '저장'
+    expect(find.byWidgetPredicate((w) => w is Semantics && w.properties.label == '진행 1/3단계, 저장'), findsOneWidget);
     expect(find.text('준비 시작'), findsOneWidget);
     expect(find.text('이번엔 안 함'), findsOneWidget);
 
@@ -78,7 +80,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(opened.single.toString(), 'https://example.com/n');
 
-    await tester.tap(find.text('신청함'));
+    await tester.tap(find.widgetWithText(TextButton, '신청함'));
     await tester.pumpAndSettle();
     expect(store['a']!.state, CaseState.applied);
     expect(find.text('신청함으로 표시했습니다.'), findsOneWidget);
@@ -112,9 +114,41 @@ void main() {
     expect(find.text('이번엔 안 함'), findsWidgets); // 상태 칩
     ScaffoldMessenger.of(tester.element(find.byType(ReportScreen))).hideCurrentSnackBar();
     await tester.pumpAndSettle();
+    // 끝난 건은 진행 단계 없이 한 줄
+    expect(find.byWidgetPredicate((w) => w is Semantics && (w.properties.label ?? '').startsWith('진행 ')), findsNothing);
     await tester.tap(find.widgetWithText(TextButton, '되돌리기'));
     await tester.pumpAndSettle();
     expect(store['a']!.state, CaseState.saved);
+  });
+
+  group('원문 문구는 출처에 맞춤', () {
+    test('학교 게시판·알림톡·출처 없음은 학교 공지, 교외·모르는 출처는 공고 원문', () {
+      for (final id in ['mjc_www_notice', 'mjc_kakao', 'sewu_www_notice', null]) {
+        expect(originName(id), '학교 공지', reason: '$id');
+      }
+      for (final id in ['wevity_contest', 'contestkorea_contest', 'unknown']) {
+        expect(originName(id), '공고 원문', reason: id);
+        expect(originName(id, object: true), '공고 원문을', reason: id);
+      }
+    });
+
+    for (final (source, button, summary) in [
+      ('wevity_contest', '원문에서 보기', '공고 원문을 바탕으로 정리'),
+      ('mjc_www_notice', '학교 공지에서 보기', '학교 공지를 바탕으로 정리'),
+    ]) {
+      testWidgets('$source: 아래 버튼 "$button", 요약 "$summary"', (tester) async {
+        await pumpReport(
+          tester,
+          repo: FakeCaseRepository(
+            saved: [savedOf(a)],
+            notices: {'a': noticeOf(a, sourceId: source, description: '요약 한 줄')},
+          ),
+          cases: {'a': caseOf('a', CaseState.saved)},
+        );
+        expect(find.text(button), findsOneWidget);
+        expect(find.text(summary), findsOneWidget);
+      });
+    }
   });
 
   testWidgets('되돌리기 알림은 저절로 닫히고, 다음 동작 알림이 앞 알림 뒤에 밀리지 않음', (tester) async {
@@ -125,7 +159,7 @@ void main() {
     );
     await tester.tap(find.text('준비 시작'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('신청함'));
+    await tester.tap(find.widgetWithText(TextButton, '신청함'));
     await tester.pumpAndSettle();
     expect(find.text('신청함으로 표시했습니다.'), findsOneWidget);
     // 바로 되돌린 뒤 이번엔 안 함: 앞 알림 대신 새 알림이 곧바로 보인다

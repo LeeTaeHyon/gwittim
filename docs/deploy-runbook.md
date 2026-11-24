@@ -80,6 +80,7 @@ gcloud run services update-traffic gwittim-api --project=gwittim-dev --region=as
    ```
    - `android/app/google-services.json`이 있어야 함(git 제외, 작업 폴더에는 메인 폴더에서 복사)
    - 서명은 이 PC의 디버그 키(Firebase에 SHA-1 등록됨). 다른 PC에서 빌드하면 Google 로그인이 안 됨
+   - 시연용 빌드: `--dart-define=GWITTIM_DEMO=true`를 더하면 크레딧 페이지에 '시연용 크레딧 채우기'가 생긴다. 서버도 `GWITTIM_DEMO_CREDITS=1`이어야 동작(아니면 '이 서버는 시연용 채우기를 켜지 않았습니다.'). 서버 설정은 시연 기간에만 켜고 끝나면 끈다. 켜 두어도 월 비용 상한은 그대로
 3. 결과 `build/app/outputs/flutter-apk/app-release.apk` → `data/local/apk/gwittim-<main 커밋 7자리>.apk`로 복사, SHA-256 기록
 4. 설치 확인: `adb install -r --user 0 <apk>` → §4의 2~6번을 실기기에서
 5. 서버보다 앱이 먼저 나가면 새 화면이 옛 서버와 안 맞는다. **서버 배포 → APK 빌드** 순서
