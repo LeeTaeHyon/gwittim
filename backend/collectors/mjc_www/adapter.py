@@ -137,7 +137,7 @@ def collect(
                 return raws, errors
             url = view_url(board, row.bbs_mst_idx, row.data_idx)
             try:
-                detail = parse_detail(get(url))
+                detail = parse_detail(get(url), url)
             except Exception as e:
                 errors.append(f"{row.data_idx}: {type(e).__name__}")
                 continue
@@ -164,6 +164,7 @@ def to_raw_notice(board: Board, data_idx: str, url: str, row, detail, collected_
         "source_fields": {
             "posted_date": posted,
             "author_department": detail.author or row.author or None,
+            **({"poster_url": detail.poster_url} if detail.poster_url else {}),
             "board_menu_idx": board.menu_idx,
             "bbs_mst_idx": row.bbs_mst_idx,
             "body_image_count": detail.body_image_count,

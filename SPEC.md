@@ -93,7 +93,7 @@ M1의 수동 검증 표본은 20건을 목표로 한다. 부족하면 실제 건
 | body_text | string | 메뉴·푸터를 제거한 본문. 본문 이미지의 대체텍스트(alt)는 `[이미지 설명]` 줄 아래에 붙인다(D-014) |
 | published | object 또는 null | 원문 게시일 날짜 정보. 날짜만 있으면 precision=date, 미표기는 null |
 | collected_at | string | 이번 수집 시각 |
-| content_hash | string | `sha256:<hex>`. title·body_text·published·source_fields·첨부 파일명의 해시 |
+| content_hash | string | `sha256:<hex>`. title·body_text·published·source_fields(poster_url 제외)·첨부 파일명의 해시 |
 | source_fields | object | 출처가 제공한 날짜·대상·작성 부서 등 원래 필드. 조회수처럼 매번 바뀌는 값 제외 |
 | attachments | array | file_name·url(직접 URL 없으면 null)·type. 배열에 있다고 다운로드 허용된 것은 아님 |
 
@@ -101,12 +101,15 @@ M1의 수동 검증 표본은 20건을 목표로 한다. 부족하면 실제 건
 
 수집기는 DB 저장을 직접 책임지지 않는다. 저장·분석은 공통 파이프라인에서 처리한다. 수집시각처럼 매번 달라지는 값은 content_hash에서 제외한다.
 
+명지 게시판의 선택형 `source_fields.poster_url`은 본문 편집기 이미지 첫 후보의 HTTPS 주소다. 추가·교체·제거 시 원문 해시, 버전 및 요약·분석을 유지한다.
+
 ### Notice — 앱이 사용하는 공고
 
 | 필드 | 타입 | 의미 |
 |---|---|---|
 | schema_version / notice_id | string | 계약 버전 / 내부 ID |
 | source_id / source_url | string / string 또는 null | 출처 / 원문 링크 (알림톡은 null, 앱은 원문 열기 대신 안내를 보인다) |
+| poster_url | string (선택) | 명지 게시판 원문 포스터. 상세에서만 제공하며 없으면 생략 |
 | title | string | 표시 제목 |
 | apply_url | string 또는 null, 선택 | 알림톡 본문에 적힌 학교 사이트(*.mjc.ac.kr) 주소. 앱의 '신청 사이트 열기' (D-025) |
 | body_preview | boolean, 선택 | 폰 알림으로만 받은 알림톡. 카카오톡 알림 본문 한도(200자)로 뒷부분이 빠졌을 수 있다. 앱은 안내 문구를 보인다. 내보내기가 들어오면 전체 본문으로 바뀌고 이 필드는 없어진다 (D-040) |

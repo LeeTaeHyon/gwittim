@@ -622,3 +622,35 @@ def test_own_school_name_before_status_is_university_condition():
 )
 def test_category_rules(title, category):
     assert RuleBasedAnalyzer().analyze(raw_notice("안내드립니다", title=title), SEWU)["category"] == category
+
+
+@pytest.mark.parametrize("fallback", [False, True])
+def test_poster_changes_publish_without_reanalysis(monkeypatch, fallback):
+    from backend.publish import InMemorySink, publish
+
+    raw = raw_notice(CONTEST)
+    fields = dict(raw["source_fields"])
+    first_url = fields.pop("poster_url")
+    raw["source_fields"] = fields
+    record, store = record_for(raw)
+    previous, issues = build_notice(record, today=TODAY)
+    # 이미 본문 변경 이력이 있는 게시본에서도 이력을 유지한다.
+    previous["changed_fields"] = ["title"]
+    sink = InMemorySink()
+    publish(previous, issues, sink)
+    analyzer = RuleBasedAnalyzer()
+    if fallback:
+        monkeypatch.setattr(analyzer, "version", analyzer.version + "+ollama:test")
+    monkeypatch.setattr(analyzer, "analyze", lambda *_: pytest.fail("poster update invoked analyzer"))
+    for url in (first_url, first_url.replace("sample-", "updated-"), None):
+        incoming = dict(raw, source_fields=dict(fields, **({"poster_url": url} if url else {})))
+        assert content_hash(incoming) == raw["content_hash"]
+        result = ingest(incoming, store)
+        assert result.notice_version == 1
+        notice, issues = build_notice(store.get(result.key), today=TODAY, previous=previous, analyzer=analyzer)
+        publish(notice, issues, sink)
+        public = dict(sink.get_public(notice["notice_id"]))
+        assert ("poster_url" in public) == bool(url)
+        assert public.pop("poster_url", None) == url
+        assert public == {k: v for k, v in previous.items() if k != "poster_url"}
+        previous = notice

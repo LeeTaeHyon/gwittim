@@ -12,6 +12,7 @@ import 'components.dart';
 import 'credits_screen.dart';
 import 'format.dart';
 import 'icons.dart';
+import 'notice_poster.dart';
 import 'skeleton.dart';
 import 'theme.dart';
 
@@ -516,6 +517,7 @@ class _ReportScreenState extends State<ReportScreen> {
               if (n.sourceUrl != null)
                 if (staleNotice(notice.lastVerifiedAt, DateTime.now().toUtc()) case final stale?) _StaleBox(text: stale),
               if (changed != null) _ChangeBanner(entry: changed),
+              if (notice.posterUrl case final url?) NoticePoster(key: ValueKey(url), url: url),
               _Checklist(
                 rows: checklistRows(notice, rec, _profileValue),
                 status: rec?.eligibilityStatus,
