@@ -28,7 +28,7 @@ from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line, points_near
 from .llm import redact
-from .rules import EXCLUDES, OTHER_STATUS, RuleBasedAnalyzer, tidy_unresolved
+from .rules import EXCLUDES, OTHER_STATUS, UNIVERSITY, RuleBasedAnalyzer, _dictionary, tidy_unresolved
 
 MODEL_SUBDIR = Path("models/extract-v1")  # 배치 --data-dir 아래 (기본 data/local/models/extract-v1)
 MODEL_NOTE = "모델 추출"  # unresolved_condition.note: 규칙이 아니라 이 모델이 고른 줄
@@ -47,6 +47,14 @@ def _compact(text: str) -> str:
 def model_lines(raw: dict) -> list[str]:
     """학습 때와 같은 줄 나누기: 제목 한 줄 + 본문의 빈 줄 아닌 줄(앞뒤 공백 제거)."""
     return [raw["title"].strip()] + [l.strip() for l in raw["body_text"].splitlines() if l.strip()]
+
+
+def _names_school(line: str, university_id: str) -> bool:
+    """줄에 출처 학교를 가리키는 말이 있는지: '우리 대학'·'본교'(규칙과 같은 정규식) 또는 학교 이름('명지전문대(학)')."""
+    if UNIVERSITY.search(line):
+        return True
+    name = next((u["name_ko"] for u in _dictionary("universities") if u["id"] == university_id), None)
+    return bool(name) and re.sub(r"대학교?$", "대", name) in line
 
 
 class ExtractModelAnalyzer:
@@ -141,7 +149,8 @@ class ExtractModelAnalyzer:
                 elif name.startswith("grade_"):
                     add("grade", int(name[-1]), line)
                 elif name.startswith("uni_") and source.university_id and name == f"uni_{source.university_id}":
-                    add("university_id", source.university_id, line)
+                    if _names_school(line, source.university_id):  # 학교 이름·'본교' 없는 줄의 꼬리표는 학교 조건이 아니다
+                        add("university_id", source.university_id, line)
 
         have = {c["field"] for c in elig["conditions"]}
         for field, (values, evidence) in found.items():

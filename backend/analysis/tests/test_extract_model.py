@@ -207,13 +207,21 @@ def test_all_grades_from_model_is_not_a_grade_condition():
 
 
 def test_school_tag_only_counts_for_matching_source_school():
-    body = "명지 소속 대상 프로그램\n"
+    body = "명지전문대 소속 대상 프로그램\n"
     rules = {"소속": {"uni_mjc": 0.95}}
     f = analyzer(rules).analyze(raw(body), MJC)
     assert [c["value"] for c in f["eligibility"]["conditions"] if c["field"] == "university_id"] == ["mjc"]
     sewu = source_config("sewu_www_notice")
     f = analyzer(rules).analyze(raw(body), sewu)
     assert not any(c["field"] == "university_id" for c in f["eligibility"]["conditions"])
+
+
+def test_school_tag_needs_school_name_in_line():
+    # 학교 이름·'본교'가 없는 줄에 모델이 학교 꼬리표를 붙여도 학교 조건을 만들지 않는다 (평가셋 BD0000003205)
+    f = analyzer({"관련 학과": {"uni_mjc": 0.95}}).analyze(raw("채용 안내\n* 관련 학과 졸업자 우대\n"), MJC)
+    assert not any(c["field"] == "university_id" for c in f["eligibility"]["conditions"])
+    f = analyzer({"본교": {"uni_mjc": 0.95}}).analyze(raw("채용 안내\n본교 학생 대상\n"), MJC)
+    assert any(c["field"] == "university_id" for c in f["eligibility"]["conditions"])
 
 
 def test_model_lines_match_training_split():
