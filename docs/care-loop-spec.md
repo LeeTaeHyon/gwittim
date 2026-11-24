@@ -528,7 +528,7 @@
 - 2주차 '앱 안 할 일' 슬롯(11/30~12/2)을 이 작업이 대체. 넘치는 만큼 교외 수집 2단계(링커리어·씽굿)를 뒤로 미룸
 - 합계 사람 1명 기준 10일(분석 수정 2 + 후처리 1 + 고리 7). 8(b)를 하면 +1일
 - 계약 변경·스키마 변경 없음. 0a·0b·8a는 서버·배치, 고리는 앱(새 APK)
-- 하위 에이전트 명세: 0a·0b → [deadline-fix-spec.md](deadline-fix-spec.md), 8a → [todo-grounding-spec.md](todo-grounding-spec.md)(11/24). 고리는 다음
+- 하위 에이전트 명세: 0a·0b → [deadline-fix-spec.md](deadline-fix-spec.md), 8a → [todo-grounding-spec.md](todo-grounding-spec.md), 고리 1~7 → [care-loop-impl-spec.md](care-loop-impl-spec.md)(11/24)
 
 **최소 고리 1개**: 저장 → 리포트 '내 지원'에서 준비 시작·신청함·안 함 → 저장함·달력·홈·상세 분석이 같은 상태·다음 할 일·남은 날 → 앱 안 리마인드(시작일·마감 2일 전~당일) → 끝난 상태면 멈춤
 
