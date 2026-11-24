@@ -246,30 +246,65 @@ void main() {
       expect(store.all, isEmpty);
     });
 
-    test('기기 기록 읽기가 늦게 끝나도: 자동으로 만든 기록은 기기 값, 이번에 바꾼 건 지금 값, 지운 건 지운 채', () async {
-      ApplicationCase c(String id, CaseState s) => ApplicationCase(noticeId: id, state: s, changedAt: now);
-      final storage = MemoryCaseStorage({
-        'auto': c('auto', CaseState.preparing),
-        'mine': c('mine', CaseState.saved),
-        'gone': c('gone', CaseState.saved),
-      });
-      final store = ApplicationCaseStore(storage: storage, now: () => now);
-      await store.adopt(['auto']); // 읽기 전 저장 목록에서 자동으로 만든 기록
-      await store.recordSaved('mine');
-      await store.markApplied('mine'); // 읽기 전 사용자가 바꿈
-      await store.forget('gone'); // 읽기 전 저장 취소
-      await store.load();
-      expect(store['auto']!.state, CaseState.preparing);
-      expect(store['mine']!.state, CaseState.applied);
-      expect(store['gone'], isNull);
-    });
+    group('기기 기록 읽기가 늦게 끝날 때 합치기', () {
+      ApplicationCase c(String id, CaseState s, {String? eligibility}) =>
+          ApplicationCase(noticeId: id, state: s, changedAt: now, eligibilityStatus: eligibility);
 
-    test('읽기 전에 모두 지웠으면 기기 기록을 되살리지 않음', () async {
-      final storage = MemoryCaseStorage({'a': ApplicationCase(noticeId: 'a', state: CaseState.saved, changedAt: now)});
-      final store = ApplicationCaseStore(storage: storage, now: () => now);
-      await store.clearAll();
-      await store.load();
-      expect(store.all, isEmpty);
+      test('규칙 1: 이번 실행에 사용자가 바꾼 기록(저장·상태 변경·되돌리기)은 지금 값', () async {
+        final storage = MemoryCaseStorage({
+          'moved': c('moved', CaseState.saved),
+          'undone': c('undone', CaseState.applied),
+        });
+        final store = ApplicationCaseStore(storage: storage, now: () => now);
+        await store.recordSaved('new');
+        await store.recordSaved('moved');
+        await store.markApplied('moved');
+        await store.recordSaved('undone');
+        await store.markSkipped('undone');
+        await store.undo('undone');
+        await store.load();
+        expect(store['new']!.state, CaseState.saved);
+        expect(store['moved']!.state, CaseState.applied);
+        expect(store['undone']!.state, CaseState.saved);
+      });
+
+      test('규칙 2: 이번 실행에 저장 취소한 기록은 지운 채', () async {
+        final store = ApplicationCaseStore(storage: MemoryCaseStorage({'gone': c('gone', CaseState.preparing)}), now: () => now);
+        await store.forget('gone');
+        await store.load();
+        expect(store['gone'], isNull);
+      });
+
+      test('규칙 3: 목록에서 자동으로 만든 기록·판정 갱신은 기기에 있던 값', () async {
+        final storage = MemoryCaseStorage({
+          'auto': c('auto', CaseState.preparing),
+          'judged': c('judged', CaseState.preparing, eligibility: 'met'),
+        });
+        final store = ApplicationCaseStore(storage: storage, now: () => now);
+        await store.adopt(['auto', 'judged']); // 읽기 전 저장 목록에서 자동으로 만든 기록
+        await store.updateEligibility(recs({'judged': 'needs_check'})); // 읽기 전 판정 갱신
+        await store.load();
+        expect(store['auto']!.state, CaseState.preparing);
+        expect(store['judged']!.state, CaseState.preparing);
+        expect(store['judged']!.eligibilityStatus, 'met');
+      });
+
+      test('규칙 4: 이번 실행에 모두 지웠으면(로그아웃·탈퇴) 기기 기록을 되살리지 않음', () async {
+        final store = ApplicationCaseStore(storage: MemoryCaseStorage({'a': c('a', CaseState.saved)}), now: () => now);
+        await store.clearAll();
+        await store.load();
+        expect(store.all, isEmpty);
+      });
+
+      test('쓰기는 읽기가 끝난 뒤 합친 상태로(기기에 있던 기록을 덮지 않음)', () async {
+        final storage = MemoryCaseStorage({'keep': c('keep', CaseState.preparing)});
+        final store = ApplicationCaseStore(storage: storage, now: () => now);
+        await store.recordSaved('new'); // 읽기 전에 쓰기를 부름
+        await store.load();
+        await store.flushed;
+        expect(storage.saved.keys.toSet(), {'keep', 'new'});
+        expect(storage.saved['keep']!.state, CaseState.preparing);
+      });
     });
 
     test('알 수 없는 상태 값은 버림', () {
