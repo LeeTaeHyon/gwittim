@@ -26,7 +26,6 @@ from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from backend.analysis.extract_model import MODEL_SUBDIR, load_if_present
 from backend.analysis.kakao import KakaoAnalyzer
 from backend.analysis.llm import OllamaAnalyzer
 from backend.batch import run_kakao
@@ -58,10 +57,8 @@ def main() -> None:
     ap.add_argument("--inbox-file", type=Path, help="받은편지함 문서 JSONL (Firestore 대신, 확인용)")
     ap.add_argument("--no-inbox", action="store_true", help="Firestore 받은편지함을 읽지 않는다")
     ap.add_argument("--data-dir", type=Path, default=Path("data/local"))
-    ap.add_argument("--ollama-model", default="gemma4:12b", help="요약과 애매한 분류에 쓸 모델 (D-007). 자체 모델이 없으면 마감 보강도")
+    ap.add_argument("--ollama-model", default="gemma4:12b", help="요약·마감 보강과 애매한 분류에 쓸 모델 (D-007)")
     ap.add_argument("--no-llm", action="store_true", help="Gemma 없이: 규칙 분석 + 내 모델만")
-    ap.add_argument("--extract-model", type=Path, default=None, help="자체 공고 줄 분류 모델 폴더 (D-042). 기본 <data-dir>/models/extract-v1")
-    ap.add_argument("--no-extract-model", action="store_true", help="자체 모델을 쓰지 않음")
     args = ap.parse_args()
 
     paths = latest_exports(args.export_dir)
@@ -94,13 +91,11 @@ def main() -> None:
     else:
         sink = InMemorySink()
 
-    # 자체 모델이 있으면 마감·조건 추출을 맡고 Gemma는 요약과 애매한 분류만 (D-042)
-    extract = None if args.no_extract_model else load_if_present(args.extract_model or args.data_dir / MODEL_SUBDIR)
-    if args.no_llm:
-        analyzer = KakaoAnalyzer(extract)
-    else:
-        base = OllamaAnalyzer(args.ollama_model, base=extract, extract=extract is None)
-        analyzer = KakaoAnalyzer(base, gemma=ollama(args.ollama_model))
+    analyzer = (
+        KakaoAnalyzer()
+        if args.no_llm
+        else KakaoAnalyzer(OllamaAnalyzer(args.ollama_model), gemma=ollama(args.ollama_model))
+    )
     report = run_kakao(raws, store=store, sink=sink, notices=notices, today=datetime.now(KST).date(), analyzer=analyzer)
     notices_path.write_text(json.dumps(notices, ensure_ascii=False, indent=1), encoding="utf-8")
     summary = asdict(report)
@@ -108,8 +103,6 @@ def main() -> None:
     summary["files"] = len(paths)
     summary["inbox"] = len(inbox)  # 폰 수집기가 올린 알림 수 (D-036)
     summary["decided_by"] = dict(analyzer.decided_by)  # model / gemma / model_gemma_failed (새로 분석한 공고만)
-    summary["extract_model"] = None if extract is None else {
-        "version": extract.version, "analyzed": extract.model_analyzed, "fallback_rule_only": extract.model_failed}
     summary["sink"] = f"firestore:{project}" if project else "local"
     print(json.dumps(summary, ensure_ascii=False))
 

@@ -2113,8 +2113,8 @@ SPEC 범위 변경 (AGENTS.md §3, SPEC 0.4)
 
 ## D-042. 공고 분석 추출을 자체 학습 모델로 (Gemma 추출 대체) (2단계) (2026-11-18)
 
-- 상태: **팀장 결정(팀원 확인 전)**
-- 근거: 시험 공고 94건 비교(아래), 설명 문서 [extract-model.md](extract-model.md)
+- 상태: **보류·되돌림(2026-11-25 팀장)**. 실제 반영에서 원문에 적힌 마감 16건을 잃어 되돌렸고, 고친 안도 Gemma 호출이 남아 효율 이득이 없어 보류. 코드·문서·측정 기록은 [legacy/extract-model/](../legacy/extract-model/README.md)에 보관
+- 근거: 시험 공고 94건 비교(아래), 설명 문서 [extract-model.md](../legacy/extract-model/docs/extract-model.md)
 
 ### 배경
 
