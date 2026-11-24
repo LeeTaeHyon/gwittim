@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../data/application_case.dart';
 import '../data/cached_repository.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 import 'briefing_data.dart';
+import 'case_view.dart';
 import 'common.dart';
 import 'components.dart';
 import 'format.dart';
@@ -40,27 +42,33 @@ List<SavedEntry> sortByDeadline(List<SavedEntry> entries) {
   return list;
 }
 
-/// 마감 기준 묶음. 순서대로 보인다.
+/// 마감 기준 묶음. 순서대로 보인다. 끝난 지원 건(신청함·안 함·마감 지남·모집 끝남·삭제됨)은 맨 아래 [past].
 enum SavedGroup {
   thisWeek('이번 주 마감'),
   nextWeek('다음 주 마감'),
   later('그 이후'),
   noDeadline('마감일 없음'),
-  past('지난 공고');
+  past('끝난 지원');
 
   const SavedGroup(this.title);
 
   final String title;
 }
 
-/// 마감된·삭제된 공고와 마감일이 지난 공고는 '지난 공고'. 주는 월요일에 시작한다.
-SavedGroup savedGroupOf(SavedEntry e, DateTime today) {
+/// 저장한 공고의 지원 건 상태(D-052). 기록이 아직 없으면 '저장'으로 본다.
+CaseState savedStateOf(SavedEntry e, ApplicationCase? kase, DateTime now) => effectiveState(
+  kase ?? ApplicationCase(noticeId: e.notice.noticeId, state: CaseState.saved, changedAt: e.saved.savedAt),
+  e.notice,
+  now,
+);
+
+/// 끝난 지원 건은 '끝난 지원'. 나머지는 마감 기준으로 묶고, 주는 월요일에 시작한다.
+SavedGroup savedGroupOf(SavedEntry e, DateTime today, {ApplicationCase? kase}) {
   final n = e.notice;
-  if (n.lifecycleStatus == 'closed' || n.lifecycleStatus == 'removed') return SavedGroup.past;
+  if (isEnded(savedStateOf(e, kase, today))) return SavedGroup.past;
   final deadline = n.applicationDeadline;
   if (deadline == null) return SavedGroup.noDeadline;
   final day = DateTime(today.year, today.month, today.day);
-  if (deadline.day.isBefore(day)) return SavedGroup.past;
   final weekStart = day.subtract(Duration(days: day.weekday - DateTime.monday));
   return switch (deadline.day.difference(weekStart).inDays ~/ 7) {
     0 => SavedGroup.thisWeek,
@@ -70,19 +78,29 @@ SavedGroup savedGroupOf(SavedEntry e, DateTime today) {
 }
 
 /// 묶음별 목록. 빈 묶음은 넣지 않는다. 묶음 안은 마감일 순.
-List<(SavedGroup, List<SavedEntry>)> groupSaved(List<SavedEntry> entries, DateTime today) {
+List<(SavedGroup, List<SavedEntry>)> groupSaved(
+  List<SavedEntry> entries,
+  DateTime today, {
+  Map<String, ApplicationCase> cases = const {},
+}) {
   final sorted = sortByDeadline(entries);
   return [
     for (final g in SavedGroup.values)
-      if (sorted.where((e) => savedGroupOf(e, today) == g).toList() case final list when list.isNotEmpty) (g, list),
+      if (sorted.where((e) => savedGroupOf(e, today, kase: cases[e.notice.noticeId]) == g).toList()
+          case final list when list.isNotEmpty)
+        (g, list),
   ];
 }
 
-/// 저장한 뒤 마감일이 바뀐 모집 중 공고 (브리핑과 같은 기준)
-List<SavedEntry> deadlineChangedEntries(List<SavedEntry> entries) => [
+/// 저장한 뒤 마감일이 바뀐 모집 중 공고 (브리핑과 같은 기준). 리포트를 열어 이미 본 변경은 빼다(D-052).
+List<SavedEntry> deadlineChangedEntries(List<SavedEntry> entries, {Map<String, ApplicationCase> cases = const {}}) => [
   for (final e in sortByDeadline(entries))
-    if (e.deadlineChanged && e.notice.lifecycleStatus == 'open') e,
+    if (e.deadlineChanged && e.notice.lifecycleStatus == 'open' && !changeSeen(e, cases[e.notice.noticeId])) e,
 ];
+
+/// 리포트를 열어 지금 마감을 이미 본 변경인가.
+bool changeSeen(SavedEntry e, ApplicationCase? kase) =>
+    kase != null && kase.seenDeadline == deadlineKey(e.notice.applicationDeadline);
 
 class SavedScreenState extends State<SavedScreen> {
   List<SavedEntry>? _entries;
@@ -206,7 +224,9 @@ class SavedScreenState extends State<SavedScreen> {
       return const SavedSkeleton();
     }
     final c = context.gw;
-    final changed = deadlineChangedEntries(entries);
+    final store = ApplicationCaseScope.maybeOf(context);
+    final cases = {for (final k in store?.all ?? const <ApplicationCase>[]) k.noticeId: k};
+    final changed = deadlineChangedEntries(entries, cases: cases);
     final count = entries.where((e) => !_unsaved.contains(e.notice.noticeId)).length;
     return RefreshIndicator(
       onRefresh: refresh,
@@ -247,7 +267,7 @@ class SavedScreenState extends State<SavedScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (final (i, (group, list)) in groupSaved(entries, _today).indexed) ...[
+                    for (final (i, (group, list)) in groupSaved(entries, _today, cases: cases).indexed) ...[
                       Padding(
                         padding: EdgeInsets.only(top: i == 0 ? 0 : 18),
                         child: Semantics(
@@ -263,6 +283,8 @@ class SavedScreenState extends State<SavedScreen> {
                           key: ValueKey(e.notice.noticeId),
                           entry: e,
                           group: group,
+                          view: caseView(e.notice, store == null ? null : cases[e.notice.noticeId], now: _today),
+                          changeSeen: changeSeen(e, cases[e.notice.noticeId]),
                           category: _categories[e.notice.category] ?? e.notice.category,
                           today: _today,
                           saved: !_unsaved.contains(e.notice.noticeId),
@@ -297,6 +319,8 @@ class _SavedRow extends StatelessWidget {
     super.key,
     required this.entry,
     required this.group,
+    required this.view,
+    required this.changeSeen,
     required this.category,
     required this.today,
     required this.saved,
@@ -307,6 +331,12 @@ class _SavedRow extends StatelessWidget {
 
   final SavedEntry entry;
   final SavedGroup group;
+
+  /// 지원 건 문구(상태 이름·다음 할 일·남은 날). 모든 화면이 같은 문자열을 쓴다(D-052).
+  final CaseView view;
+
+  /// 리포트를 열어 이미 본 마감 변경이면 '마감일 바뀜'을 그리지 않는다.
+  final bool changeSeen;
   final String category;
   final DateTime today;
   final bool saved;
@@ -320,7 +350,7 @@ class _SavedRow extends StatelessWidget {
     final n = entry.notice;
     final removed = n.lifecycleStatus == 'removed';
     final past = group == SavedGroup.past;
-    final changed = entry.deadlineChanged && n.lifecycleStatus == 'open';
+    final changed = entry.deadlineChanged && n.lifecycleStatus == 'open' && !changeSeen;
     final before = entry.saved.savedDeadlineSnapshot;
     final meta = TextStyle(fontSize: 13, height: 1.5, color: c.muted);
     return InkWell(
@@ -357,6 +387,19 @@ class _SavedRow extends StatelessWidget {
                     )
                   else
                     Text.rich(_meta(n, c), style: meta),
+                  if (view.stateLabel != null && !removed) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Pill(view.stateLabel!, tone: view.ended ? PillTone.neutral : PillTone.chip),
+                        if (view.next != null)
+                          Text(keepAll(view.next!.text), style: TextStyle(fontSize: 13, height: 1.5, color: c.body)),
+                      ],
+                    ),
+                  ],
                   if (changed) ...[
                     const SizedBox(height: 6),
                     Wrap(
@@ -401,35 +444,19 @@ class _SavedRow extends StatelessWidget {
     );
   }
 
-  /// 마감 상태를 앞에 굵게(D-day · 확인된 시각), 분류는 뒤에 흐리게. 확정 마감이 없으면 원문 설명.
+  /// 남은 날(지원 건 문구, 모든 화면 같음)을 앞에 굵게, 분류는 뒤에 흐리게.
   TextSpan _meta(NoticeSummary n, GwColors c) {
-    final deadline = n.applicationDeadline;
-    final left = daysLeft(n, today);
-    final lead = [
-      if (n.lifecycleStatus == 'closed')
-        '모집 마감'
-      else if (deadline == null)
-        n.deadlineNote ?? '공고에 마감일 없음'
-      else if (deadline.day.isBefore(DateTime(today.year, today.month, today.day)))
-        '마감일 지남'
-      else ...[
-        if (left != null) left == 0 ? '오늘 마감' : 'D-$left',
-        if (deadline.hasTime) '${deadline.time} 마감',
-      ],
-    ].join(' · ');
+    final left = view.ended ? null : daysLeft(n, today);
     return TextSpan(
       children: [
-        if (lead.isNotEmpty) ...[
-          TextSpan(
-            text: lead,
-            style: left == null
-                ? null
-                : TextStyle(fontWeight: FontWeight.w600, color: left <= urgentDays ? c.urgent : c.sub),
-          ),
-          const TextSpan(text: ' · '),
-        ],
+        TextSpan(
+          text: view.remaining,
+          style: left == null
+              ? null
+              : TextStyle(fontWeight: FontWeight.w600, color: left <= urgentDays ? c.urgent : c.sub),
+        ),
+        const TextSpan(text: ' · '),
         TextSpan(text: category),
-        if (n.lifecycleStatus == 'unknown') const TextSpan(text: ' · 모집 상태 미확인'),
       ],
     );
   }

@@ -246,6 +246,32 @@ void main() {
       expect(store.all, isEmpty);
     });
 
+    test('기기 기록 읽기가 늦게 끝나도: 자동으로 만든 기록은 기기 값, 이번에 바꾼 건 지금 값, 지운 건 지운 채', () async {
+      ApplicationCase c(String id, CaseState s) => ApplicationCase(noticeId: id, state: s, changedAt: now);
+      final storage = MemoryCaseStorage({
+        'auto': c('auto', CaseState.preparing),
+        'mine': c('mine', CaseState.saved),
+        'gone': c('gone', CaseState.saved),
+      });
+      final store = ApplicationCaseStore(storage: storage, now: () => now);
+      await store.adopt(['auto']); // 읽기 전 저장 목록에서 자동으로 만든 기록
+      await store.recordSaved('mine');
+      await store.markApplied('mine'); // 읽기 전 사용자가 바꿈
+      await store.forget('gone'); // 읽기 전 저장 취소
+      await store.load();
+      expect(store['auto']!.state, CaseState.preparing);
+      expect(store['mine']!.state, CaseState.applied);
+      expect(store['gone'], isNull);
+    });
+
+    test('읽기 전에 모두 지웠으면 기기 기록을 되살리지 않음', () async {
+      final storage = MemoryCaseStorage({'a': ApplicationCase(noticeId: 'a', state: CaseState.saved, changedAt: now)});
+      final store = ApplicationCaseStore(storage: storage, now: () => now);
+      await store.clearAll();
+      await store.load();
+      expect(store.all, isEmpty);
+    });
+
     test('알 수 없는 상태 값은 버림', () {
       expect(ApplicationCase.fromJson('a', {'state': 'missed', 'changed_at': now.toIso8601String()}), isNull);
       expect(ApplicationCase.fromJson('a', 'x'), isNull);
@@ -331,6 +357,16 @@ void main() {
       await repo.saveNotice('a');
       await repo.grantAgentConsent();
       expect(store['a']!.eligibilityStatus, 'needs_check');
+    });
+
+    test('저장 목록에 있는데 기록이 없는 공고는 "저장"으로 만들고 판정을 채움', () async {
+      inner.list = recs({'old': 'needs_check'});
+      await repo.listRecommendations();
+      inner.saved = [savedEntry('old'), savedEntry('other')];
+      await repo.listSaved();
+      expect(store['old']!.state, CaseState.saved);
+      expect(store['old']!.eligibilityStatus, 'needs_check');
+      expect(store['other']!.eligibilityStatus, isNull);
     });
 
     test('저장 목록을 받으면 없는 공고의 기록을 지움(이전 실행에서 남은 기록)', () async {

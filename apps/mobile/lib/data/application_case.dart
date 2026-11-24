@@ -253,8 +253,14 @@ class ApplicationCaseStore extends ChangeNotifier {
   Future<void> _load() async {
     try {
       final loaded = await _storage.load();
-      // 읽는 동안 생긴 변경(저장 등)을 덮지 않는다
-      _cases = {...loaded, ..._cases};
+      // 읽기가 끝나기 전에 생긴 변경을 합친다. 사용자가 이번 실행에서 바꾼 건(저장·상태 변경)은 지금 값,
+      // 저장 취소한 건은 지운 채로, 그 밖(목록에서 자동으로 만든 기록·판정 갱신)은 기기에 있던 값을 쓴다.
+      final merged = _clearedThisRun ? <String, ApplicationCase>{} : {...loaded};
+      for (final c in _cases.values) {
+        if (_touchedThisRun.contains(c.noticeId) || !merged.containsKey(c.noticeId)) merged[c.noticeId] = c;
+      }
+      merged.removeWhere((id, _) => _forgottenThisRun.contains(id));
+      _cases = merged;
     } catch (_) {
       // 기기 저장소를 못 읽으면 빈 상태로 시작한다
     }
@@ -297,6 +303,8 @@ class ApplicationCaseStore extends ChangeNotifier {
   /// 저장(saveNotice) 성공 뒤. 이미 기록이 있으면 판정만 채운다.
   Future<void> recordSaved(String noticeId, {String? eligibilityStatus}) async {
     _savedThisRun.add(noticeId);
+    _touchedThisRun.add(noticeId);
+    _forgottenThisRun.remove(noticeId);
     final now = _now();
     final old = _cases[noticeId];
     final c = old == null
@@ -314,6 +322,8 @@ class ApplicationCaseStore extends ChangeNotifier {
   /// 저장 취소(deleteSaved) 성공 뒤, 또는 '목록에서 지우기'.
   Future<void> forget(String noticeId) async {
     _savedThisRun.remove(noticeId);
+    _touchedThisRun.remove(noticeId);
+    _forgottenThisRun.add(noticeId);
     if (!_cases.containsKey(noticeId)) return;
     await _put({..._cases}..remove(noticeId));
   }
@@ -333,6 +343,7 @@ class ApplicationCaseStore extends ChangeNotifier {
   Future<bool> undo(String noticeId) async {
     final c = _cases[noticeId];
     if (c == null || (c.state != CaseState.applied && c.state != CaseState.skipped)) return false;
+    _touchedThisRun.add(noticeId);
     await _put({
       ..._cases,
       noticeId: c.copyWith(state: c.previous ?? CaseState.saved, clearPrevious: true, changedAt: _now()),
@@ -343,6 +354,7 @@ class ApplicationCaseStore extends ChangeNotifier {
   Future<bool> _move(String noticeId, Set<CaseState> from, CaseState to) async {
     final c = _cases[noticeId];
     if (c == null || !from.contains(c.state)) return false;
+    _touchedThisRun.add(noticeId);
     await _put({..._cases, noticeId: c.copyWith(state: to, previous: c.state, changedAt: _now())});
     return true;
   }
@@ -407,9 +419,35 @@ class ApplicationCaseStore extends ChangeNotifier {
     });
   }
 
+  /// 이번 실행에서 사용자가 바꾼 건과 저장 취소한 건(기기 기록 읽기가 늦게 끝날 때 합치는 데 씀).
+  final _touchedThisRun = <String>{};
+  bool _clearedThisRun = false;
+  final _forgottenThisRun = <String>{};
+
   /// 이번 실행에서 이 기기로 저장한 공고. 저장 목록 응답이 저장보다 늦게 만들어진 것(캐시 등)이라도
   /// 이 공고들의 기록은 지우지 않는다. 이번 실행에서 지우는 길은 저장 취소뿐이다.
   final _savedThisRun = <String>{};
+
+  /// 저장 목록에 있는데 기록이 없는 공고(이 기능 전에 저장했거나 다른 기기에서 저장)는 '저장' 상태로 기록을 만든다.
+  /// 저장 = 지원 건 시작(D-052 결정 7). 판정은 마지막 추천 목록에 있으면 그 값, 없으면 null.
+  Future<void> adopt(Iterable<String> savedIds, {String? Function(String id)? statusOf}) async {
+    final now = _now();
+    final next = {..._cases};
+    var changed = false;
+    for (final id in savedIds) {
+      if (next.containsKey(id)) continue;
+      final status = statusOf?.call(id);
+      next[id] = ApplicationCase(
+        noticeId: id,
+        state: CaseState.saved,
+        changedAt: now,
+        eligibilityStatus: status,
+        eligibilityAt: status == null ? null : now,
+      );
+      changed = true;
+    }
+    if (changed) await _put(next);
+  }
 
   /// 저장 목록을 받은 뒤: 목록에 없는 공고의 기록을 지운다(다른 기기에서 저장 취소한 경우, 공고 문서가 사라진 경우).
   Future<void> pruneTo(Iterable<String> savedIds) async {
@@ -424,6 +462,9 @@ class ApplicationCaseStore extends ChangeNotifier {
   /// 탈퇴·로그아웃 때 모두 지운다.
   Future<void> clearAll() async {
     _savedThisRun.clear();
+    _touchedThisRun.clear();
+    _forgottenThisRun.clear();
+    _clearedThisRun = true;
     // 기기 저장소를 못 쓰면 다음 실행 때 남는다
     await _put({});
   }
@@ -494,7 +535,9 @@ class CaseTrackingRepository implements NoticeRepository, WrappingRepository {
   @override
   Future<List<SavedEntry>> listSaved() async {
     final saved = await _inner.listSaved();
-    await cases.pruneTo(saved.map((s) => s.notice.noticeId));
+    final ids = [for (final s in saved) s.notice.noticeId];
+    await cases.pruneTo(ids);
+    await cases.adopt(ids, statusOf: (id) => _lastStatus[id]);
     _refreshDetails(saved.map((s) => s.notice));
     return saved;
   }
