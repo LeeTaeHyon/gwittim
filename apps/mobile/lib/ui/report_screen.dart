@@ -412,12 +412,16 @@ class _ReportScreenState extends State<ReportScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final ok = await action(widget.noticeId);
     if (!ok || done == null) return;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(done),
-        action: SnackBarAction(label: '되돌리기', onPressed: () => cases.undo(widget.noticeId)),
-      ),
-    );
+    // 되돌리기 버튼이 있어도 저절로 닫히게(persist: false), 앞 알림은 바로 닫고 새 알림을 띄운다
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(done),
+          persist: false,
+          action: SnackBarAction(label: '되돌리기', onPressed: () => cases.undo(widget.noticeId)),
+        ),
+      );
   }
 
   Widget _body(Notice notice) {

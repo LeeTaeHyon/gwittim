@@ -117,6 +117,31 @@ void main() {
     expect(store['a']!.state, CaseState.saved);
   });
 
+  testWidgets('되돌리기 알림은 저절로 닫히고, 다음 동작 알림이 앞 알림 뒤에 밀리지 않음', (tester) async {
+    await pumpReport(
+      tester,
+      repo: FakeCaseRepository(saved: [savedOf(a)]),
+      cases: {'a': caseOf('a', CaseState.saved)},
+    );
+    await tester.tap(find.text('준비 시작'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('신청함'));
+    await tester.pumpAndSettle();
+    expect(find.text('신청함으로 표시했습니다.'), findsOneWidget);
+    // 바로 되돌린 뒤 이번엔 안 함: 앞 알림 대신 새 알림이 곧바로 보인다
+    await tester.tap(find.widgetWithText(SnackBarAction, '되돌리기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('이번엔 안 함'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('이번엔 안 함으로 표시했습니다.'), findsOneWidget);
+    expect(find.text('신청함으로 표시했습니다.'), findsNothing);
+    // 10초 뒤에는 저절로 닫혀 있다
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+    expect(find.byType(SnackBar), findsNothing);
+  });
+
   testWidgets('끝난 지원 건(마감 지남)은 버튼이 없음', (tester) async {
     final passed = summaryOf('a', deadline: dateOnly('2026-11-20'));
     await pumpReport(tester, repo: FakeCaseRepository(saved: [savedOf(passed)]), cases: {'a': caseOf('a', CaseState.preparing)});
