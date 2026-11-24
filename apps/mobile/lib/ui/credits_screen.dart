@@ -336,7 +336,7 @@ class _EntryRow extends StatelessWidget {
                           children: [
                             TextSpan(text: label),
                             TextSpan(
-                              text: keepAll(' · ${title ?? _unknownNotice}'),
+                              text: keepTitle(' · ${title ?? _unknownNotice}'),
                               style: TextStyle(fontWeight: FontWeight.w500, color: c.sub),
                             ),
                           ],

@@ -222,7 +222,7 @@ class _UrgentBubble extends StatelessWidget {
         children: [
           Text('마감 임박', style: _kicker(c).copyWith(color: c.urgent)),
           const SizedBox(height: 6),
-          Text(keepAll(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(keepTitle(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
           Text(
             '${due.month}월 ${due.day}일 마감 · ${left == 0 ? '오늘' : 'D-$left'}',
             style: _title(c).copyWith(color: c.urgent),
@@ -360,7 +360,7 @@ class _MajorPickBubbleState extends State<_MajorPickBubble> {
         children: [
           const MajorPickLabel(),
           const SizedBox(height: 10),
-          Text(keepAll(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(keepTitle(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
           Text(
             '${due.month}월 ${due.day}일 마감 · ${left == 0 ? '오늘' : 'D-$left'}',
             style: _title(c).copyWith(color: c.urgent),
@@ -595,7 +595,7 @@ class _SavedSoonBubble extends StatelessWidget {
         children: [
           Text('저장한 공고', style: _kicker(c)),
           const SizedBox(height: 6),
-          Text(keepAll(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(keepTitle(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
           Text(left == 0 ? '오늘 신청 마감' : '신청 마감 D-$left', style: _title(c).copyWith(color: c.urgent)),
           const SizedBox(height: 6),
           Text(
@@ -716,7 +716,7 @@ class _ChangedBubble extends StatelessWidget {
         children: [
           Text('저장한 공고', style: _kicker(c)),
           const SizedBox(height: 6),
-          Text(keepAll('${entry.notice.title}\n${deadlineChangeText(entry)}'), style: _title(c)),
+          Text(keepTitle('${entry.notice.title}\n${deadlineChangeText(entry)}'), style: _title(c)),
           const SizedBox(height: 16),
           Wrap(
             spacing: 8,

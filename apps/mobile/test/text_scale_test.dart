@@ -4,8 +4,9 @@ import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/main.dart';
 import 'package:gwittim/ui/briefing_data.dart';
 import 'package:gwittim/ui/components.dart';
-import 'package:gwittim/ui/notices_screen.dart';
 import 'package:gwittim/ui/report_screen.dart';
+
+import 'finders.dart';
 
 /// 전역 글꼴 배율 상한. 기기 글자 크기를 최대로 키워도 앱은 [maxTextScale]배까지만 키운다.
 void main() {
@@ -96,24 +97,31 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    await scrollToEnd(tester);
-    await tester.tap(find.text('학교 밖 기회 찾기'));
+    // 학교 밖 기회 찾기 입구는 공고 탭 칩 줄 아래에 있다 (D-049)
+    await tester.tap(find.descendant(of: find.byType(GwTabBar), matching: find.text('공고')));
+    await tester.pumpAndSettle();
+    await scrollToEnd(tester, up: true);
+    await tester.tap(findTextContaining('학교 밖 기회 찾기').hitTestable());
     await tester.pumpAndSettle();
     await scrollToEnd(tester);
     noOverflow('학교 밖 기회 찾기');
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
+    await tester.tap(find.descendant(of: find.byType(GwTabBar), matching: find.text('오늘')));
+    await tester.pumpAndSettle();
     await scrollToEnd(tester, up: true);
 
-    await tester.scrollUntilVisible(find.byType(NoticeCard), 300, scrollable: _vertical.hitTestable().first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byType(NoticeCard).hitTestable().first);
+    // 홈 마감 줄을 눌러 리포트를 연다 (D-050: 홈에는 공고 카드 대신 목록 줄)
+    await tester.scrollUntilVisible(findText(_projectTitle), 300, scrollable: _vertical.hitTestable().first);
+    await tester.tap(findText(_projectTitle).hitTestable());
     await tester.pumpAndSettle();
     expect(find.byType(ReportScreen), findsOneWidget);
     await scrollToEnd(tester);
     noOverflow('공고 리포트');
   });
 }
+
+const _projectTitle = '[합성 샘플] 컴퓨터공학과 프로젝트 발표회 참가자 모집';
 
 final _vertical = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down);
 

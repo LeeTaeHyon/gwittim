@@ -599,7 +599,7 @@ class _ResultCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  keepAll(item.title),
+                  keepTitle(item.title),
                   style: TextStyle(fontSize: 17, height: 1.45, fontWeight: FontWeight.w700, color: c.ink),
                 ),
               ),

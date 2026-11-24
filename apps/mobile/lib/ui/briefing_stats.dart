@@ -4,13 +4,10 @@ import 'briefing_data.dart';
 import 'format.dart';
 import 'theme.dart';
 
-/// 홈 '오늘의 귀띔' 카드와 브리핑 머리가 함께 쓰는 조각 (hero 면 위).
+/// 브리핑 머리·도착 장면이 쓰는 조각 (hero 면 위).
 
 /// '11월 19일 수요일'
 String briefingDay(DateTime d) => '${d.month}월 ${d.day}일 ${weekdayName(d)}요일';
-
-/// hero 위 반투명 면과 테두리. loginInk는 두 테마 모두 흰색이다.
-Color heroTileFill(GwColors c) => c.loginInk.withValues(alpha: 0.12);
 
 /// 라임 면 위 짙은 글자. [animate]면 왼쪽에서 오른쪽으로 700ms 칠해진다(지연 [delay], 애니메이션 줄이기면 칠한 상태).
 /// [started]가 false인 동안은 칠하기 전 모습으로 기다린다. 네이비 위에 투명한 형광펜은 탁해져서 면으로 칠한다.
@@ -70,7 +67,8 @@ class _FacePainter extends CustomPainter {
   bool shouldRepaint(_FacePainter old) => old.progress != progress || old.color != color;
 }
 
-/// 숫자 칸 줄: 우선순위대로 0건이 아닌 것만 최대 3칸, 가로 균등. 하나도 없으면 아무것도 두지 않는다.
+/// 숫자 줄: 우선순위대로 0건이 아닌 것만 최대 3개를 '아이콘 이름 숫자'로 한 줄에 둔다(상자 없음).
+/// 줄이 모자라면 항목 단위로 아랫줄로 넘어간다. 하나도 없으면 아무것도 두지 않는다.
 class BriefingStatRow extends StatelessWidget {
   const BriefingStatRow({super.key, required this.briefing});
 
@@ -80,23 +78,24 @@ class BriefingStatRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final stats = briefingStats(briefing);
     if (stats.isEmpty) return const SizedBox.shrink();
-    // 칸 이름이 두 줄로 넘어가도 세 칸 높이가 같도록 가장 높은 칸에 맞춘다.
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < stats.length; i++) ...[
-            if (i > 0) const SizedBox(width: 8),
-            Expanded(child: _StatTile(kind: stats[i].kind, count: stats[i].count)),
-          ],
-        ],
-      ),
+    return Wrap(
+      spacing: 16,
+      runSpacing: 6,
+      children: [for (final s in stats) _StatItem(kind: s.kind, count: s.count)],
     );
   }
 }
 
-class _StatTile extends StatelessWidget {
-  const _StatTile({required this.kind, required this.count});
+(IconData, String) _look(BriefingStatKind kind) => switch (kind) {
+  BriefingStatKind.urgent => (Icons.alarm_rounded, '마감 임박'),
+  BriefingStatKind.savedSoon => (Icons.bookmark_rounded, '저장 곧 마감'),
+  BriefingStatKind.fresh => (Icons.fiber_new_rounded, '새 공고'),
+  BriefingStatKind.career => (Icons.explore_rounded, '진로 관련'),
+  BriefingStatKind.changed => (Icons.update_rounded, '마감 변경'),
+};
+
+class _StatItem extends StatelessWidget {
+  const _StatItem({required this.kind, required this.count});
 
   final BriefingStatKind kind;
   final int count;
@@ -104,42 +103,31 @@ class _StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
-    final (icon, name) = switch (kind) {
-      BriefingStatKind.urgent => (Icons.alarm_rounded, '마감 임박'),
-      BriefingStatKind.savedSoon => (Icons.bookmark_rounded, '저장 곧 마감'),
-      BriefingStatKind.fresh => (Icons.fiber_new_rounded, '새 공고'),
-      BriefingStatKind.career => (Icons.explore_rounded, '진로 관련'),
-      BriefingStatKind.changed => (Icons.update_rounded, '마감 변경'),
-    };
+    final (icon, name) = _look(kind);
     final accent = kind == BriefingStatKind.urgent ? c.heroUrgent : null;
     return Semantics(
       label: '$name $count건',
       excludeSemantics: true,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
-        decoration: BoxDecoration(color: heroTileFill(c), borderRadius: BorderRadius.circular(14)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 20, color: accent ?? c.loginSub),
-            const SizedBox(height: 6),
-            Text(
-              '$count',
-              style: TextStyle(
-                fontSize: 28,
-                height: 1.1,
-                fontWeight: FontWeight.w700,
-                color: accent ?? c.loginInk,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: accent ?? c.loginSub),
+          const SizedBox(width: 5),
+          Text(
+            name,
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.loginSub),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: accent ?? c.loginInk,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
-            const SizedBox(height: 4),
-            Text(
-              name,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.loginSub),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

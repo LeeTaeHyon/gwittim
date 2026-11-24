@@ -410,7 +410,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      keepAll(n.title),
+                      keepTitle(n.title),
                       style: TextStyle(fontSize: 24, height: 1.42, fontWeight: FontWeight.w700, color: c.ink),
                     ),
                     const SizedBox(height: 8),
@@ -978,7 +978,7 @@ class _Related extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(keepAll(r.title), style: TextStyle(fontSize: 15, height: 1.45, color: c.body)),
+                    child: Text(keepTitle(r.title), style: TextStyle(fontSize: 15, height: 1.45, color: c.body)),
                   ),
                   Icon(Icons.chevron_right_rounded, color: c.muted),
                 ],

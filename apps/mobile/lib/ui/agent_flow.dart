@@ -965,7 +965,7 @@ class AnalysisReportScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
               child: Text(
-                keepAll(title!),
+                keepTitle(title!),
                 style: TextStyle(fontSize: 17, height: 1.45, fontWeight: FontWeight.w600, color: c.ink),
               ),
             ),

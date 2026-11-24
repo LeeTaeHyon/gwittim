@@ -5,9 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gwittim/data/api_repository.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
-import 'package:gwittim/ui/briefing_data.dart';
 import 'package:gwittim/ui/external_search_screen.dart';
-import 'package:gwittim/ui/home_screen.dart';
+import 'package:gwittim/ui/notices_screen.dart';
 import 'package:gwittim/ui/theme.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -402,31 +401,48 @@ void main() {
     });
   });
 
-  testWidgets('홈 맨 아래 입구를 누르면 찾기 화면이 열린다', (tester) async {
+  Future<void> pumpNotices(WidgetTester tester, NoticeRepository repo) async {
     tester.view.physicalSize = const Size(1600, 4000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final repo = _Repo();
-    final store = MemoryBriefingStore();
-    await store.markShown(DateTime(2026, 10, 30)); // 하루 첫 브리핑이 자동으로 뜨지 않게
-    await tester.runAsync(repo.preload);
     await tester.pumpWidget(
       MaterialApp(
         theme: gwittimTheme(),
         home: Scaffold(
-          body: HomeScreen(
-            repository: repo,
-            openUrl: (_) async => true,
-            briefingStore: store,
-            today: DateTime(2026, 10, 30),
-          ),
+          body: NoticesScreen(repository: repo, openUrl: (_) async => true, today: DateTime(2026, 10, 30)),
         ),
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(findText('AI 웹 검색 · 크레딧 2개'), 300);
-    expect(findText('AI 웹 검색 · 크레딧 2개'), findsOneWidget);
-    await tester.tap(findText('학교 밖 기회 찾기'));
+  }
+
+  testWidgets('공고 탭 칩 줄 아래 입구를 누르면 찾기 화면이 열린다 (D-049)', (tester) async {
+    final repo = _Repo();
+    await tester.runAsync(repo.preload);
+    await pumpNotices(tester, repo);
+    expect(findText('학교 밖 기회 찾기  AI 웹 검색'), findsOneWidget);
+    // 칩 줄 바로 아래, 첫 공고 카드보다 위
+    expect(
+      tester.getTopLeft(findTextContaining('학교 밖 기회 찾기')).dy,
+      lessThan(tester.getTopLeft(find.byType(NoticeCard).first).dy),
+    );
+    await tester.tap(findTextContaining('학교 밖 기회 찾기'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(FilledButton, '찾기 · 크레딧 2개'), findsOneWidget);
+  });
+
+  testWidgets('공고 탭 검색 결과가 없으면 빈 화면 버튼으로 학교 밖 찾기', (tester) async {
+    final repo = _Repo();
+    await tester.runAsync(repo.preload);
+    await pumpNotices(tester, repo);
+    await tester.tap(find.text('검색'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '없는검색어없는검색어');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(find.text('찾는 공고가 없습니다'), findsOneWidget);
+    expect(findText('학교 밖 기회 찾기  AI 웹 검색'), findsNothing); // 입구는 빈 화면 버튼 하나로
+    await tester.tap(find.widgetWithText(TextButton, '학교 밖 기회 찾기'));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(FilledButton, '찾기 · 크레딧 2개'), findsOneWidget);
   });
