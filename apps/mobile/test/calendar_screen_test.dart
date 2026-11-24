@@ -5,7 +5,7 @@ import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/main.dart';
 import 'package:gwittim/ui/briefing_data.dart';
 import 'package:gwittim/ui/calendar_screen.dart';
-import 'package:gwittim/ui/icons.dart';
+import 'package:gwittim/ui/components.dart';
 import 'package:gwittim/ui/report_screen.dart';
 
 import 'finders.dart';
@@ -189,6 +189,7 @@ void main() {
     expect(find.descendant(of: cell, matching: find.byKey(const ValueKey('dot-saved'))), findsOneWidget);
     await tester.tap(cell);
     await tester.pumpAndSettle();
-    expect(find.byWidgetPredicate((w) => w is GwIcon && w.glyph == GwGlyph.saved && w.filled), findsOneWidget);
+    // 지원 건(D-052)이면 북마크 대신 상태 칩이 보인다
+    expect(find.widgetWithText(Pill, '저장'), findsOneWidget);
   });
 }

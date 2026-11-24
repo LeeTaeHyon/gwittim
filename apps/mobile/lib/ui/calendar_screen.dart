@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../data/application_case.dart';
 import '../data/cached_repository.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 import 'briefing_data.dart';
+import 'case_view.dart';
 import 'common.dart';
 import 'components.dart';
 import 'format.dart';
@@ -14,37 +16,116 @@ import 'theme.dart';
 
 /// 달력에 놓는 공고 하나. 맞춤 공고와 저장한 공고에 다 있으면 하나로 합친다.
 class CalendarItem {
-  const CalendarItem({required this.notice, this.recommendation, required this.saved});
+  const CalendarItem({
+    required this.notice,
+    this.recommendation,
+    required this.saved,
+    this.view,
+    this.startAt,
+    this.dim = false,
+  });
 
   final NoticeSummary notice;
 
   /// 추천 목록에서 왔으면 그 판정 (리포트에 넘긴다)
   final Recommendation? recommendation;
   final bool saved;
+
+  /// 지원 건 문구(D-052). 지원 건 기록을 쓰는 달력에서 저장한 공고만.
+  final CaseView? view;
+
+  /// 신청 시작일 줄이면 그 시작(지원 건만, 점은 더하지 않음). 마감 줄이면 null.
+  final DateInfo? startAt;
+  bool get start => startAt != null;
+
+  /// 신청함: 흐리게 보인다.
+  final bool dim;
+
+  /// 강조하는 진행 중 지원 건의 마감 줄(저장·준비 중)
+  bool get inProgress => saved && !start && !dim;
 }
+
+/// 달력에서 빼는 지원 건 상태 (D-052): 이번엔 안 함·마감 지남·모집 끝남·삭제됨.
+const _hiddenStates = {CaseState.skipped, CaseState.missed, CaseState.closed, CaseState.removed};
 
 /// 확정 마감일별 공고 (D-017). 맞춤 공고는 다가오는 마감과 같은 기준(D-016)으로 고르고,
 /// 저장한 공고는 관련 여부와 상관없이 넣는다. 마감일이 없는 공고(선착순 등)와 삭제된 공고는 넣지 않는다.
 /// 날짜 안에서는 시각이 확인된 것을 먼저, 그다음 제목 순.
-Map<DateTime, List<CalendarItem>> calendarItems(RecommendationList list, List<SavedEntry> saved) {
+///
+/// [cases]가 있으면(지원 건 기록, D-052): 진행 중 지원 건(저장·준비 중)의 마감 줄을 그날 맨 위로, 신청 시작일에
+/// '신청 시작' 줄을 넣고, 신청함은 흐리게, 이번엔 안 함·마감 지남·모집 끝남·삭제됨은 뺀다(추천 목록에 있어도).
+Map<DateTime, List<CalendarItem>> calendarItems(
+  RecommendationList list,
+  List<SavedEntry> saved, {
+  Map<String, ApplicationCase>? cases,
+  DateTime? now,
+}) {
   final byId = <String, CalendarItem>{};
+  final starts = <CalendarItem>[];
+  final hidden = <String>{};
+  final useCases = cases != null && now != null;
+  final caseItems = <String, CalendarItem>{};
+  if (useCases) {
+    for (final s in saved) {
+      final n = s.notice;
+      final kase = cases[n.noticeId];
+      final state = effectiveState(
+        kase ?? ApplicationCase(noticeId: n.noticeId, state: CaseState.saved, changedAt: s.saved.savedAt),
+        n,
+        now,
+      );
+      if (_hiddenStates.contains(state)) {
+        hidden.add(n.noticeId);
+        continue;
+      }
+      final view = caseView(n, kase, now: now);
+      if (n.applicationDeadline != null) {
+        caseItems[n.noticeId] = CalendarItem(notice: n, saved: true, view: view, dim: state == CaseState.applied);
+      }
+      final start = kase?.applicationStart;
+      if (start != null && state != CaseState.applied) {
+        starts.add(CalendarItem(notice: n, saved: true, view: view, startAt: start));
+      }
+    }
+  }
   for (final e in deadlineCandidates(list)) {
-    if (e.notice.applicationDeadline == null) continue;
+    if (e.notice.applicationDeadline == null || hidden.contains(e.notice.noticeId)) continue;
     byId[e.notice.noticeId] = CalendarItem(notice: e.notice, recommendation: e.recommendation, saved: false);
   }
-  for (final s in saved) {
-    final n = s.notice;
-    if (n.applicationDeadline == null || n.lifecycleStatus == 'removed') continue;
-    byId[n.noticeId] = CalendarItem(notice: n, recommendation: byId[n.noticeId]?.recommendation, saved: true);
+  if (useCases) {
+    for (final item in caseItems.values) {
+      final id = item.notice.noticeId;
+      byId[id] = CalendarItem(
+        notice: item.notice,
+        recommendation: byId[id]?.recommendation,
+        saved: true,
+        view: item.view,
+        dim: item.dim,
+      );
+    }
+  } else {
+    for (final s in saved) {
+      final n = s.notice;
+      if (n.applicationDeadline == null || n.lifecycleStatus == 'removed') continue;
+      byId[n.noticeId] = CalendarItem(notice: n, recommendation: byId[n.noticeId]?.recommendation, saved: true);
+    }
   }
   final out = <DateTime, List<CalendarItem>>{};
   for (final item in byId.values) {
     (out[item.notice.applicationDeadline!.day] ??= []).add(item);
   }
+  for (final item in starts) {
+    (out[item.startAt!.day] ??= []).add(item);
+  }
+  // 진행 중 지원 건 마감 → 신청 시작 → 맞춤 공고 → 신청함
+  int rank(CalendarItem i) => i.inProgress && useCases ? 0 : (i.start ? 1 : (i.dim ? 3 : 2));
+  DateInfo dateOf(CalendarItem i) => i.startAt ?? i.notice.applicationDeadline!;
   for (final items in out.values) {
     items.sort((a, b) {
-      final ta = a.notice.applicationDeadline!.time;
-      final tb = b.notice.applicationDeadline!.time;
+      final r = rank(a).compareTo(rank(b));
+      if (r != 0) return r;
+      final ta = dateOf(a).time;
+      final tb = dateOf(b).time;
       if ((ta == null) != (tb == null)) return ta == null ? 1 : -1;
       if (ta != null && tb != null && ta != tb) return ta.compareTo(tb);
       return a.notice.title.compareTo(b.notice.title);
@@ -71,7 +152,21 @@ class CalendarScreen extends StatefulWidget {
 const _weekdaysSunFirst = ['일', '월', '화', '수', '목', '금', '토'];
 
 class CalendarScreenState extends State<CalendarScreen> {
-  Map<DateTime, List<CalendarItem>>? _items;
+  RecommendationList? _list;
+  List<SavedEntry> _saved = const [];
+
+  /// 지원 건 기록이 바뀌면 다시 받지 않아도 바로 다시 그린다(D-052).
+  Map<DateTime, List<CalendarItem>>? get _items {
+    final list = _list;
+    if (list == null) return null;
+    final store = ApplicationCaseScope.maybeOf(context);
+    return calendarItems(
+      list,
+      _saved,
+      cases: store == null ? null : {for (final k in store.all) k.noticeId: k},
+      now: store == null ? null : _today,
+    );
+  }
   Map<String, String> _categories = const {};
   int _undated = 0;
   Object? _error;
@@ -124,7 +219,8 @@ class CalendarScreenState extends State<CalendarScreen> {
           _month = DateTime(today.year, today.month);
           _selected = today;
         }
-        _items = calendarItems(list, saved);
+        _list = list;
+        _saved = saved;
         _undated = deadlineCandidates(list)
             .where((e) => e.notice.applicationDeadline == null && !savedIds.contains(e.notice.noticeId))
             .length;
@@ -133,7 +229,7 @@ class CalendarScreenState extends State<CalendarScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      if (_items != null) {
+      if (_list != null) {
         showRefreshFailed(context, e); // 보이던 달력은 그대로 둔다
       } else {
         setState(() => _error = e);
@@ -188,7 +284,7 @@ class CalendarScreenState extends State<CalendarScreen> {
     final c = context.gw;
     final inMonth = items.entries
         .where((e) => e.key.year == _month.year && e.key.month == _month.month)
-        .fold(0, (n, e) => n + e.value.length);
+        .fold(0, (n, e) => n + e.value.where((i) => !i.start).length);
     final day = items[_selected] ?? const <CalendarItem>[];
     return RefreshIndicator(
       onRefresh: refresh,
@@ -426,14 +522,15 @@ class _DayCell extends StatelessWidget {
     final isSelected = day == selected;
     final isToday = day == today;
     final past = day.isBefore(today);
-    final hasSaved = items.any((i) => i.saved);
+    final hasSaved = items.any((i) => i.saved && !i.start && !i.dim);
     final hasOther = items.any((i) => !i.saved);
+    final deadlines = items.where((i) => !i.start).length;
     return Semantics(
       button: true,
       selected: isSelected,
       label:
           '${day.month}월 ${day.day}일 ${weekdayName(day)}요일${isToday ? ', 오늘' : ''}'
-          '${items.isEmpty ? '' : ', 마감 ${items.length}건'}',
+          '${deadlines == 0 ? '' : ', 마감 $deadlines건'}',
       excludeSemantics: true,
       child: InkWell(
         key: ValueKey('day-${day.month}-${day.day}'),
@@ -531,14 +628,25 @@ class _DayRow extends StatelessWidget {
   final DateTime today;
   final VoidCallback onTap;
 
+  /// 지원 건 줄의 메타: 신청 시작 줄은 '신청 시작 · 시각', 마감 줄은 남은 날(모든 화면 같은 문구)
+  List<String> _lead(DateInfo? deadline) {
+    final view = item.view;
+    if (item.startAt case final s?) return ['신청 시작', if (s.hasTime) s.time!];
+    if (view != null) return [view.remaining];
+    return [
+      daysLeftLabel(item.notice, today) ?? '마감', // 지났거나 모집이 끝난 공고
+      if (deadline != null && deadline.hasTime) '${deadline.time} 마감',
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final n = item.notice;
-    final deadline = n.applicationDeadline!;
+    final deadline = n.applicationDeadline;
     final c = context.gw;
-    final label = daysLeftLabel(n, today);
-    final urgent = (daysLeft(n, today) ?? 99) <= urgentDays;
-    final status = item.recommendation?.eligibilityStatus;
+    final urgent = !item.dim && !item.start && (daysLeft(n, today) ?? 99) <= urgentDays;
+    final status = item.view == null ? item.recommendation?.eligibilityStatus : null;
+    final stateLabel = item.start ? '신청 시작' : item.view?.stateLabel;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -555,7 +663,12 @@ class _DayRow extends StatelessWidget {
                     keepTitle(n.title),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body, height: 1.4),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: item.dim ? c.muted : c.body,
+                      height: 1.4,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   // 남은 날과 시각을 앞에 굵게, 분류와 상태는 뒤에 흐리게 (ui-style §7 메타 줄)
@@ -563,10 +676,7 @@ class _DayRow extends StatelessWidget {
                     TextSpan(
                       children: [
                         TextSpan(
-                          text: [
-                            label ?? '마감', // 지났거나 모집이 끝난 공고
-                            if (deadline.hasTime) '${deadline.time} 마감',
-                          ].join(' · '),
+                          text: _lead(deadline).join(' · '),
                           style: TextStyle(fontWeight: FontWeight.w600, color: urgent ? c.urgent : c.sub),
                         ),
                         TextSpan(text: ' · $category'),
@@ -578,7 +688,12 @@ class _DayRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (item.saved)
+            if (stateLabel != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 10, top: 2),
+                child: Pill(stateLabel, tone: item.dim ? PillTone.neutral : PillTone.chip),
+              )
+            else if (item.saved)
               Padding(
                 padding: const EdgeInsets.only(left: 10, top: 2),
                 child: GwIcon(GwGlyph.saved, filled: true, size: 20, color: c.point, semanticLabel: '저장한 공고'),
