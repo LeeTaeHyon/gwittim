@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -12,10 +14,17 @@ abstract class AuthService {
   /// 사용자가 취소하면 false.
   Future<bool> signInWithGoogle();
 
+  /// 로그인 없이 둘러보기 (D-054). Firebase 익명 계정을 만든다. 실패하면 예외.
+  Future<void> signInAsGuest();
+
+  /// 지금 로그인한 계정이 게스트(익명 계정)인지. 로그인 전이면 false.
+  bool get isGuest;
+
   Future<void> signOut();
 
   /// 탈퇴 (D-024). 계정을 다시 확인한 뒤 [deleteData]로 서버 데이터를 지우고 로그인 계정을 지운다.
   /// 다시 확인을 취소하면 아무것도 지우지 않고 false.
+  /// 게스트는 다시 확인 없이 서버 데이터 → 익명 계정 순서로 지운다('게스트 끝내기', D-054).
   Future<bool> deleteAccount(Future<void> Function() deleteData);
 }
 
@@ -38,6 +47,14 @@ class FirebaseAuthService implements AuthService {
   Future<String?> idToken({bool refresh = false}) async => _auth.currentUser?.getIdToken(refresh);
 
   @override
+  bool get isGuest => _auth.currentUser?.isAnonymous ?? false;
+
+  @override
+  Future<void> signInAsGuest() async {
+    await _auth.signInAnonymously();
+  }
+
+  @override
   Future<bool> signInWithGoogle() async {
     try {
       final account = await _google.authenticate();
@@ -57,6 +74,12 @@ class FirebaseAuthService implements AuthService {
   Future<bool> deleteAccount(Future<void> Function() deleteData) async {
     final user = _auth.currentUser;
     if (user == null) return false;
+    if (user.isAnonymous) {
+      // 익명 계정은 다시 확인할 수단이 없다. 서버 삭제가 실패하면 계정은 남겨 다시 누를 수 있게 한다.
+      await deleteData();
+      await user.delete();
+      return true;
+    }
     final GoogleSignInAccount account;
     try {
       account = await _google.authenticate();
@@ -78,5 +101,48 @@ class FirebaseAuthService implements AuthService {
   Future<void> signOut() async {
     await _google.signOut();
     await _auth.signOut();
+  }
+}
+
+/// 로컬 개발 서버용 게스트 시험 (GWITTIM_DEV_GUEST). Firebase 없이 로그인 화면 → 게스트 → 게스트 끝내기를 돈다.
+/// 토큰은 backend.api.local의 게스트 토큰(guest-token)을 그대로 쓴다. Google 로그인은 하지 않는다.
+class LocalGuestAuthService implements AuthService {
+  LocalGuestAuthService(this._token);
+
+  final String _token;
+  final _state = StreamController<bool>.broadcast();
+  bool _signedIn = false;
+
+  @override
+  Stream<bool> get signedIn async* {
+    yield _signedIn;
+    yield* _state.stream;
+  }
+
+  @override
+  bool get isGuest => _signedIn;
+
+  @override
+  Future<String?> idToken({bool refresh = false}) async => _signedIn ? _token : null;
+
+  @override
+  Future<void> signInAsGuest() async => _set(true);
+
+  @override
+  Future<bool> signInWithGoogle() async => false;
+
+  @override
+  Future<bool> deleteAccount(Future<void> Function() deleteData) async {
+    await deleteData();
+    _set(false);
+    return true;
+  }
+
+  @override
+  Future<void> signOut() async => _set(false);
+
+  void _set(bool value) {
+    _signedIn = value;
+    _state.add(value);
   }
 }

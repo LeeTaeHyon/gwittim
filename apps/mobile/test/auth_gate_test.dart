@@ -46,7 +46,27 @@ class FakeAuth implements AuthService {
   @override
   Future<void> signOut() async {
     _signedIn = false;
+    _guest = false;
     _state.add(false);
+  }
+
+  bool _guest = false;
+  int guestSignInCalls = 0;
+  Object? guestFailsWith;
+
+  /// 게스트 끝내기 순서 확인용: 'data'(서버 삭제) → 'account'(계정 삭제)
+  final events = <String>[];
+
+  @override
+  bool get isGuest => _signedIn && _guest;
+
+  @override
+  Future<void> signInAsGuest() async {
+    guestSignInCalls++;
+    if (guestFailsWith != null) throw guestFailsWith!;
+    _signedIn = true;
+    _guest = true;
+    _state.add(true);
   }
 
   /// 탈퇴 때 계정 다시 확인에 응하는지
@@ -61,10 +81,13 @@ class FakeAuth implements AuthService {
   @override
   Future<bool> deleteAccount(Future<void> Function() deleteData) async {
     deleteCalls++;
-    if (!reauthenticates) return false;
+    if (!_guest && !reauthenticates) return false; // 게스트는 다시 확인하지 않는다
     await deleteData();
+    events.add('data');
     if (deleteFailsWith != null) throw deleteFailsWith!;
+    events.add('account');
     _signedIn = false;
+    _guest = false;
     _state.add(false);
     if (returnsAfter > Duration.zero) await Future<void>.delayed(returnsAfter);
     return true;
@@ -527,6 +550,125 @@ void main() {
     expect(tester.hasRunningAnimations, isFalse);
   });
 
+  Future<FakeAuth> signInGuest(WidgetTester tester, NoticeRepository repo, {FakeAuth? auth}) async {
+    auth ??= FakeAuth();
+    await tester.pumpWidget(
+      AuthGate(
+        auth: auth,
+        repositoryFor: (_) => repo,
+        openUrl: (_) async => true,
+        briefingStore: MemoryBriefingStore(alwaysShown: true),
+      ),
+    );
+    auth.start();
+    await settle(tester);
+    await tester.tap(find.text('로그인 없이 둘러보기'));
+    await settle(tester);
+    return auth;
+  }
+
+  Future<void> openAccount(WidgetTester tester, String target) async {
+    await tester.tap(find.byTooltip('내 정보'));
+    await settle(tester);
+    await tester.scrollUntilVisible(
+      find.text(target),
+      300,
+      scrollable: find.descendant(of: find.byType(ProfileScreen), matching: find.byType(Scrollable)).first,
+    );
+    await settle(tester);
+  }
+
+  testWidgets('게스트: 로그인 화면의 둘러보기 버튼과 30일 안내, 누르면 게스트로 들어간다 (D-054)', (tester) async {
+    final repo = await loaded(tester);
+    final auth = FakeAuth();
+    await tester.pumpWidget(AuthGate(auth: auth, repositoryFor: (_) => repo, openUrl: (_) async => true));
+    auth.start();
+    await settle(tester);
+    expect(find.text('로그인 없이 둘러보기'), findsOneWidget);
+    expect(find.text('게스트 정보는 30일 뒤 삭제됩니다.'), findsOneWidget);
+    expect(find.textContaining('동의한 것으로 봅니다'), findsOneWidget);
+
+    await tester.tap(find.text('로그인 없이 둘러보기'));
+    await settle(tester);
+    expect(auth.guestSignInCalls, 1);
+    expect(auth.signInCalls, 0);
+    expect(auth.isGuest, isTrue);
+    expect(find.text('오늘'), findsOneWidget); // 하단 탭
+  });
+
+  testWidgets('게스트 로그인 실패는 상세 없이 안내하고 로그인 화면에 남는다', (tester) async {
+    final auth = FakeAuth()..guestFailsWith = Exception('operation-not-allowed');
+    await tester.pumpWidget(
+      AuthGate(auth: auth, repositoryFor: (_) => SampleNoticeRepository(), openUrl: (_) async => true),
+    );
+    auth.start();
+    await settle(tester);
+    await tester.tap(find.text('로그인 없이 둘러보기'));
+    await settle(tester);
+    expect(findText('로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.'), findsOneWidget);
+    expect(find.textContaining('operation-not-allowed'), findsNothing);
+    expect(find.text('Google 계정으로 시작하기'), findsOneWidget);
+  });
+
+  testWidgets('게스트의 내 정보 계정 칸: 게스트 끝내기만, 로그아웃·탈퇴 없음', (tester) async {
+    final repo = await loaded(tester);
+    await signInGuest(tester, repo);
+    await openAccount(tester, '게스트 끝내기');
+    expect(find.text('게스트로 이용 중'), findsOneWidget);
+    expect(find.text('게스트 끝내기'), findsOneWidget);
+    expect(find.text('로그아웃'), findsNothing);
+    expect(find.text('탈퇴하기'), findsNothing);
+    expect(find.text('Google 계정으로 로그인됨'), findsNothing);
+  });
+
+  testWidgets('게스트 끝내기: 확인 창 → 서버 삭제 → 계정 삭제, 기기 답도 지우고 완료 팝업 없이 로그인 화면', (tester) async {
+    final repo = await loaded(tester);
+    await tester.runAsync(() => repo.saveNotice('n_synthetic_0004'));
+    final store = MemoryBriefingStore(alwaysShown: true);
+    await store.saveMajorPicks(const MajorPickState(decided: {'n_synthetic_0001': false}, declineStreak: 1));
+    final auth = FakeAuth();
+    await tester.pumpWidget(
+      AuthGate(auth: auth, repositoryFor: (_) => repo, openUrl: (_) async => true, briefingStore: store),
+    );
+    auth.start();
+    await settle(tester);
+    await tester.tap(find.text('로그인 없이 둘러보기'));
+    await settle(tester);
+    await openAccount(tester, '게스트 끝내기');
+
+    await tester.tap(find.text('게스트 끝내기'));
+    await settle(tester);
+    expect(find.text('게스트를 끝내시겠습니까?'), findsOneWidget);
+    expect(findText('저장한 공고와 내 정보가 삭제됩니다.'), findsOneWidget);
+    await tester.tap(find.text('취소'));
+    await settle(tester);
+    expect(auth.deleteCalls, 0);
+
+    await tester.tap(find.text('게스트 끝내기'));
+    await settle(tester);
+    await tester.tap(find.text('끝내기'));
+    await settle(tester);
+    expect(auth.events, ['data', 'account']);
+    expect(await repo.getProfile(), isNull);
+    expect(await repo.listSaved(), isEmpty);
+    expect((await store.majorPicks()).decided, isEmpty);
+    expect(find.text('Google 계정으로 시작하기'), findsOneWidget);
+    expect(find.text('탈퇴 완료'), findsNothing);
+  });
+
+  testWidgets('게스트 끝내기 실패는 상세 없이 안내하고 게스트로 남는다', (tester) async {
+    final repo = await loaded(tester);
+    await signInGuest(tester, repo, auth: FakeAuth()..deleteFailsWith = Exception('network'));
+    await openAccount(tester, '게스트 끝내기');
+    await tester.tap(find.text('게스트 끝내기'));
+    await settle(tester);
+    await tester.tap(find.text('끝내기'));
+    await settle(tester);
+    expect(findText('게스트를 끝내지 못했습니다. 잠시 후 다시 시도해 주세요.'), findsOneWidget);
+    expect(find.textContaining('network'), findsNothing);
+    expect(find.byType(ProfileScreen), findsOneWidget);
+  });
+
   group('로그인 화면 크기 맞춤', () {
     // (폭, 높이, 글자 배율, 스크롤 없이 들어가야 하는지). 위아래 시스템 막대 24씩.
     for (final (w, h, scale, fits) in [
@@ -550,6 +692,7 @@ void main() {
 
         final bottom = h - 24;
         expect(tester.getRect(find.byType(GoogleSignInButton)).bottom, lessThanOrEqualTo(bottom));
+        expect(tester.getRect(find.text('로그인 없이 둘러보기')).bottom, lessThanOrEqualTo(bottom));
         expect(tester.getRect(find.textContaining('동의한 것으로 봅니다')).bottom, lessThanOrEqualTo(bottom));
         final over = tester.state<ScrollableState>(find.byType(Scrollable).first).position.maxScrollExtent;
         if (fits) expect(over, 0);

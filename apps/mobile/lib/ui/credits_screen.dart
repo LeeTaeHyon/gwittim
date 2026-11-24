@@ -7,6 +7,7 @@ import 'agent_flow.dart';
 import 'common.dart';
 import 'components.dart';
 import 'format.dart';
+import 'guest_scope.dart';
 import 'skeleton.dart';
 import 'theme.dart';
 
@@ -175,7 +176,12 @@ class _CreditsScreenState extends State<CreditsScreen> {
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.ink),
               ),
               const SizedBox(height: 8),
-              for (final rule in const ['매일 1개 충전, 최대 5개', '상세 분석 1개', '외부 공고 찾기 2개', '받은 분석 다시 보기 무료'])
+              for (final rule in [
+                GuestScope.of(context) ? '게스트는 처음 3개, 매일 충전 없음' : '매일 1개 충전, 최대 5개',
+                '상세 분석 1개',
+                '외부 공고 찾기 2개',
+                '받은 분석 다시 보기 무료',
+              ])
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Row(
@@ -247,7 +253,7 @@ class _Balance extends StatelessWidget {
     final full = credits.balance >= Credits.max;
     return Semantics(
       container: true,
-      label: '보유 크레딧 ${credits.balance} / ${Credits.max}. ${nextRefillText(credits)}',
+      label: '보유 크레딧 ${credits.balance} / ${Credits.max}. ${nextRefillText(credits, guest: GuestScope.of(context))}',
       child: ExcludeSemantics(
         child: Container(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
@@ -311,7 +317,7 @@ class _Balance extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      keepAll(nextRefillText(credits)),
+                      keepAll(nextRefillText(credits, guest: GuestScope.of(context))),
                       style: TextStyle(fontSize: 14, height: 1.45, fontWeight: FontWeight.w600, color: c.loginInk),
                     ),
                   ),

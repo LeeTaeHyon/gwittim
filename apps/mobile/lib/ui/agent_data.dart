@@ -64,8 +64,12 @@ String shortDateTime(DateTime at) {
   return '${t.month}월 ${t.day}일 ${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 }
 
+/// 게스트(익명 계정, D-054)의 크레딧 안내. 게스트는 매일 충전이 없다.
+const guestNoRefillText = '게스트는 매일 충전이 없습니다. Google 계정으로 시작하면 매일 1개가 충전됩니다.';
+
 /// 크레딧 페이지의 다음 충전 문구 (명세 §10.2). 충전은 다음 날 0시(KST)다.
-String nextRefillText(Credits credits, {DateTime? now}) {
+String nextRefillText(Credits credits, {DateTime? now, bool guest = false}) {
+  if (guest) return guestNoRefillText;
   final next = credits.nextRefillAt;
   if (next == null) return '최대 보유. 사용하면 다음 날부터 다시 충전됩니다.';
   DateTime kst(DateTime d) => d.toUtc().add(const Duration(hours: 9));

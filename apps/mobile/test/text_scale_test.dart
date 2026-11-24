@@ -3,6 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gwittim/auth/auth_gate.dart';
+import 'package:gwittim/auth/google_sign_in_button.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/main.dart';
@@ -13,6 +15,7 @@ import 'package:gwittim/ui/report_screen.dart';
 import 'package:gwittim/ui/theme.dart';
 
 import 'app_test.dart' show OneNoticeRepository, notice;
+import 'auth_gate_test.dart' show FakeAuth;
 import 'finders.dart';
 
 /// 전역 글꼴 배율 상한. 기기 글자 크기를 최대로 키워도 앱은 [maxTextScale]배까지만 키운다.
@@ -157,6 +160,36 @@ void main() {
     expect(find.text('지원 전 체크리스트'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  for (final mode in [ThemeMode.light, ThemeMode.dark]) {
+    testWidgets('360 폭·글자 2배 로그인 화면: Google·둘러보기 버튼과 30일 안내·약관이 넘치지 않는다 ($mode)', (tester) async {
+      smallPhoneBigText(tester);
+      final auth = FakeAuth();
+      await tester.pumpWidget(
+        AuthGate(
+          auth: auth,
+          repositoryFor: (_) => SampleNoticeRepository(),
+          openUrl: (_) async => true,
+          themeController: ThemeController(initial: mode),
+        ),
+      );
+      auth.start();
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(tester.takeException(), isNull);
+      const bottom = 780.0 - 24;
+      for (final target in [
+        find.byType(GoogleSignInButton),
+        find.text('로그인 없이 둘러보기'),
+        find.text('게스트 정보는 30일 뒤 삭제됩니다.'),
+        find.textContaining('동의한 것으로 봅니다'),
+      ]) {
+        expect(target, findsOneWidget);
+        expect(tester.getRect(target).bottom, lessThanOrEqualTo(bottom));
+      }
+    });
+  }
 
   testWidgets('기기 글자 크기 2배여도 앱 안에서는 1.3배', (tester) async {
     smallPhoneBigText(tester);

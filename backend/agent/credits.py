@@ -19,6 +19,8 @@ KST = timezone(timedelta(hours=9), "KST")
 MAX_CREDITS = 5
 SIGNUP_GIFT = 5
 DAILY_CHARGE = 1
+# 게스트(Firebase 익명 계정, D-054): 처음 3개(상세 분석 1 + 외부 공고 찾기 2를 한 번씩), 매일 충전 없음. 게스트 여부는 저장하지 않고 요청마다 토큰에서 읽어 넘긴다.
+GUEST_SIGNUP_GIFT = 3
 
 SIGNUP = "signup"
 DAILY = "daily"
@@ -95,12 +97,13 @@ def to_kst(moment: datetime) -> datetime:
     return moment.astimezone(KST)
 
 
-def signup(now: datetime) -> CreditState:
+def signup(now: datetime, guest: bool = False) -> CreditState:
     now = to_kst(now)
+    gift = GUEST_SIGNUP_GIFT if guest else SIGNUP_GIFT
     return CreditState(
-        balance=SIGNUP_GIFT,
+        balance=gift,
         last_charge_date=now.date(),
-        entries=(LedgerEntry(SIGNUP, SIGNUP_GIFT, now),),
+        entries=(LedgerEntry(SIGNUP, gift, now),),
     )
 
 
@@ -151,25 +154,27 @@ def prune_history(state: CreditState, now: datetime) -> CreditState:
     return replace(state, entries=entries, processed=processed)
 
 
-def current_state(state: CreditState, now: datetime) -> CreditState:
+def current_state(state: CreditState, now: datetime, guest: bool = False) -> CreditState:
     """읽거나 쓸 때 쓰는 지금 상태: 충전 반영 → 10분 지난 잡아 두기 환불 → 90일 지난 내역 정리.
 
     크레딧 페이지 조회, next_refill_at, reserve, settle 모두 이것을 거친다(명세 §10.3 '읽거나 쓸 때 계산').
+    게스트는 충전을 건너뛴다(D-054). last_charge_date도 그대로 둔다.
     """
-    return prune_history(release_stale_holds(apply_refill(state, now), now), now)
+    refilled = state if guest else apply_refill(state, now)
+    return prune_history(release_stale_holds(refilled, now), now)
 
 
-def demo_refill(state: CreditState, now: datetime) -> CreditState:
-    """시연용: 잔액을 최대 보유(5)까지 채운다. 이미 5 이상이면 그대로. 내역에 'demo'로 남긴다."""
+def demo_refill(state: CreditState, now: datetime, guest: bool = False) -> CreditState:
+    """시연용: 잔액을 최대 보유(5)까지 채운다. 이미 5 이상이면 그대로. 내역에 'demo'로 남긴다. 게스트도 같다."""
     now = to_kst(now)
-    state = current_state(state, now)
+    state = current_state(state, now, guest)
     gap = MAX_CREDITS - state.balance
     if gap <= 0:
         return state
     return replace(state, balance=MAX_CREDITS, entries=(*state.entries, LedgerEntry(DEMO, gap, now)))
 
 
-def reserve(state: CreditState, kind: str, request_id: str, now: datetime) -> ReserveResult:
+def reserve(state: CreditState, kind: str, request_id: str, now: datetime, guest: bool = False) -> ReserveResult:
     """1단계: AI를 부르기 전에 크레딧을 잡아 둔다. held일 때만 AI를 부른다.
 
     순서: 충전 반영 → 오래된 잡아 두기 환불 → 이미 확정한 요청 → 진행 중인 요청 → 잔액.
@@ -177,7 +182,7 @@ def reserve(state: CreditState, kind: str, request_id: str, now: datetime) -> Re
     """
     if kind not in COSTS:
         raise ValueError(f"알 수 없는 차감 종류: {kind}")
-    state = current_state(state, now)
+    state = current_state(state, now, guest)
     if request_id in state.processed_request_ids:
         return ReserveResult(state, "duplicate")
     if any(h.request_id == request_id for h in state.holds):
@@ -195,6 +200,7 @@ def settle(
     succeeded: bool,
     now: datetime,
     ref: str | None = None,
+    guest: bool = False,
 ) -> SettleResult:
     """2단계: AI 결과에 따라 확정하거나 돌려준다.
 
@@ -203,7 +209,7 @@ def settle(
     - 잡아 둔 것이 없으면 no_hold(이미 확정·환불했거나 10분이 지나 자동 환불됨). 이 결과는 사용자에게 주지 않는다.
     - 먼저 current_state로 충전·만료 환불·오래된 내역 정리를 반영한다.
     """
-    state = current_state(state, now)
+    state = current_state(state, now, guest)
     hold = next((h for h in state.holds if h.request_id == request_id), None)
     if hold is None:
         return SettleResult(state, "no_hold")
@@ -223,8 +229,10 @@ def settle(
     )
 
 
-def next_refill_at(state: CreditState, now: datetime) -> datetime | None:
-    """다음 충전 시각(다음 날 0시 KST). 최대 보유면 None."""
+def next_refill_at(state: CreditState, now: datetime, guest: bool = False) -> datetime | None:
+    """다음 충전 시각(다음 날 0시 KST). 최대 보유이거나 게스트(충전 없음)면 None."""
+    if guest:
+        return None
     state = current_state(state, now)
     if state.balance >= MAX_CREDITS:
         return None

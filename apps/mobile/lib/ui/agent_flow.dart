@@ -9,6 +9,7 @@ import 'common.dart';
 import 'components.dart';
 import 'credits_screen.dart';
 import 'format.dart';
+import 'guest_scope.dart';
 import 'skeleton.dart';
 import 'theme.dart';
 
@@ -749,7 +750,7 @@ class _AgentWaitScreenState extends State<AgentWaitScreen> {
       case RepositoryErrorKind.insufficientCredits:
         return MessageView(
           title: '크레딧 부족',
-          detail: '크레딧이 없습니다. 내일 0시에 1개가 충전됩니다.',
+          detail: GuestScope.of(context) ? '크레딧이 없습니다. $guestNoRefillText' : '크레딧이 없습니다. 내일 0시에 1개가 충전됩니다.',
           action: (
             label: '크레딧 보기',
             onPressed: () =>
@@ -1269,7 +1270,11 @@ class AnalysisAction extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text(keepAll('크레딧 없음 · 내일 0시 1개 충전'), textAlign: TextAlign.center, style: captionStyle(context)),
+          Text(
+            keepAll(GuestScope.of(context) ? '크레딧 없음 · 게스트는 충전 없음' : '크레딧 없음 · 내일 0시 1개 충전'),
+            textAlign: TextAlign.center,
+            style: captionStyle(context),
+          ),
           Center(
             child: _LinkButton(label: '크레딧 보기', onPressed: onOpenCredits),
           ),

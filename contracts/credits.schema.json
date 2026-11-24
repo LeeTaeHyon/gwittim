@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gwittim.invalid/contracts/credits.schema.json",
   "title": "get_credits 응답 — 크레딧 잔액·사용 내역",
-  "description": "잔액은 서버만 씀(앱은 읽기만). balance는 지금 쓸 수 있는 개수이며 0~5. next_refill_at은 다음 충전 시각(다음 날 0시 KST)이고 최대 보유면 null. entries는 최근 90일, 최신순이며 실패해서 차감하지 않은 요청은 넣지 않음. docs/agent-privacy-spec.md §10.",
+  "description": "잔액은 서버만 씀(앱은 읽기만). balance는 지금 쓸 수 있는 개수이며 0~5. next_refill_at은 다음 충전 시각(다음 날 0시 KST)이고 최대 보유면 null, 게스트(익명 계정, 매일 충전 없음)는 늘 null. entries는 최근 90일, 최신순이며 실패해서 차감하지 않은 요청은 넣지 않음. docs/agent-privacy-spec.md §10.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -46,11 +46,11 @@
               "external_search",
               "demo"
             ],
-            "description": "signup 가입 선물, daily 매일 충전, detail_analysis 상세 분석, external_search 외부 공고 찾기, demo 시연용 채우기(서버 설정으로 켰을 때만)"
+            "description": "signup 가입 선물(게스트 포함), daily 매일 충전, detail_analysis 상세 분석, external_search 외부 공고 찾기, demo 시연용 채우기(서버 설정으로 켰을 때만)"
           },
           "amount": {
             "type": "integer",
-            "description": "충전은 +, 사용은 −. signup +5, daily +1, detail_analysis −1, external_search −2, demo +1~+5(5까지 채운 만큼)."
+            "description": "충전은 +, 사용은 −. signup +5(게스트 +3, D-054), daily +1, detail_analysis −1, external_search −2, demo +1~+5(5까지 채운 만큼)."
           },
           "at": {
             "$ref": "common.schema.json#/$defs/utc_timestamp"
@@ -105,7 +105,10 @@
             "then": {
               "properties": {
                 "amount": {
-                  "const": 5
+                  "enum": [
+                    3,
+                    5
+                  ]
                 }
               }
             }
