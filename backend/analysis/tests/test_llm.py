@@ -97,7 +97,24 @@ def test_grounded_llm_output_is_merged(ollama):
     assert conds["major_id"] == "mjc.computer_engineering"
     assert fields["eligibility"]["extraction_complete"] is False  # 우대 조건 → 미완성
     assert fields["summary"].startswith("컴퓨터공학과")
-    assert "_analysis_version" not in fields and a.version == "rule-0.10+ollama:test-model"
+    assert "_analysis_version" not in fields and a.version == "rule-0.11+ollama:test-model"
+
+
+def test_summary_only_mode_keeps_base_extraction(ollama):
+    # 자체 모델 분석기가 추출을 맡으면(D-042) Gemma는 요약만 낸다. 마감·조건·미해석 조건 답은 쓰지 않는다
+    ollama.reply = {
+        "summary": "컴퓨터공학과 학생 대상 취업 특강이며 11월 5일 17시까지 접수한다.",
+        "deadline": {"evidence": "접수는 2026.11.05.(목) 17:00까지 이메일로 제출"},
+        "conditions": [{"field": "grade", "operator": "eq", "value": 2, "evidence": "대상: 컴퓨터공학과 학생"}],
+        "unresolved": ["토익 700점 이상 우대"],
+    }
+    body = "특강 안내\n대상: 컴퓨터공학과 학생\n접수는 2026.11.05.(목) 17:00까지 이메일로 제출"
+    a = OllamaAnalyzer("test-model", host=ollama.url, timeout=5, extract=False)
+    expected = a.base.analyze(raw(body=body), MJC)
+    fields = a.analyze(raw(body=body), MJC)
+    assert fields["summary"].startswith("컴퓨터공학과")
+    assert {k: v for k, v in fields.items() if k != "summary"} == {k: v for k, v in expected.items() if k != "summary"}
+    assert a.version == "rule-0.11+ollama:test-model-summary"
 
 
 def test_hallucinations_are_rejected(ollama):
@@ -150,7 +167,7 @@ def test_ollama_failure_falls_back_to_rule_version(ollama):
     store = InMemoryStore()
     result = ingest(raw(), store)
     notice, issues = build_notice(store.records[result.key], today=date(2026, 10, 17), analyzer=analyzer(ollama))
-    assert notice["analysis_version"] == "rule-0.10"
+    assert notice["analysis_version"] == "rule-0.11"
     assert issues == [] and schema_errors("notice", notice) == []
 
 
@@ -165,7 +182,7 @@ def test_llm_notice_passes_validation(ollama):
     result = ingest(raw(), store)
     notice, issues = build_notice(store.records[result.key], today=date(2026, 10, 17), analyzer=analyzer(ollama))
     assert issues == []
-    assert notice["analysis_version"] == "rule-0.10+ollama:test-model"
+    assert notice["analysis_version"] == "rule-0.11+ollama:test-model"
 
 
 def test_summary_with_wrong_weekday_or_unknown_date_is_rejected(ollama):

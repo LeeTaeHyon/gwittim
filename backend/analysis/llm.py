@@ -80,12 +80,15 @@ class OllamaAnalyzer:
         host: str = "http://127.0.0.1:11434",
         timeout: float = 120.0,
         base: RuleBasedAnalyzer | None = None,
+        extract: bool = True,
     ):
         self.model = model
         self.host = host.rstrip("/")
         self.timeout = timeout
         self.base = base or RuleBasedAnalyzer()
-        self.version = f"{self.base.version}+ollama:{model}"
+        # extract=False: 마감·조건 보강은 base(자체 모델 분석기, D-042)에 맡기고 요약만 쓴다
+        self.extract = extract
+        self.version = f"{self.base.version}+ollama:{model}" + ("" if extract else "-summary")
         self.rejected: list[str] = []  # 마지막 분석에서 버린 LLM 출력과 사유 (평가·디버깅용)
         self.llm_analyzed = 0  # LLM 응답을 받은 공고 수
         self.llm_failed = 0  # LLM 호출 실패로 규칙 분석만 쓴 공고 수
@@ -147,11 +150,11 @@ class OllamaAnalyzer:
         except Exception as e:  # 네트워크·모델·JSON 실패: 규칙 분석만으로 돌려준다
             self.llm_failed += 1
             self.rejected.append(f"llm_unavailable: {type(e).__name__}")
-            return {**fields, "_analysis_version": self.base.version}
+            return {**fields, "_analysis_version": fields.pop("_analysis_version", self.base.version)}
 
         source_text = _normalize(title + " " + raw["body_text"])
-        if fields["category"] == "admin_notice":
-            # 업체·교직원 대상 행정 공지: 학생 지원 자격·마감을 LLM에게서도 받지 않는다. 요약만 쓴다
+        if fields["category"] == "admin_notice" or not self.extract:
+            # 업체·교직원 대상 행정 공지(학생 지원 자격·마감을 LLM에게서도 받지 않음)이거나 자체 모델이 추출을 맡으면(D-042) 요약만 쓴다
             year = int(raw["published"]["date"][:4]) if raw.get("published") else None
             fields["summary"] = self._checked_summary(out.get("summary"), source_text, year, [title, *raw["body_text"].splitlines()])
             return fields
