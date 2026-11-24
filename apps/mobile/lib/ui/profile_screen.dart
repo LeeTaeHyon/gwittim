@@ -1540,43 +1540,16 @@ class _ChoiceChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.gw;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    return AnswerChipWrap(
       children: [
         for (final item in items)
-          Builder(
-            builder: (context) {
-              final on = selected.contains(item.id);
-              return Semantics(
-                button: true,
-                selected: on,
-                child: Material(
-                  color: on ? c.cta : c.card,
-                  shape: StadiumBorder(side: BorderSide(color: on ? c.cta : c.line, width: 1.5)),
-                  child: InkWell(
-                    customBorder: const StadiumBorder(),
-                    onTap: () {
-                      if (on) return onChanged({...selected}..remove(item.id));
-                      if (selected.length >= _maxPicks) return onLimit();
-                      onChanged({...selected, item.id});
-                    },
-                    child: Container(
-                      height: 44,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      // 체크 아이콘을 넣으면 칩 폭이 바뀌어 줄이 다시 나뉘므로 색 면만으로 표시
-                      child: Center(
-                        widthFactor: 1,
-                        child: Text(
-                          item.name,
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: on ? c.onCta : c.body),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
+          AnswerChip(
+            label: item.name,
+            selected: selected.contains(item.id),
+            onTap: () {
+              if (selected.contains(item.id)) return onChanged({...selected}..remove(item.id));
+              if (selected.length >= _maxPicks) return onLimit();
+              onChanged({...selected, item.id});
             },
           ),
       ],

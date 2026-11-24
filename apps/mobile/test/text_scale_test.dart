@@ -8,10 +8,11 @@ import 'package:gwittim/auth/google_sign_in_button.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/main.dart';
+import 'package:gwittim/ui/agent_data.dart';
+import 'package:gwittim/ui/agent_flow.dart';
 import 'package:gwittim/ui/briefing_data.dart';
 import 'package:gwittim/ui/components.dart';
 import 'package:gwittim/ui/report_screen.dart';
-
 import 'package:gwittim/ui/theme.dart';
 
 import 'app_test.dart' show OneNoticeRepository, notice;
@@ -273,6 +274,22 @@ void main() {
     expect(find.byType(ReportScreen), findsOneWidget);
     await scrollToEnd(tester);
     noOverflow('공고 리포트');
+  });
+
+  testWidgets('360 폭·큰 글자: 상세 분석 질문 화면이 넘치지 않는다', (tester) async {
+    smallPhoneBigText(tester);
+    final repo = SampleNoticeRepository(today: today);
+    await tester.runAsync(repo.preload);
+    await tester.pumpWidget(
+      GwMaterialApp(
+        themeController: ThemeController(),
+        home: AgentQuestionScreen(repository: repo, store: MemoryAgentChipStore()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('파이썬'), findsOneWidget);
+    await scrollToEnd(tester);
+    expect(tester.takeException(), isNull);
   });
 }
 

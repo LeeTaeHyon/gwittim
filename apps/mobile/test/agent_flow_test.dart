@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/ui/agent_data.dart';
+import 'package:gwittim/ui/components.dart';
 import 'package:gwittim/ui/credits_screen.dart';
 import 'package:gwittim/ui/guest_scope.dart';
 import 'package:gwittim/ui/profile_screen.dart';
@@ -118,9 +119,10 @@ void main() {
       await _tap(tester, find.text('동의하고 계속'));
       await tester.pumpAndSettle();
       expect((await repo.getProfile()).hasAgentConsent, isTrue);
-      expect(findText('해 본 것'), findsOneWidget);
-      expect(findText('가능한 시기'), findsOneWidget);
-      expect(findText('갈 수 있는 지역'), findsOneWidget);
+      // 질문 제목과 안내는 한 문단이라 큰 글자에서 안내가 통째로 아랫줄로 간다.
+      expect(findText('해 본 것  여러 개 선택'), findsOneWidget);
+      expect(findText('가능한 시기  하나 선택'), findsOneWidget);
+      expect(findText('갈 수 있는 지역  여러 개 선택'), findsOneWidget);
       await tester.tap(find.byTooltip('뒤로'));
       await tester.pumpAndSettle();
       expect(await _balance(repo), 5);
@@ -187,6 +189,19 @@ void main() {
       expect(repo.sentChips!.experience, ['none_yet']);
       expect(repo.sentChips!.regions, ['any']);
       expect(repo.sentChips!.period, 'vacation');
+    });
+
+    testWidgets('칩은 높이 36으로 보이고, 위아래 여백까지 누르는 영역이다', (tester) async {
+      final repo = await toQuestions(tester);
+      final chip = find.ancestor(of: find.text('파이썬'), matching: find.byType(AnswerChip));
+      final face = find.descendant(of: chip, matching: find.byType(Material));
+      expect(tester.getSize(face).height, 36);
+      expect(tester.getSize(chip).height, 44);
+      // 칩 면 바로 위 여백(2만큼 위)을 눌러도 고른다
+      await tester.tapAt(tester.getRect(face).topCenter - const Offset(0, 2));
+      await tester.pumpAndSettle();
+      await _tap(tester, find.text('분석하기'));
+      expect(repo.sentChips!.experience, ['python']);
     });
 
     testWidgets('단독 칩을 고른 뒤 다른 칩을 누르면 단독 칩이 꺼진다', (tester) async {

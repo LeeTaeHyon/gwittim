@@ -529,73 +529,35 @@ class _Question extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 좁은 폭·큰 글자에서 한 줄에 안 들어가면 안내('여러 개 선택')가 통째로 아랫줄로 간다.
           Semantics(
             header: true,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, letterSpacing: -0.5, color: c.ink),
-                ),
-                const SizedBox(width: 8),
-                Text(hint, style: TextStyle(fontSize: 13, color: c.muted)),
-              ],
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: keepAll(title),
+                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, letterSpacing: -0.5, color: c.ink),
+                  ),
+                  TextSpan(
+                    text: '  ${keepTogether(hint)}',
+                    style: TextStyle(fontSize: 13, color: c.muted),
+                  ),
+                ],
+              ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 10),
+            padding: const EdgeInsets.only(top: 4, bottom: 6),
             child: Text(keepAll(why), style: captionStyle(context)),
           ),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          AnswerChipWrap(
             children: [
               for (final item in items)
                 AnswerChip(label: item.name, selected: isSelected(item.id), onTap: () => onTap(item.id)),
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// 고르는 칩 (외부 공고 찾기 화면도 씀): 높이 44, 테두리 1.5, 고르면 cta 면 (체크 아이콘 없음 — 폭이 바뀌어 줄바꿈이 달라지지 않게)
-class AnswerChip extends StatelessWidget {
-  const AnswerChip({super.key, required this.label, required this.selected, required this.onTap});
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gw;
-    final shape = StadiumBorder(side: BorderSide(color: selected ? c.cta : c.line, width: 1.5));
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: Material(
-        color: selected ? c.cta : c.card,
-        shape: shape,
-        child: InkWell(
-          customBorder: shape,
-          onTap: onTap,
-          // 글자 폭만큼만 차지한다(Container에 alignment를 주면 Wrap 안에서 한 줄을 다 채워 칩이 세로로 쌓였음)
-          child: Container(
-            height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Center(
-              widthFactor: 1,
-              child: Text(
-                label,
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: selected ? c.onCta : c.body),
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
