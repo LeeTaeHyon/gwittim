@@ -134,6 +134,14 @@ Map<DateTime, List<CalendarItem>> calendarItems(
   return out;
 }
 
+/// 고른 날 목록의 머리. 그날 줄이 신청 시작뿐이면 '… 신청 시작', 마감과 섞여 있으면 날짜만, 그 밖(마감만·빈 날)은 '… 마감'.
+String dayTitle(DateTime day, List<CalendarItem> items) {
+  final date = '${day.month}월 ${day.day}일(${weekdayName(day)})';
+  final starts = items.where((i) => i.start).length;
+  if (starts == 0) return '$date 마감';
+  return starts == items.length ? '$date 신청 시작' : date;
+}
+
 /// 달력 탭 (D-017). 월 달력에서 날짜를 고르면 그날 마감되는 공고가 아래에 보인다.
 /// 기기 캘린더 연동·개인 시간표는 하지 않는다 (SPEC P0 제외).
 class CalendarScreen extends StatefulWidget {
@@ -333,7 +341,7 @@ class CalendarScreenState extends State<CalendarScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: SectionTitle(
-              '${_selected.month}월 ${_selected.day}일(${weekdayName(_selected)}) 마감',
+              dayTitle(_selected, day),
               trailing: Text(day.isEmpty ? '' : '${day.length}건', style: captionStyle(context)),
             ),
           ),
@@ -525,12 +533,14 @@ class _DayCell extends StatelessWidget {
     final hasSaved = items.any((i) => i.saved && !i.start && !i.dim);
     final hasOther = items.any((i) => !i.saved);
     final deadlines = items.where((i) => !i.start).length;
+    final starts = items.where((i) => i.start).length;
     return Semantics(
       button: true,
       selected: isSelected,
       label:
           '${day.month}월 ${day.day}일 ${weekdayName(day)}요일${isToday ? ', 오늘' : ''}'
-          '${deadlines == 0 ? '' : ', 마감 $deadlines건'}',
+          '${deadlines == 0 ? '' : ', 마감 $deadlines건'}'
+          '${starts == 0 ? '' : ', 신청 시작 $starts건'}',
       excludeSemantics: true,
       child: InkWell(
         key: ValueKey('day-${day.month}-${day.day}'),
@@ -566,7 +576,11 @@ class _DayCell extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   spacing: 3,
-                  children: [if (hasSaved) const _Dot(saved: true), if (hasOther) const _Dot(saved: false)],
+                  children: [
+                    if (hasSaved) const _Dot(saved: true),
+                    if (hasOther) const _Dot(saved: false),
+                    if (starts > 0) const _StartMark(),
+                  ],
                 ),
               ),
             ],
@@ -599,22 +613,45 @@ class _Dot extends StatelessWidget {
   }
 }
 
+/// 지원 건의 신청 시작일 표시(D-052). 마감 점(동그라미)과 모양이 다른 마름모.
+class _StartMark extends StatelessWidget {
+  const _StartMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: const ValueKey('mark-start'),
+      width: 6,
+      height: 6,
+      child: Center(
+        child: Transform.rotate(
+          angle: 0.785398, // 45도
+          child: Container(width: 4.2, height: 4.2, color: context.gw.accent),
+        ),
+      ),
+    );
+  }
+}
+
 class _Legend extends StatelessWidget {
   const _Legend();
 
   @override
   Widget build(BuildContext context) {
     final style = TextStyle(fontSize: 12.5, color: context.gw.muted);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    Widget entry(Widget mark, String label) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [mark, const SizedBox(width: 6), Text(label, style: style)],
+    );
+    // 큰 글자에서 한 줄에 다 안 들어가면 다음 줄로 넘긴다
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 16,
+      runSpacing: 4,
       children: [
-        const _Dot(saved: true),
-        const SizedBox(width: 6),
-        Text('저장한 공고', style: style),
-        const SizedBox(width: 16),
-        const _Dot(saved: false),
-        const SizedBox(width: 6),
-        Text('맞춤 공고', style: style),
+        entry(const _Dot(saved: true), '저장한 공고'),
+        entry(const _Dot(saved: false), '맞춤 공고'),
+        entry(const _StartMark(), '신청 시작'),
       ],
     );
   }

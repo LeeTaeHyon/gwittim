@@ -61,7 +61,17 @@ void main() {
     expect(items[DateTime(2026, 11, 25)], isNull);
   });
 
-  testWidgets('줄은 남은 날 문구와 상태 칩, 신청 시작 줄은 점을 더하지 않음', (tester) async {
+  test('날짜 머리: 신청 시작뿐이면 "신청 시작", 섞이면 날짜만, 마감만·빈 날은 "마감"', () {
+    final items = calendarItems(listOf([other]), [savedOf(prep), savedOf(applied)], cases: cases(), now: today);
+    final d25 = DateTime(2026, 11, 25);
+    final d27 = DateTime(2026, 11, 27);
+    expect(dayTitle(d25, items[d25]!), '11월 25일(수) 신청 시작');
+    expect(dayTitle(d27, items[d27]!), '11월 27일(금) 마감');
+    expect(dayTitle(d27, [...items[d27]!, ...items[d25]!]), '11월 27일(금)');
+    expect(dayTitle(d25, const []), '11월 25일(수) 마감');
+  });
+
+  testWidgets('줄은 남은 날 문구와 상태 칩, 신청 시작일은 마감 점 대신 마름모 표시', (tester) async {
     tester.view.physicalSize = const Size(800, 2000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -81,19 +91,30 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    // 11/25: 신청 시작 줄만 있어 점이 없다
+    // 범례에 신청 시작(마름모)
+    expect(findText('신청 시작'), findsOneWidget);
+    expect(find.byKey(const ValueKey('mark-start')), findsNWidgets(2)); // 범례 + 11/25 칸
+    // 위쪽 건수는 마감 줄만 센다(11/27 준비 중·신청함·맞춤 3건, 11/25 신청 시작은 빼고)
+    expect(findText('11월 마감 3건'), findsOneWidget);
+    // 11/25: 신청 시작 줄만 있어 마감 점은 없고 마름모만
     final start = find.byKey(const ValueKey('day-11-25'));
     expect(find.descendant(of: start, matching: find.byKey(const ValueKey('dot-saved'))), findsNothing);
+    expect(find.descendant(of: start, matching: find.byKey(const ValueKey('mark-start'))), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('11월 25일 .*신청 시작 1건')), findsOneWidget);
     await tester.tap(start);
     await tester.pumpAndSettle();
+    expect(findText('11월 25일(수) 신청 시작'), findsOneWidget);
+    expect(findText('1건'), findsOneWidget);
     expect(findText('신청 시작 · 09:00 · 공모전'), findsOneWidget);
     expect(find.widgetWithText(Pill, '신청 시작'), findsOneWidget);
 
     final deadline = find.byKey(const ValueKey('day-11-27'));
     expect(find.descendant(of: deadline, matching: find.byKey(const ValueKey('dot-saved'))), findsOneWidget);
     expect(find.descendant(of: deadline, matching: find.byKey(const ValueKey('dot-related'))), findsOneWidget);
+    expect(find.descendant(of: deadline, matching: find.byKey(const ValueKey('mark-start'))), findsNothing);
     await tester.tap(deadline);
     await tester.pumpAndSettle();
+    expect(findText('11월 27일(금) 마감'), findsOneWidget);
     expect(findText('D-3 · 11월 27일 마감 · 공모전'), findsNWidgets(2)); // 준비 중·신청함 줄(남은 날 문구)
     // 분류 이름은 단어 중간에서 끊기지 않게 한 덩어리
     expect(
