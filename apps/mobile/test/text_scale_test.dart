@@ -1,11 +1,22 @@
+import 'dart:async';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gwittim/auth/auth_gate.dart';
+import 'package:gwittim/auth/google_sign_in_button.dart';
+import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/main.dart';
+import 'package:gwittim/ui/agent_data.dart';
+import 'package:gwittim/ui/agent_flow.dart';
 import 'package:gwittim/ui/briefing_data.dart';
 import 'package:gwittim/ui/components.dart';
 import 'package:gwittim/ui/report_screen.dart';
+import 'package:gwittim/ui/theme.dart';
 
+import 'app_test.dart' show OneNoticeRepository, notice;
+import 'auth_gate_test.dart' show FakeAuth;
 import 'finders.dart';
 
 /// 전역 글꼴 배율 상한. 기기 글자 크기를 최대로 키워도 앱은 [maxTextScale]배까지만 키운다.
@@ -34,6 +45,151 @@ void main() {
     tester.platformDispatcher.textScaleFactorTestValue = 2;
     addTearDown(tester.view.reset);
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  }
+
+  for (final brightness in Brightness.values) {
+    testWidgets('포스터 상세 확대·복귀, 큰 글자 $brightness', (tester) async {
+      smallPhoneBigText(tester);
+      final base = notice();
+      const url = 'https://mjcms.mjc.ac.kr/crosseditor/binary/images/test.png';
+      final recorder = ui.PictureRecorder();
+      ui.Canvas(recorder);
+      final picture = recorder.endRecording();
+      final image = await tester.runAsync(() => picture.toImage(100, 350));
+      picture.dispose();
+      final cache = PaintingBinding.instance.imageCache;
+      cache.putIfAbsent(
+        const NetworkImage(url),
+        () => OneFrameImageStreamCompleter(
+          Future.value(ImageInfo(image: image!)),
+        ),
+      );
+      addTearDown(() => cache.evict(const NetworkImage(url)));
+      final repo = OneNoticeRepository(
+        Notice(
+          summary: base.summary,
+          eligibility: base.eligibility,
+          description: null,
+          sourceId: 'mjc_www_notice',
+          activityPeriod: null,
+          applicationStart: null,
+          lastVerifiedAt: null,
+          posterUrl: url,
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: gwittimTheme(brightness),
+          builder: (context, child) => MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 1.3,
+            child: child!,
+          ),
+          home: ReportScreen(
+            repository: repo,
+            noticeId: 'n',
+            openUrl: (_) async => true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final button = find.bySemanticsLabel('포스터 크게 보기');
+      await tester.ensureVisible(button);
+      final position = tester.state<ScrollableState>(_vertical.first).position;
+      final offset = position.pixels;
+      for (final back in [false, true]) {
+        await tester.tap(button);
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<InteractiveViewer>(find.byType(InteractiveViewer))
+              .maxScale,
+          5,
+        );
+        final viewer = find.byType(InteractiveViewer);
+        final transform = find.descendant(of: viewer, matching: find.byType(Transform)).first;
+        final center = tester.getCenter(viewer);
+        final left = await tester.startGesture(center - const Offset(30, 0), pointer: 1);
+        final right = await tester.startGesture(center + const Offset(30, 0), pointer: 2);
+        for (final distance in [55.0, 90.0]) {
+          await left.moveTo(center - Offset(distance, 0));
+          await right.moveTo(center + Offset(distance, 0));
+          await tester.pump();
+        }
+        await left.up();
+        await right.up();
+        final zoom = tester.widget<Transform>(transform).transform.clone();
+        expect(zoom.getMaxScaleOnAxis(), greaterThan(1));
+        await tester.drag(viewer, const Offset(0, -65));
+        await tester.pump();
+        expect(tester.widget<Transform>(transform).transform, isNot(zoom));
+        if (back) {
+          await tester.binding.handlePopRoute();
+        } else {
+          await tester.tap(find.byTooltip('닫기'));
+        }
+        await tester.pumpAndSettle();
+        expect(position.pixels, offset);
+        expect(button, findsOneWidget);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('포스터를 기다리거나 디코딩에 실패해도 상세 행동을 유지한다', (tester) async {
+    const url = 'https://mjcms.mjc.ac.kr/crosseditor/binary/images/invalid.png';
+    final frame = Completer<ImageInfo>();
+    final cache = PaintingBinding.instance.imageCache;
+    cache.putIfAbsent(const NetworkImage(url), () => OneFrameImageStreamCompleter(frame.future));
+    addTearDown(() => cache.evict(const NetworkImage(url)));
+    final base = notice();
+    final repo = OneNoticeRepository(Notice(
+      summary: base.summary, eligibility: base.eligibility, description: null,
+      activityPeriod: null, applicationStart: null, lastVerifiedAt: null, posterUrl: url,
+    ));
+    await tester.pumpWidget(MaterialApp(
+      theme: gwittimTheme(),
+      home: ReportScreen(repository: repo, noticeId: 'n', openUrl: (_) async => true),
+    ));
+    await tester.pump();
+    expect(find.bySemanticsLabel('불러오는 중'), findsWidgets);
+    expect(find.text('지원 전 체크리스트'), findsOneWidget);
+    expect(find.text('포스터 크게 보기'), findsNothing);
+    frame.completeError(StateError('decoding failed'));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('불러오는 중'), findsNothing);
+    expect(find.text('포스터 크게 보기'), findsNothing);
+    expect(find.text('지원 전 체크리스트'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final mode in [ThemeMode.light, ThemeMode.dark]) {
+    testWidgets('360 폭·글자 2배 로그인 화면: Google·둘러보기 버튼과 30일 안내·약관이 넘치지 않는다 ($mode)', (tester) async {
+      smallPhoneBigText(tester);
+      final auth = FakeAuth();
+      await tester.pumpWidget(
+        AuthGate(
+          auth: auth,
+          repositoryFor: (_) => SampleNoticeRepository(),
+          openUrl: (_) async => true,
+          themeController: ThemeController(initial: mode),
+        ),
+      );
+      auth.start();
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(tester.takeException(), isNull);
+      const bottom = 780.0 - 24;
+      for (final target in [
+        find.byType(GoogleSignInButton),
+        find.text('로그인 없이 둘러보기'),
+        find.text('게스트 정보는 30일 뒤 삭제됩니다.'),
+        find.textContaining('동의한 것으로 봅니다'),
+      ]) {
+        expect(target, findsOneWidget);
+        expect(tester.getRect(target).bottom, lessThanOrEqualTo(bottom));
+      }
+    });
   }
 
   testWidgets('기기 글자 크기 2배여도 앱 안에서는 1.3배', (tester) async {
@@ -118,6 +274,22 @@ void main() {
     expect(find.byType(ReportScreen), findsOneWidget);
     await scrollToEnd(tester);
     noOverflow('공고 리포트');
+  });
+
+  testWidgets('360 폭·큰 글자: 상세 분석 질문 화면이 넘치지 않는다', (tester) async {
+    smallPhoneBigText(tester);
+    final repo = SampleNoticeRepository(today: today);
+    await tester.runAsync(repo.preload);
+    await tester.pumpWidget(
+      GwMaterialApp(
+        themeController: ThemeController(),
+        home: AgentQuestionScreen(repository: repo, store: MemoryAgentChipStore()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('파이썬'), findsOneWidget);
+    await scrollToEnd(tester);
+    expect(tester.takeException(), isNull);
   });
 }
 

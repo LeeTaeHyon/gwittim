@@ -1,7 +1,7 @@
 # 귀띔 (Gwittim) — 공통 개발 명세
 
-- 버전: 0.20
-- 작성일: 2026-10-16 / 0.2 갱신: 2026-10-17 (D-005 계약 결정 반영, `contracts/` 초안 작성) / 0.3 갱신: 2026-10-26 (D-013 수집 게시판 4개, 오래된 마감 미상 공고 추천 제외, D-014 이미지 대체텍스트) / 0.4 갱신: 2026-10-30 (D-019 카카오톡 알림톡 출처, 알림톡 분류 모델) / 0.5 갱신: 2026-10-30 (D-020 학과 통계 보조 점수, 프로필 학과 통계 칩) / 0.6 갱신: 2026-10-30 (D-021 학과 통계 추천 분리 표시와 관심 있음·없음) / 0.7 갱신: 2026-11-01 (D-027 마감일 없는 공고의 시기 점수 0) / 0.8 갱신: 2026-11-01 (D-025 알림톡과 게시판 공고 짝, 신청 사이트) / 0.9 갱신: 2026-11-01 (D-026 공고 탭 검색·분류 칩) / 0.10 갱신: 2026-11-03 (D-028 '졸업생 진로 추천' 표시 이름) / 0.11 갱신: 2026-11-05 (D-031 관심사·직무 최대 5개) / 0.12 갱신: 2026-11-10 (D-032 고른 관심사·직무 꼬리표가 없는 공고는 불일치) / 0.13 갱신: 2026-11-15 (D-034 알림톡 자동 수집용 팀장 폰, 기기 안 거르기·분류) / 0.14 갱신: 2026-11-15 (D-035 알림톡 종류·관심사 모델을 사람 정답 학습으로, LLM은 배운 적 없는 분야의 관심사만) / 0.15 갱신: 2026-11-15 (D-036 수집기 폰 → 서버 받은편지함 → 배치) / 0.16 갱신: 2026-11-17 (D-040 폰 알림으로만 받은 알림톡의 본문 미리보기 표시) / 0.17 갱신: 2026-11-21 (D-038 교외 공모전 출처 1차 위비티·콘테스트코리아를 범위에 포함) / 0.18 갱신: 2026-11-22 (D-043 학교 공지는 같은 학교 학생에게만, 학교 안 고른 학생은 교외 공고만) / 0.19 갱신: 2026-11-22 (D-045 두 번째 학교 숭의여대 공지 게시판) / 0.20 갱신: 2026-11-23 (D-052 기기 예약 알림도 P0 제외, 신청 챙기기는 앱 안 표시만)
+- 버전: 0.21
+- 작성일: 2026-10-16 / 0.2 갱신: 2026-10-17 (D-005 계약 결정 반영, `contracts/` 초안 작성) / 0.3 갱신: 2026-10-26 (D-013 수집 게시판 4개, 오래된 마감 미상 공고 추천 제외, D-014 이미지 대체텍스트) / 0.4 갱신: 2026-10-30 (D-019 카카오톡 알림톡 출처, 알림톡 분류 모델) / 0.5 갱신: 2026-10-30 (D-020 학과 통계 보조 점수, 프로필 학과 통계 칩) / 0.6 갱신: 2026-10-30 (D-021 학과 통계 추천 분리 표시와 관심 있음·없음) / 0.7 갱신: 2026-11-01 (D-027 마감일 없는 공고의 시기 점수 0) / 0.8 갱신: 2026-11-01 (D-025 알림톡과 게시판 공고 짝, 신청 사이트) / 0.9 갱신: 2026-11-01 (D-026 공고 탭 검색·분류 칩) / 0.10 갱신: 2026-11-03 (D-028 '졸업생 진로 추천' 표시 이름) / 0.11 갱신: 2026-11-05 (D-031 관심사·직무 최대 5개) / 0.12 갱신: 2026-11-10 (D-032 고른 관심사·직무 꼬리표가 없는 공고는 불일치) / 0.13 갱신: 2026-11-15 (D-034 알림톡 자동 수집용 팀장 폰, 기기 안 거르기·분류) / 0.14 갱신: 2026-11-15 (D-035 알림톡 종류·관심사 모델을 사람 정답 학습으로, LLM은 배운 적 없는 분야의 관심사만) / 0.15 갱신: 2026-11-15 (D-036 수집기 폰 → 서버 받은편지함 → 배치) / 0.16 갱신: 2026-11-17 (D-040 폰 알림으로만 받은 알림톡의 본문 미리보기 표시) / 0.17 갱신: 2026-11-21 (D-038 교외 공모전 출처 1차 위비티·콘테스트코리아를 범위에 포함) / 0.18 갱신: 2026-11-22 (D-043 학교 공지는 같은 학교 학생에게만, 학교 안 고른 학생은 교외 공고만) / 0.19 갱신: 2026-11-22 (D-045 두 번째 학교 숭의여대 공지 게시판) / 0.20 갱신: 2026-11-23 (D-052 기기 예약 알림도 P0 제외, 신청 챙기기는 앱 안 표시만) / 0.21 갱신: 2026-11-25 (D-054 게스트 로그인: 익명 계정, 크레딧 3개·매일 충전 없음, 30일 보관)
 - 상태: 구현 착수용 제안 초안. 팀 합의 후 기준 버전으로 사용한다.
 - 대상: 팀장, 팀원, 각자의 AI 코딩 에이전트
 - 이 문서는 목표 동작을 정의한다. 구현 완료를 의미하지 않는다.
@@ -93,7 +93,7 @@ M1의 수동 검증 표본은 20건을 목표로 한다. 부족하면 실제 건
 | body_text | string | 메뉴·푸터를 제거한 본문. 본문 이미지의 대체텍스트(alt)는 `[이미지 설명]` 줄 아래에 붙인다(D-014) |
 | published | object 또는 null | 원문 게시일 날짜 정보. 날짜만 있으면 precision=date, 미표기는 null |
 | collected_at | string | 이번 수집 시각 |
-| content_hash | string | `sha256:<hex>`. title·body_text·published·source_fields·첨부 파일명의 해시 |
+| content_hash | string | `sha256:<hex>`. title·body_text·published·source_fields(poster_url 제외)·첨부 파일명의 해시 |
 | source_fields | object | 출처가 제공한 날짜·대상·작성 부서 등 원래 필드. 조회수처럼 매번 바뀌는 값 제외 |
 | attachments | array | file_name·url(직접 URL 없으면 null)·type. 배열에 있다고 다운로드 허용된 것은 아님 |
 
@@ -101,12 +101,15 @@ M1의 수동 검증 표본은 20건을 목표로 한다. 부족하면 실제 건
 
 수집기는 DB 저장을 직접 책임지지 않는다. 저장·분석은 공통 파이프라인에서 처리한다. 수집시각처럼 매번 달라지는 값은 content_hash에서 제외한다.
 
+명지 게시판의 선택형 `source_fields.poster_url`은 본문 편집기 이미지 첫 후보의 HTTPS 주소다. 추가·교체·제거 시 원문 해시, 버전 및 요약·분석을 유지한다.
+
 ### Notice — 앱이 사용하는 공고
 
 | 필드 | 타입 | 의미 |
 |---|---|---|
 | schema_version / notice_id | string | 계약 버전 / 내부 ID |
 | source_id / source_url | string / string 또는 null | 출처 / 원문 링크 (알림톡은 null, 앱은 원문 열기 대신 안내를 보인다) |
+| poster_url | string (선택) | 명지 게시판 원문 포스터. 상세에서만 제공하며 없으면 생략 |
 | title | string | 표시 제목 |
 | apply_url | string 또는 null, 선택 | 알림톡 본문에 적힌 학교 사이트(*.mjc.ac.kr) 주소. 앱의 '신청 사이트 열기' (D-025) |
 | body_preview | boolean, 선택 | 폰 알림으로만 받은 알림톡. 카카오톡 알림 본문 한도(200자)로 뒷부분이 빠졌을 수 있다. 앱은 안내 문구를 보인다. 내보내기가 들어오면 전체 본문으로 바뀌고 이 필드는 없어진다 (D-040) |
@@ -156,6 +159,7 @@ university_id, major_id, grade, enrollment_status, interest_ids, target_role_ids
 - 관심사·희망 직무는 각각 최대 5개까지 고른다. 앱은 3개를 넘으면 '3개 이하일 때 추천이 더 정확합니다.'라고 안내한다. 점수는 하나라도 겹치면 1이라 많이 고를수록 덜 원하는 분야 공고가 같은 점수로 섞인다(D-031).
 - 성적·소득·주민등록번호·학생증은 수집하지 않는다.
 - 사용자 ID는 인증 정보에서 얻는다. 요청 본문의 사용자 ID를 신뢰하지 않는다.
+- 게스트(D-054): 로그인 화면의 '로그인 없이 둘러보기'는 Firebase 익명 계정을 만든다. 서버는 ID 토큰의 `firebase.sign_in_provider == "anonymous"`로 요청마다 게스트를 판별하고, 프로필·크레딧 문서에 게스트 표시를 저장하지 않는다. 기능은 Google 로그인과 같고 크레딧만 다르다. 나가기는 '게스트 끝내기'(`delete_account_data` → 익명 계정 삭제)이고, 만든 날부터 30일이 지난 게스트는 팀장이 정리 도구(`tools/cleanup_guests.py`)로 지운다. 게스트를 Google 계정으로 잇는 기능은 없다.
 - agent_consent(선택): `{version, agreed_at}`. AI 상세 분석의 외부 AI 전송 첫 사용 동의 기록이다. 없으면 동의하지 않은 것이다. 동의 문구가 바뀌면 version을 올리고 다시 묻는다. 탈퇴 때까지 프로필과 함께 보관한다(`docs/agent-privacy-spec.md` §4·§5.1).
 - 동의 철회는 `PUT /v1/profile`에서 agent_consent를 빼서 보내는 것이다. 이전 프로필에 있던 agent_consent가 새 프로필에 없으면 철회로 보고 그 사용자의 리포트 저장본을 모두 지운다. agreed_at은 서버가 정한다(새 동의나 version 변경이면 서버 시각, 그대로면 이전 값).
 
@@ -201,9 +205,9 @@ notice_id, report, expires_at, from_cache.
 
 ### Credits — 크레딧 잔액·사용 내역
 
-balance(0~5), next_refill_at(다음 충전 시각, 최대 보유면 `null`), entries(kind, amount, at, ref).
+balance(0~5), next_refill_at(다음 충전 시각, 최대 보유면 `null`, 게스트는 늘 `null`), entries(kind, amount, at, ref).
 
-- kind는 signup(+5) / daily(+1) / detail_analysis(−1) / external_search(−2)이고 amount는 충전이 +, 사용이 −다. ref는 사용 내역이 가리키는 id(상세 분석은 공고 id)이며 충전 내역은 `null`이다.
+- kind는 signup(+5, 게스트 +3) / daily(+1, 게스트는 없음) / detail_analysis(−1) / external_search(−2) / demo(+1~+5, 시연용 채우기)이고 amount는 충전이 +, 사용이 −다. ref는 사용 내역이 가리키는 id(상세 분석은 공고 id)이며 충전 내역은 `null`이다.
 - 내역은 최근 90일, 최신순이다. 실패해서 차감하지 않은 요청은 넣지 않는다.
 - 잔액은 서버만 쓰고 앱은 읽기만 한다(`docs/agent-privacy-spec.md` §10).
 
@@ -273,7 +277,7 @@ balance(0~5), next_refill_at(다음 충전 시각, 최대 보유면 `null`), ent
 
 인증 실패·권한 없음·입력 오류·미존재·일시 장애를 구분한다. 오류 응답은 `{error: {code, message}}`이고 code는 unauthenticated / permission_denied / invalid_argument / not_found / unavailable이고, 상세 분석 경로에서는 insufficient_credits / request_in_progress / consent_required도 쓴다. 목록 응답은 items, next_cursor(불투명 문자열 또는 null), generated_at을 가지며 limit은 최대 50이다. 앱에 스택 추적·비밀키를 반환하지 않는다. 추천 페이지 이동 중 중복·누락을 줄이도록 초기에는 소량 결과를 한 번에 받아 표시해도 된다.
 
-상세 분석·크레딧의 HTTP 경로(확정, D-039): `POST /v1/analysis`(request_detail_analysis), `GET /v1/analysis/{notice_id}`(get_detail_analysis), `GET /v1/credits`(get_credits). 동의 기록은 `PUT /v1/profile`의 agent_consent로 보낸다. 오류 HTTP 상태는 insufficient_credits 402, request_in_progress 409, consent_required 403이다.
+상세 분석·크레딧의 HTTP 경로(확정, D-039): `POST /v1/analysis`(request_detail_analysis), `GET /v1/analysis/{notice_id}`(get_detail_analysis), `GET /v1/credits`(get_credits). 시연용 `POST /v1/credits/demo-refill`은 잔액을 5까지 채우고 크레딧 페이지와 같은 모양을 돌려준다. 서버 설정 `GWITTIM_DEMO_CREDITS=1`일 때만 열리고 아니면 404(not_found). 켜도 월 비용 상한은 그대로 막는다. 동의 기록은 `PUT /v1/profile`의 agent_consent로 보낸다. 오류 HTTP 상태는 insufficient_credits 402, request_in_progress 409, consent_required 403이다.
 
 외부 공고 찾기(D-047): `POST /v1/external-search`(request_external_search, 계약 `external_search_request`·`external_search_response`). DeepSeek 웹 검색 결과 최대 5개(검색 출처로 확인된 것 먼저, 확인 못 한 것은 '출처 확인 안 됨' 표시), 결과 페이지는 DeepSeek가 다시 열어 응모 대상을 읽고 귀띔 판정 규칙으로 충족·확인 필요를 붙이며 미충족은 뺀다. 크레딧 2개, 결과가 없으면 환불. 결과와 학생이 적은 한 줄은 저장하지 않는다(docs/agent-privacy-spec.md §12.1).
 

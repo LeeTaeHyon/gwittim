@@ -1,0 +1,18 @@
+{
+  "balance": 2,
+  "next_refill_at": null,
+  "entries": [
+    {
+      "kind": "detail_analysis",
+      "amount": -1,
+      "at": "2026-11-25T02:00:00Z",
+      "ref": "synthetic-notice-001"
+    },
+    {
+      "kind": "signup",
+      "amount": 3,
+      "at": "2026-11-25T01:00:00Z",
+      "ref": null
+    }
+  ]
+}

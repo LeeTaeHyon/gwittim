@@ -563,10 +563,8 @@ class _Group extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          const SizedBox(height: 6),
+          AnswerChipWrap(
             children: [
               for (final item in items)
                 AnswerChip(label: item.name, selected: isSelected(item.id), onTap: () => onTap(item.id)),

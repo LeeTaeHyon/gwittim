@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'auth/auth_gate.dart';
 import 'auth/auth_service.dart';
 import 'data/api_repository.dart';
+import 'data/application_case.dart';
 import 'data/cached_repository.dart';
 import 'data/repository.dart';
 import 'ui/app_info.dart';
@@ -15,6 +16,7 @@ import 'ui/briefing_data.dart';
 import 'ui/calendar_screen.dart';
 import 'ui/common.dart';
 import 'ui/components.dart';
+import 'ui/guest_scope.dart';
 import 'ui/home_screen.dart';
 import 'ui/icons.dart';
 import 'ui/intro.dart';
@@ -26,9 +28,11 @@ import 'ui/theme.dart';
 // 실행 설정 (--dart-define):
 //   GWITTIM_API_BASE  서버 API 주소. 비우면 합성 샘플 자료로 동작한다.
 //   GWITTIM_DEV_TOKEN 로컬 개발 서버(backend.api.local)용 토큰. 있으면 Firebase 로그인 없이 그 토큰을 쓴다.
+//   GWITTIM_DEV_GUEST true면(GWITTIM_DEV_TOKEN=guest-token과 함께) 로그인 화면부터 게스트 흐름을 로컬에서 시험한다(D-054).
 //   둘 다 없고 API 주소만 있으면 Firebase Google 로그인 후 ID 토큰으로 서버를 부른다 (D-004).
 const _apiBase = String.fromEnvironment('GWITTIM_API_BASE');
 const _devToken = String.fromEnvironment('GWITTIM_DEV_TOKEN');
+const _devGuest = bool.fromEnvironment('GWITTIM_DEV_GUEST');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,6 +51,19 @@ Future<void> main() async {
     return;
   }
   final baseUrl = Uri.parse(_apiBase.endsWith('/') ? _apiBase : '$_apiBase/');
+  if (_devToken.isNotEmpty && _devGuest) {
+    _run(
+      AuthGate(
+        auth: LocalGuestAuthService(_devToken),
+        repositoryFor: (tokenProvider) =>
+            CachedNoticeRepository(ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: tokenProvider)),
+        openUrl: _openExternal,
+        themeController: theme,
+      ),
+      source: '로컬 게스트',
+    );
+    return;
+  }
   if (_devToken.isNotEmpty) {
     _run(
       GwittimApp(
@@ -138,8 +155,10 @@ class GwittimApp extends StatefulWidget {
     this.today,
     this.onSignOut,
     this.onDeleteAccount,
+    this.guest = false,
     this.briefingStore,
     this.themeController,
+    this.caseStore,
   });
 
   final NoticeRepository repository;
@@ -150,13 +169,20 @@ class GwittimApp extends StatefulWidget {
   final Future<void> Function()? onSignOut;
 
   /// 탈퇴 (D-024). 로그인 모드일 때만 있다. 계정 확인을 취소하면 false.
+  /// 게스트면 '게스트 끝내기'(D-054)로 쓰인다.
   final Future<bool> Function()? onDeleteAccount;
+
+  /// 게스트(익명 계정, D-054)로 들어왔는지. 내 정보 계정 칸과 크레딧 안내가 달라진다.
+  final bool guest;
 
   /// 하루 첫 실행 기록. 기본은 기기 저장소 (D-009).
   final BriefingStore? briefingStore;
 
   /// 화면(테마) 설정. 없으면 시스템 설정을 따르고 이번 실행에만 기억한다.
   final ThemeController? themeController;
+
+  /// 지원 건 기록(D-052). 기본은 기기 저장소. 테스트는 기억만 하는 저장소를 넣는다.
+  final ApplicationCaseStore? caseStore;
 
   @override
   State<GwittimApp> createState() => _GwittimAppState();
@@ -165,27 +191,52 @@ class GwittimApp extends StatefulWidget {
 class _GwittimAppState extends State<GwittimApp> {
   ThemeController? _ownTheme;
   late final BriefingStore _briefingStore = widget.briefingStore ?? PrefsBriefingStore();
+  ApplicationCaseStore? _ownCases;
+  late final ApplicationCaseStore _cases = widget.caseStore ?? (_ownCases = ApplicationCaseStore());
+
+  /// 저장·저장 취소·추천 목록·프로필 변경을 지원 건 기록에 한 곳에서 반영한다(care-loop-impl-spec §2).
+  late final NoticeRepository _repository = CaseTrackingRepository(widget.repository, _cases);
 
   ThemeController get _theme => widget.themeController ?? (_ownTheme ??= ThemeController());
 
   @override
+  void initState() {
+    super.initState();
+    _cases.load();
+  }
+
+  @override
   void dispose() {
     _ownTheme?.dispose();
+    _ownCases?.dispose();
     super.dispose();
+  }
+
+  /// 로그아웃하면 이 기기의 지원 건 기록을 지운다(같은 기기의 다른 계정이 보지 않게).
+  Future<void> _signOut() async {
+    await _cases.clearAll();
+    await widget.onSignOut!();
   }
 
   @override
   Widget build(BuildContext context) {
-    return GwMaterialApp(
-      themeController: _theme,
-      home: HomeShell(
-        repository: widget.repository,
-        openUrl: widget.openUrl,
-        today: widget.today,
-        onSignOut: widget.onSignOut,
-        onDeleteAccount: widget.onDeleteAccount,
-        briefingStore: _briefingStore,
-        themeController: _theme,
+    // 리포트 등 새로 여는 화면도 지원 건을 찾도록 앱 전체(MaterialApp) 위에 둔다
+    return ApplicationCaseScope(
+      notifier: _cases,
+      child: GuestScope(
+        guest: widget.guest,
+        child: GwMaterialApp(
+          themeController: _theme,
+          home: HomeShell(
+            repository: _repository,
+            openUrl: widget.openUrl,
+            today: widget.today,
+            onSignOut: widget.onSignOut == null ? null : _signOut,
+            onDeleteAccount: widget.onDeleteAccount,
+            briefingStore: _briefingStore,
+            themeController: _theme,
+          ),
+        ),
       ),
     );
   }
@@ -331,8 +382,10 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   /// 탈퇴하면 기기에 남은 학과 통계 추천 답(D-021)도 지운다.
   Future<bool> _deleteAccount() async {
     final store = widget.briefingStore;
+    final cases = ApplicationCaseScope.read(context);
     final done = await widget.onDeleteAccount!();
     if (done) {
+      await cases?.clearAll(); // 지원 건 기록(D-052)도 지운다. 기기 저장소를 못 써도 멈추지 않는다
       try {
         await store.saveMajorPicks(const MajorPickState());
       } catch (_) {

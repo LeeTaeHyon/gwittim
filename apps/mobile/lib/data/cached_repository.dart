@@ -125,6 +125,9 @@ class CachedNoticeRepository implements NoticeRepository {
   @override
   Future<Credits> getCredits() => _inner.getCredits();
 
+  @override
+  Future<Credits> demoRefillCredits() => _inner.demoRefillCredits();
+
   // 사전·통계는 앱에 든 파일이라 안쪽 저장소가 이미 한 번만 읽는다.
   @override
   Future<Map<String, String>> categoryNames() => _inner.categoryNames();
@@ -139,4 +142,5 @@ class CachedNoticeRepository implements NoticeRepository {
 /// 당겨서 새로 고침 전에 부른다. 캐시가 없는 저장소(샘플 등)는 할 일이 없다.
 void forgetCached(NoticeRepository repository) {
   if (repository is CachedNoticeRepository) repository.forget();
+  if (repository case WrappingRepository(:final inner)) forgetCached(inner);
 }

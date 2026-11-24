@@ -14,6 +14,7 @@ from firebase_admin import auth, credentials, firestore
 from google.auth.credentials import AnonymousCredentials
 
 from backend.agent.credits import CreditState, Hold, LedgerEntry
+from backend.api.deps import Caller
 from backend.publish import NOTICES, REVIEW_QUEUE, SAVED, USERS
 from backend.collectors.mjc_kakao.inbox import INBOX as KAKAO_INBOX
 
@@ -43,9 +44,12 @@ class FirebaseTokenVerifier:
     def __init__(self, app: firebase_admin.App):
         self.app = app
 
-    def verify(self, token: str) -> str | None:
+    def verify_caller(self, token: str) -> Caller | None:
+        """익명 로그인 토큰(firebase.sign_in_provider == "anonymous")은 게스트로 본다 (D-054)."""
         try:
-            return auth.verify_id_token(token, app=self.app)["uid"]
+            claims = auth.verify_id_token(token, app=self.app)
+            provider = (claims.get("firebase") or {}).get("sign_in_provider")
+            return Caller(claims["uid"], guest=provider == "anonymous")
         except (ValueError, auth.InvalidIdTokenError, auth.ExpiredIdTokenError, auth.RevokedIdTokenError, auth.CertificateFetchError):
             return None
 
@@ -231,6 +235,8 @@ class FirestoreSink(_Base):
         self.db.collection(NOTICES).document(notice_id).delete()
 
     def touch_public(self, notice_id, fields):
+        if "poster_url" in fields and fields["poster_url"] is None:
+            fields = dict(fields, poster_url=firestore.DELETE_FIELD)
         self.db.collection(NOTICES).document(notice_id).update(fields)
 
     def put_review(self, notice, issues):

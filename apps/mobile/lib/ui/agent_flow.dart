@@ -9,6 +9,7 @@ import 'common.dart';
 import 'components.dart';
 import 'credits_screen.dart';
 import 'format.dart';
+import 'guest_scope.dart';
 import 'skeleton.dart';
 import 'theme.dart';
 
@@ -528,73 +529,35 @@ class _Question extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 좁은 폭·큰 글자에서 한 줄에 안 들어가면 안내('여러 개 선택')가 통째로 아랫줄로 간다.
           Semantics(
             header: true,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, letterSpacing: -0.5, color: c.ink),
-                ),
-                const SizedBox(width: 8),
-                Text(hint, style: TextStyle(fontSize: 13, color: c.muted)),
-              ],
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: keepAll(title),
+                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, letterSpacing: -0.5, color: c.ink),
+                  ),
+                  TextSpan(
+                    text: '  ${keepTogether(hint)}',
+                    style: TextStyle(fontSize: 13, color: c.muted),
+                  ),
+                ],
+              ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 10),
+            padding: const EdgeInsets.only(top: 4, bottom: 6),
             child: Text(keepAll(why), style: captionStyle(context)),
           ),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          AnswerChipWrap(
             children: [
               for (final item in items)
                 AnswerChip(label: item.name, selected: isSelected(item.id), onTap: () => onTap(item.id)),
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// 고르는 칩 (외부 공고 찾기 화면도 씀): 높이 44, 테두리 1.5, 고르면 cta 면 (체크 아이콘 없음 — 폭이 바뀌어 줄바꿈이 달라지지 않게)
-class AnswerChip extends StatelessWidget {
-  const AnswerChip({super.key, required this.label, required this.selected, required this.onTap});
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gw;
-    final shape = StadiumBorder(side: BorderSide(color: selected ? c.cta : c.line, width: 1.5));
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: Material(
-        color: selected ? c.cta : c.card,
-        shape: shape,
-        child: InkWell(
-          customBorder: shape,
-          onTap: onTap,
-          // 글자 폭만큼만 차지한다(Container에 alignment를 주면 Wrap 안에서 한 줄을 다 채워 칩이 세로로 쌓였음)
-          child: Container(
-            height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Center(
-              widthFactor: 1,
-              child: Text(
-                label,
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: selected ? c.onCta : c.body),
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -749,7 +712,7 @@ class _AgentWaitScreenState extends State<AgentWaitScreen> {
       case RepositoryErrorKind.insufficientCredits:
         return MessageView(
           title: '크레딧 부족',
-          detail: '크레딧이 없습니다. 내일 0시에 1개가 충전됩니다.',
+          detail: GuestScope.of(context) ? '크레딧이 없습니다. $guestNoRefillText' : '크레딧이 없습니다. 내일 0시에 1개가 충전됩니다.',
           action: (
             label: '크레딧 보기',
             onPressed: () =>
@@ -934,9 +897,13 @@ class AnalysisReportScreen extends StatelessWidget {
     this.receivedAt,
     this.skippedExperience = false,
     this.eligibilityStatus,
+    this.caseLine,
   });
 
   final AnalysisResponse response;
+
+  /// 저장한 공고(지원 건)면 '내 지원 · 상태 · 다음 할 일 · 남은 날' 한 줄. 리포트 카드와 같은 문구(D-052)
+  final String? caseLine;
 
   /// 서버가 계산한 지원 자격 판정(met / not_met / needs_check). 추천 목록에서 들어온 공고만 있다.
   /// not_met일 때만 '지원 자격' 칸을 맨 위로 올린다. 리포트 글(LLM 문장)을 보고 순서를 정하지 않는다.
@@ -978,6 +945,16 @@ class AnalysisReportScreen extends StatelessWidget {
               style: captionStyle(context),
             ),
           ),
+          if (caseLine != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(color: c.summary, borderRadius: BorderRadius.circular(16)),
+              child: Text(
+                keepAll(caseLine!),
+                style: TextStyle(fontSize: 14, height: 1.5, fontWeight: FontWeight.w600, color: c.body),
+              ),
+            ),
           if (skippedExperience)
             Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -1255,7 +1232,11 @@ class AnalysisAction extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text(keepAll('크레딧 없음 · 내일 0시 1개 충전'), textAlign: TextAlign.center, style: captionStyle(context)),
+          Text(
+            keepAll(GuestScope.of(context) ? '크레딧 없음 · 게스트는 충전 없음' : '크레딧 없음 · 내일 0시 1개 충전'),
+            textAlign: TextAlign.center,
+            style: captionStyle(context),
+          ),
           Center(
             child: _LinkButton(label: '크레딧 보기', onPressed: onOpenCredits),
           ),

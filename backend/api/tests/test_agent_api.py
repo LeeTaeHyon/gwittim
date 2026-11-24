@@ -18,6 +18,7 @@ from backend.contracts import schema_errors
 ROOT = Path(__file__).resolve().parents[3]
 ALICE = {"Authorization": "Bearer token-alice"}
 BOB = {"Authorization": "Bearer token-bob"}
+GUEST = {"Authorization": "Bearer token-guest"}  # 익명 계정 (D-054)
 NOTICE = "n_synthetic_0001"  # 마감 2026-11-02(날짜만) -> 저장본 만료 2026-12-02 0시 KST
 CONSENT = {"version": "2026-11-21", "agreed_at": "2020-01-01T00:00:00Z"}
 
@@ -71,7 +72,7 @@ def deps(clock, provider):
         for n in (json.loads(p.read_text(encoding="utf-8")) for p in sorted((ROOT / "fixtures/valid/notice").glob("*.json")))
     }
     return Deps(
-        verifier=FakeTokenVerifier({"token-alice": "alice", "token-bob": "bob"}),
+        verifier=FakeTokenVerifier({"token-alice": "alice", "token-bob": "bob"}, guest_tokens={"token-guest": "guest"}),
         notices=InMemoryNotices(notices),
         profiles=InMemoryProfiles(),
         saved=InMemorySaved(),
@@ -594,3 +595,131 @@ def test_report_records_harness_version_in_doc_key_and_log(client, deps, caplog)
     assert doc["harness_version"] == HARNESS_VERSION
     assert doc["key"] != cache_key(NOTICE, {}) and len(doc["key"]) == 64
     assert f"harness={HARNESS_VERSION}" in caplog.text
+
+
+# ---------- 시연용 크레딧 채우기 ----------
+
+def test_demo_refill_is_404_unless_enabled(client, monkeypatch):
+    monkeypatch.delenv("GWITTIM_DEMO_CREDITS", raising=False)
+    assert client.post("/v1/credits/demo-refill", headers=ALICE).status_code == 404
+    monkeypatch.setenv("GWITTIM_DEMO_CREDITS", "0")
+    assert client.post("/v1/credits/demo-refill", headers=ALICE).status_code == 404
+
+
+def test_demo_refill_needs_login(client, monkeypatch):
+    monkeypatch.setenv("GWITTIM_DEMO_CREDITS", "1")
+    assert client.post("/v1/credits/demo-refill").status_code == 401
+
+
+def test_demo_refill_fills_to_max_and_logs_demo_entry(client, monkeypatch):
+    monkeypatch.setenv("GWITTIM_DEMO_CREDITS", "1")
+    consent(client)
+    analyze(client)
+    analyze(client, "r2", chips={"experience": ["java"]})
+    assert client.get("/v1/credits", headers=ALICE).json()["balance"] == 3
+    out = client.post("/v1/credits/demo-refill", headers=ALICE).json()
+    assert schema_errors("credits", out) == []
+    assert out["balance"] == 5
+    assert out["entries"][0] == {"kind": "demo", "amount": 2, "at": "2026-10-17T03:05:00Z", "ref": None}
+    # 이미 가득이면 내역을 더하지 않는다
+    again = client.post("/v1/credits/demo-refill", headers=ALICE).json()
+    assert again["balance"] == 5
+    assert [e["kind"] for e in again["entries"]].count("demo") == 1
+    # 다른 사용자 잔액은 그대로
+    assert client.get("/v1/credits", headers=BOB).json()["entries"] == [
+        {"kind": "signup", "amount": 5, "at": "2026-10-17T03:05:00Z", "ref": None}
+    ]
+
+
+# ---------- 게스트(익명 계정, D-054) ----------
+
+def test_guest_starts_with_three_and_gets_no_daily_refill(client, clock):
+    out = client.get("/v1/credits", headers=GUEST).json()
+    assert schema_errors("credits", out) == []
+    assert out == {
+        "balance": 3,
+        "next_refill_at": None,
+        "entries": [{"kind": "signup", "amount": 3, "at": "2026-10-17T03:05:00Z", "ref": None}],
+    }
+    clock.moment += timedelta(days=3)
+    later = client.get("/v1/credits", headers=GUEST).json()
+    assert later["balance"] == 3
+    assert later["next_refill_at"] is None
+    assert [e["kind"] for e in later["entries"]] == ["signup"]
+
+
+def test_google_user_unchanged_next_to_guest(client, clock):
+    consent(client)
+    analyze(client)
+    client.get("/v1/credits", headers=GUEST)
+    assert client.get("/v1/credits", headers=ALICE).json()["next_refill_at"] == "2026-10-17T15:00:00Z"
+    clock.moment += timedelta(days=1)
+    assert balance(client) == 5  # 매일 1개
+
+
+def test_guest_analysis_charges_one_without_refill(client, clock, provider):
+    consent(client, GUEST)
+    assert analyze(client, headers=GUEST).status_code == 200
+    out = client.get("/v1/credits", headers=GUEST).json()
+    assert out["balance"] == 2
+    assert out["next_refill_at"] is None  # 최대 보유가 아니어도 게스트는 충전 없음
+    assert [e["kind"] for e in out["entries"]] == ["detail_analysis", "signup"]
+    clock.moment += timedelta(days=1)
+    assert balance(client, GUEST) == 2
+    assert analyze(client, "r2", chips={"experience": ["java"]}, headers=GUEST).status_code == 200
+    assert analyze(client, "r3", chips={"experience": ["c"]}, headers=GUEST).status_code == 200
+    assert_error(analyze(client, "r4", chips={"experience": ["go"]}, headers=GUEST), 402, "insufficient_credits")
+    assert provider.calls == 3
+
+
+def test_guest_analysis_failure_refunds(client, deps):
+    consent(client, GUEST)
+    deps.llm = FailingProvider()
+    assert_error(analyze(client, headers=GUEST), 503, "unavailable")
+    out = client.get("/v1/credits", headers=GUEST).json()
+    assert out["balance"] == 3
+    assert [e["kind"] for e in out["entries"]] == ["signup"]
+
+
+def test_guest_profile_delete_removes_everything(client, deps):
+    consent(client, GUEST)
+    analyze(client, headers=GUEST)
+    assert client.put(f"/v1/saved/{NOTICE}", headers=GUEST).status_code in (200, 201)
+    assert deps.saved.list("guest")
+    assert client.delete("/v1/profile", headers=GUEST).status_code == 204
+    assert "guest" not in deps.reports.docs
+    assert "guest" not in deps.credits.states
+    assert deps.profiles.get("guest") is None
+    assert deps.saved.list("guest") == []
+    assert_error(client.get("/v1/profile", headers=GUEST), 404, "not_found")
+
+
+def test_guest_demo_refill_fills_to_max(client, monkeypatch):
+    monkeypatch.setenv("GWITTIM_DEMO_CREDITS", "1")
+    out = client.post("/v1/credits/demo-refill", headers=GUEST).json()
+    assert out["balance"] == 5
+    assert out["next_refill_at"] is None
+    assert out["entries"][0] == {"kind": "demo", "amount": 2, "at": "2026-10-17T03:05:00Z", "ref": None}
+
+
+def test_firebase_verifier_reads_anonymous_provider(monkeypatch):
+    from backend import firebase_store
+    from backend.api.deps import Caller
+
+    claims = {
+        "anon": {"uid": "u1", "firebase": {"sign_in_provider": "anonymous"}},
+        "google": {"uid": "u2", "firebase": {"sign_in_provider": "google.com"}},
+        "bare": {"uid": "u3"},
+    }
+
+    def fake_verify(token, app=None):
+        if token not in claims:
+            raise ValueError("bad token")
+        return claims[token]
+
+    monkeypatch.setattr(firebase_store.auth, "verify_id_token", fake_verify)
+    v = firebase_store.FirebaseTokenVerifier(app=None)
+    assert v.verify_caller("anon") == Caller("u1", guest=True)
+    assert v.verify_caller("google") == Caller("u2", guest=False)
+    assert v.verify_caller("bare") == Caller("u3", guest=False)
+    assert v.verify_caller("nope") is None

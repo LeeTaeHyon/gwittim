@@ -219,4 +219,7 @@ class ApiNoticeRepository implements NoticeRepository {
 
   @override
   Future<Credits> getCredits() async => Credits.fromJson(_json(await _send('GET', 'v1/credits')));
+
+  @override
+  Future<Credits> demoRefillCredits() async => Credits.fromJson(_json(await _send('POST', 'v1/credits/demo-refill')));
 }

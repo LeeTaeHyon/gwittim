@@ -29,7 +29,7 @@ def content_hash(raw: dict) -> str:
         "title": raw["title"],
         "body_text": raw["body_text"],
         "published": raw["published"],
-        "source_fields": raw["source_fields"],
+        "source_fields": {k: v for k, v in raw["source_fields"].items() if k != "poster_url"},
         "attachments": [a["file_name"] for a in raw["attachments"]],
     }
     canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))

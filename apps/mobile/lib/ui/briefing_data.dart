@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/application_case.dart';
 import '../data/models.dart';
+import 'case_view.dart';
 import 'format.dart';
 
 /// 오늘의 귀띔 내용 (D-009, D-018). list_recommendations·list_saved_notices 응답만으로 고른다. 점수는 쓰지 않는다.
@@ -10,6 +12,7 @@ import 'format.dart';
 class Briefing {
   const Briefing({
     this.savedSoon = const [],
+    this.startToday = const [],
     this.urgent,
     this.fresh = const [],
     this.career = const [],
@@ -18,8 +21,11 @@ class Briefing {
     this.urgentIds = const {},
   });
 
-  /// 저장한 모집 중 공고 중 확정 마감이 이틀 안에 오는 것 (가까운 순)
+  /// 저장한 모집 중 공고 중 확정 마감이 이틀 안에 오는 것 (가까운 순). 끝난 지원 건은 뺀다 (D-052)
   final List<SavedEntry> savedSoon;
+
+  /// 저장한 공고(지원 건) 중 저장·준비 중이고 신청 시작일이 오늘인 것 (D-052)
+  final List<SavedEntry> startToday;
 
   /// 7일 안에 마감되는 가장 가까운 공고 (확정 마감만, 맞춤 추천이면 관련 공고 중에서). 저장해서 위에 이미 나온 공고는 뺀다.
   final RecommendationEntry? urgent;
@@ -42,6 +48,7 @@ class Briefing {
 
   int get count => [
     savedSoon.isNotEmpty,
+    startToday.isNotEmpty,
     urgent != null,
     fresh.isNotEmpty,
     career.isNotEmpty,
@@ -57,6 +64,7 @@ class Briefing {
 /// 저장 공고 곧 마감, 7일 안 마감 후보, 새 공고, 진로 관련, 졸업생 진로 추천, 마감 변경의 공고 ID 합집합.
 int distinctNoticeCount(Briefing b) => {
   for (final s in b.savedSoon) s.notice.noticeId,
+  for (final s in b.startToday) s.notice.noticeId,
   ...b.urgentIds,
   for (final e in b.fresh) e.notice.noticeId,
   for (final e in b.career) e.notice.noticeId,
@@ -88,6 +96,9 @@ const urgentDays = 7;
 
 /// 저장 공고 마감 알림을 보내는 남은 날 (0이면 오늘 마감)
 const savedSoonDays = 2;
+
+/// 브리핑의 지원 건 카드(저장 곧 마감 + 신청 시작) 하루 최대 개수 (D-052)
+const maxCaseCards = 3;
 
 /// '새 공고'로 보는 게시일 범위: 오늘을 포함해 최근 3일
 const freshDays = 3;
@@ -129,12 +140,30 @@ Briefing buildBriefing(
   bool hasInterests = false,
   MajorPickState picks = const MajorPickState(),
   String? majorId,
+  Map<String, ApplicationCase>? cases,
+  bool Function(String id)? emphasizedEarlier,
 }) {
-  final savedSoon = [
+  // 지원 건(D-052): 끝난 건은 빼고, 오늘 앞선 실행에서 이미 강조한 건은 다시 넣지 않는다. 합쳐 최대 [maxCaseCards]개.
+  bool keep(SavedEntry s) {
+    if (cases == null) return true;
+    final id = s.notice.noticeId;
+    if (isEnded(stateOfSaved(s, cases[id], today))) return false;
+    return !(cases[id] != null && (emphasizedEarlier?.call(id) ?? false));
+  }
+
+  final soonAll = [
     for (final s in saved)
-      if ((daysLeft(s.notice, today) ?? 99) <= savedSoonDays) s,
+      if ((daysLeft(s.notice, today) ?? 99) <= savedSoonDays && keep(s)) s,
   ]..sort((a, b) => a.notice.applicationDeadline!.date.compareTo(b.notice.applicationDeadline!.date));
+  final savedSoon = cases == null ? soonAll : soonAll.take(maxCaseCards).toList();
   final soonIds = {for (final s in savedSoon) s.notice.noticeId};
+  // 오늘 신청을 시작하면서 곧 마감인 지원 건은 '저장한 공고' 카드에만(신청 시작 줄을 더함). 신청 시작 카드에서는 뺀다.
+  final startToday = cases == null
+      ? const <SavedEntry>[]
+      : [
+          for (final s in saved)
+            if (startsToday(s, cases[s.notice.noticeId], today) && keep(s) && !soonIds.contains(s.notice.noticeId)) s,
+        ].take(maxCaseCards - savedSoon.length).toList();
 
   RecommendationEntry? urgent;
   int? nearest;
@@ -176,6 +205,7 @@ Briefing buildBriefing(
 
   return Briefing(
     savedSoon: savedSoon,
+    startToday: startToday,
     urgent: urgent,
     fresh: fresh,
     career: career,

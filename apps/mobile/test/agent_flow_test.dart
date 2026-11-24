@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/ui/agent_data.dart';
+import 'package:gwittim/ui/components.dart';
 import 'package:gwittim/ui/credits_screen.dart';
+import 'package:gwittim/ui/guest_scope.dart';
 import 'package:gwittim/ui/profile_screen.dart';
 import 'package:gwittim/ui/report_screen.dart';
 import 'package:gwittim/ui/theme.dart';
@@ -40,6 +42,7 @@ Future<T> _open<T extends SampleNoticeRepository>(
   WidgetTester tester,
   T repo, {
   bool consent = false,
+  bool guest = false,
   Widget Function(T repo)? screen,
 }) async {
   // 목록 아래쪽까지 한 번에 만들어지도록 화면을 길게 둔다.
@@ -49,17 +52,20 @@ Future<T> _open<T extends SampleNoticeRepository>(
   await tester.runAsync(repo.preload);
   if (consent) await repo.grantAgentConsent();
   await tester.pumpWidget(
-    MaterialApp(
-      theme: gwittimTheme(),
-      home:
-          screen?.call(repo) ??
-          ReportScreen(
-            repository: repo,
-            noticeId: _id,
-            openUrl: (_) async => true,
-            today: DateTime(2026, 10, 17),
-            agentStore: MemoryAgentChipStore(),
-          ),
+    GuestScope(
+      guest: guest,
+      child: MaterialApp(
+        theme: gwittimTheme(),
+        home:
+            screen?.call(repo) ??
+            ReportScreen(
+              repository: repo,
+              noticeId: _id,
+              openUrl: (_) async => true,
+              today: DateTime(2026, 10, 17),
+              agentStore: MemoryAgentChipStore(),
+            ),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -113,9 +119,10 @@ void main() {
       await _tap(tester, find.text('동의하고 계속'));
       await tester.pumpAndSettle();
       expect((await repo.getProfile()).hasAgentConsent, isTrue);
-      expect(findText('해 본 것'), findsOneWidget);
-      expect(findText('가능한 시기'), findsOneWidget);
-      expect(findText('갈 수 있는 지역'), findsOneWidget);
+      // 질문 제목과 안내는 한 문단이라 큰 글자에서 안내가 통째로 아랫줄로 간다.
+      expect(findText('해 본 것  여러 개 선택'), findsOneWidget);
+      expect(findText('가능한 시기  하나 선택'), findsOneWidget);
+      expect(findText('갈 수 있는 지역  여러 개 선택'), findsOneWidget);
       await tester.tap(find.byTooltip('뒤로'));
       await tester.pumpAndSettle();
       expect(await _balance(repo), 5);
@@ -129,6 +136,27 @@ void main() {
       final button = tester.widget<FilledButton>(find.widgetWithText(FilledButton, '내 기준으로 자세히 보기'));
       expect(button.onPressed, isNull);
       expect(findText('크레딧 없음 · 내일 0시 1개 충전'), findsOneWidget);
+      expect(find.text('크레딧 보기'), findsOneWidget);
+    });
+
+    testWidgets('게스트 크레딧 0: 충전 시각 대신 게스트는 충전 없음 (D-054)', (tester) async {
+      final repo = _Repo()..debugSetBalance(0);
+      await _open(tester, repo, consent: true, guest: true);
+      await _reveal(tester, find.text('크레딧 보기'));
+      final button = tester.widget<FilledButton>(find.widgetWithText(FilledButton, '내 기준으로 자세히 보기'));
+      expect(button.onPressed, isNull);
+      expect(findText('크레딧 없음 · 게스트는 충전 없음'), findsOneWidget);
+      expect(findTextContaining('내일 0시'), findsNothing);
+    });
+
+    testWidgets('게스트 크레딧 부족 안내: 기존 안내 화면, 충전 약속 없음', (tester) async {
+      final repo = _Repo()..failWith = RepositoryErrorKind.insufficientCredits;
+      await _open(tester, repo, consent: true, guest: true);
+      await _tap(tester, findText('내 기준으로 자세히 보기'));
+      await _tap(tester, find.text('건너뛰고 분석'));
+      expect(findText('크레딧 부족'), findsOneWidget);
+      expect(findTextContaining('게스트는 매일 충전이 없습니다.'), findsOneWidget);
+      expect(findTextContaining('내일 0시'), findsNothing);
       expect(find.text('크레딧 보기'), findsOneWidget);
     });
 
@@ -161,6 +189,19 @@ void main() {
       expect(repo.sentChips!.experience, ['none_yet']);
       expect(repo.sentChips!.regions, ['any']);
       expect(repo.sentChips!.period, 'vacation');
+    });
+
+    testWidgets('칩은 높이 36으로 보이고, 위아래 여백까지 누르는 영역이다', (tester) async {
+      final repo = await toQuestions(tester);
+      final chip = find.ancestor(of: find.text('파이썬'), matching: find.byType(AnswerChip));
+      final face = find.descendant(of: chip, matching: find.byType(Material));
+      expect(tester.getSize(face).height, 36);
+      expect(tester.getSize(chip).height, 44);
+      // 칩 면 바로 위 여백(2만큼 위)을 눌러도 고른다
+      await tester.tapAt(tester.getRect(face).topCenter - const Offset(0, 2));
+      await tester.pumpAndSettle();
+      await _tap(tester, find.text('분석하기'));
+      expect(repo.sentChips!.experience, ['python']);
     });
 
     testWidgets('단독 칩을 고른 뒤 다른 칩을 누르면 단독 칩이 꺼진다', (tester) async {
@@ -320,6 +361,37 @@ void main() {
       // 줄을 누르면 받은 분석으로
       await _tap(tester, findTextContaining('상세 분석 · '));
       expect(findText('나와 이 공고'), findsOneWidget);
+    });
+
+    testWidgets('게스트 크레딧 페이지: 다음 충전 대신 게스트 안내, 규칙도 충전 없음 (D-054)', (tester) async {
+      final repo = _Repo()..debugSetBalance(1);
+      await _open(tester, repo, guest: true, screen: (r) => CreditsScreen(repository: r));
+      expect(findText('1 / 5'), findsOneWidget);
+      expect(findText(guestNoRefillText), findsOneWidget);
+      expect(findTextContaining('다음 충전'), findsNothing);
+      expect(findText('게스트는 처음 3개, 매일 충전 없음'), findsOneWidget);
+      expect(findText('매일 1개 충전, 최대 5개'), findsNothing);
+    });
+
+    testWidgets('시연용 채우기: 일반 빌드엔 버튼이 없고, 시연용 빌드에선 눌러서 5로 채움', (tester) async {
+      final repo = _Repo()..debugSetBalance(1);
+      await tester.pumpWidget(MaterialApp(theme: gwittimTheme(), home: CreditsScreen(repository: repo)));
+      await tester.pumpAndSettle();
+      expect(findText('시연용 크레딧 채우기'), findsNothing);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: gwittimTheme(),
+          home: CreditsScreen(key: UniqueKey(), repository: repo, showDemoRefill: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(findText('1 / 5'), findsOneWidget);
+      await _tap(tester, findText('시연용 크레딧 채우기'));
+      expect(findText('5 / 5'), findsOneWidget);
+      expect(findText('크레딧을 5개로 채웠습니다.'), findsOneWidget);
+      await _reveal(tester, findText('시연용 채우기'));
+      expect(findText('시연용 채우기'), findsOneWidget); // 내역 줄
+      expect(findText('+4'), findsOneWidget);
     });
 
     testWidgets('최대 보유 문구', (tester) async {

@@ -12,9 +12,17 @@ from backend.agent.credits import CreditState
 KST = timezone(timedelta(hours=9), "Asia/Seoul")
 
 
+@dataclass(frozen=True)
+class Caller:
+    """토큰으로 확인한 요청자. guest는 Firebase 익명 계정(D-054). 저장하지 않고 요청마다 토큰에서 읽는다."""
+
+    uid: str
+    guest: bool = False
+
+
 class TokenVerifier(Protocol):
-    def verify(self, token: str) -> str | None:
-        """유효하면 uid, 아니면 None. 사용자 ID는 이 결과로만 정한다 (SPEC §5)."""
+    def verify_caller(self, token: str) -> Caller | None:
+        """유효하면 요청자, 아니면 None. 사용자 ID는 이 결과로만 정한다 (SPEC §5)."""
         ...
 
 
@@ -89,12 +97,17 @@ class SystemClock:
 
 @dataclass
 class FakeTokenVerifier:
-    """테스트·로컬용: 토큰 문자열 → uid 표."""
+    """테스트·로컬용: 토큰 문자열 → uid 표. guest_tokens의 토큰은 게스트(익명 계정)로 본다."""
 
     tokens: dict[str, str] = field(default_factory=dict)
+    guest_tokens: dict[str, str] = field(default_factory=dict)
 
-    def verify(self, token: str) -> str | None:
-        return self.tokens.get(token)
+    def verify_caller(self, token: str) -> Caller | None:
+        if token in self.tokens:
+            return Caller(self.tokens[token])
+        if token in self.guest_tokens:
+            return Caller(self.guest_tokens[token], guest=True)
+        return None
 
 
 @dataclass
@@ -223,6 +236,15 @@ class InMemoryReports:
                 del by_key[key]
                 removed += 1
         return removed
+
+
+def delete_user_data(uid: str, *, saved: SavedStore, reports: ReportStore, credits: CreditStore,
+                     profiles: ProfileStore) -> None:
+    """한 사용자의 서버 정보(저장·리포트·크레딧·프로필)를 지운다. DELETE /v1/profile과 게스트 정리 도구가 같이 쓴다."""
+    saved.delete_all(uid)
+    reports.delete_all(uid)
+    credits.delete(uid)
+    profiles.delete(uid)
 
 
 @dataclass
