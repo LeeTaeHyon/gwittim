@@ -231,6 +231,8 @@ class FirestoreSink(_Base):
         self.db.collection(NOTICES).document(notice_id).delete()
 
     def touch_public(self, notice_id, fields):
+        if "poster_url" in fields and fields["poster_url"] is None:
+            fields = dict(fields, poster_url=firestore.DELETE_FIELD)
         self.db.collection(NOTICES).document(notice_id).update(fields)
 
     def put_review(self, notice, issues):

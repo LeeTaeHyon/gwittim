@@ -50,7 +50,8 @@ def ingest(raw: dict, store: PipelineStore) -> Result:
         record = RawRecord(key, raw, expected, 1, raw["collected_at"], raw["collected_at"])
         outcome = Outcome.NEW
     elif existing.content_hash == expected:
-        record = RawRecord(key, existing.raw, expected, existing.notice_version, existing.first_collected_at, raw["collected_at"])
+        latest = dict(existing.raw, source_fields=raw["source_fields"])
+        record = RawRecord(key, latest, expected, existing.notice_version, existing.first_collected_at, raw["collected_at"])
         outcome = Outcome.UNCHANGED  # 다시 보였으므로 삭제 확인 횟수는 초기화
     else:
         record = RawRecord(key, raw, expected, existing.notice_version + 1, existing.first_collected_at, raw["collected_at"])

@@ -154,6 +154,7 @@ class Notice {
     this.applyUrl,
     this.relatedNotices = const [],
     this.bodyPreview = false,
+    this.posterUrl,
   });
 
   final NoticeSummary summary;
@@ -176,6 +177,7 @@ class Notice {
 
   /// 폰 알림으로만 받은 알림톡이라 본문 뒷부분이 빠졌을 수 있음 (D-040).
   final bool bodyPreview;
+  final String? posterUrl;
 
   factory Notice.fromJson(Map<String, dynamic> m) => Notice(
     summary: NoticeSummary.fromJson(m),
@@ -190,6 +192,7 @@ class Notice {
       for (final r in (m['related_notices'] as List?) ?? const [])
         (noticeId: r['notice_id'] as String, title: r['title'] as String),
     ],
+    posterUrl: m['poster_url'] as String?,
     bodyPreview: m['body_preview'] as bool? ?? false,
   );
 }

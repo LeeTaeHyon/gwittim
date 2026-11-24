@@ -2,6 +2,15 @@
 
 마지막 갱신: 2026-11-24 (홈 한 목록, 신청 완료까지 챙기기 구현)
 
+## 명지 게시판 상세 포스터 (2026-11-24, feat/notice-poster)
+
+- 팀장 승인으로 이슈 없이 구현한 로컬 작업 트리. 선택 필드 `poster_url`과 원문 해시 제외 규칙은 SPEC §5, RawNotice·Notice 스키마와 명지 샘플에 반영했다. 기존 계약 버전 1.0을 유지한다.
+- `mjc_www/parser.py`·`adapter.py`가 본문 편집기 이미지 첫 장을 고른다. `common/identity.py`·`pipeline.py`, `analysis/notice.py`, `publish/publisher.py`·`firebase_store.py`가 포스터만 추가·교체·제거하면 기존 버전·요약·지원 조건·마감·변경 이력을 보존한다. 기존 대체텍스트나 본문 자체가 바뀌면 종전 수집 규칙을 따른다. 첫 후보가 공통 채용 안내 이미지일 수 있다.
+- 앱의 `models.dart`, `report_screen.dart`, `notice_poster.dart`, `theme.dart`가 상세 미리보기·확대와 실패 처리를 담당한다. 목록 모델은 포스터를 읽지 않는다. UI 규칙과 결정은 ui-style·decisions에 기록했다.
+- 전체 검사: `uv run pytest -q -p no:cacheprovider --basetemp=data/local/tests-06` 631 통과·3 건너뜀, `uv run python tools/validate_contracts.py` 스키마 16개·정상 38개·비정상 51개 통과. `flutter analyze --no-pub` 이상 없음, `flutter test --no-pub` 449 통과·2 건너뜀. 포스터 변경 시 분석기가 호출되면 실패하는 테스트를 일반·폴백 분석 결과 모두에 적용했다.
+- 로컬 실제 데이터 시험: 게시판 네 곳에서 6건을 재수집해 저장 표본과 모두 일치했다. 기존 공고 사본을 채운 결과는 6건 확인·5건 갱신·0건 실패. chzzk_pixel에서 세로·가로 포스터, 닫기와 Android 뒤로 가기, 미표시·404, 라이트·다크·글자 2배를 확인했다. 기존 8765 포트가 사용 중이라 로컬 검증 서버는 8766을 사용했다. 작업 트리의 git 제외 폴더 `data/local/poster-check.png`에 여섯 화면을 모았고 `data/local/zoom-check.png`에서 전체·핀치 확대·이동 결과를 비교할 수 있다. 최종 디버그 빌드 설치와 화면 조작은 성공했다. `flutter run`의 VM 서비스 자동 연결이 지연되어 실제 화면은 ADB로 확인한 뒤 검증 프로세스를 종료했다.
+- 기존 공고 채우기: 정기 배치는 최근 목록 창만 읽는다. 작업 트리에서 `uv run python -m backend.collectors.mjc_www.backfill_posters data/local/notices.json data/local/notices-with-posters.json`으로 새 로컬 사본을 만든다. 원본과 비교해 바뀐 필드, 갱신·실패 건수를 확인한다. 게시본 반영은 코드 검토와 신규 계약 적용 후 별도 승인으로 배치와 겹치지 않는 시간에 같은 명령에 `--firestore-project <프로젝트 ID>`를 더하고 새 출력 경로를 지정한다. 공개 문서의 포스터 필드만 부분 갱신하며, 수집 중 게시본이 수정되면 덮어쓰지 않고 실패로 기록한다. 운영 반영·배포는 미실행.
+
 ## 현재 상태
 
 - SPEC 0.2(D-001~006 확정: 2026-10-18 팀장 결정으로 확정), `contracts/` 스키마·사전(draft)·`fixtures/` 합성 샘플.

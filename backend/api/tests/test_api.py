@@ -296,3 +296,15 @@ def test_ingest_rejects_bad_fields(ingest_client, change):
     client, inbox = ingest_client
     assert_error(client.post("/v1/ingest/kakao", json={**PHONE_NOTICE, **change}, headers=INGEST), 400, "invalid_argument")
     assert inbox.docs == {}
+
+
+def test_poster_only_in_detail(client):
+    notice = fixture("notice/date_only_timezone_unknown.json")
+    nid = notice["notice_id"]
+    assert client.get(f"/v1/notices/{nid}", headers=ALICE).json()["poster_url"] == notice["poster_url"]
+    client.put("/v1/profile", headers=ALICE, json=profile_body())
+    client.put(f"/v1/saved/{nid}", headers=ALICE)
+    for path in ("/v1/recommendations", "/v1/recommendations?q=" + notice["title"], "/v1/saved"):
+        items = client.get(path, headers=ALICE).json()["items"]
+        assert nid in [item["notice"]["notice_id"] for item in items]
+        assert all("poster_url" not in item["notice"] for item in items)
