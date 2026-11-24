@@ -129,7 +129,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('나에게 맞는 공고'), findsOneWidget);
+    expect(find.text('다음 마감'), findsOneWidget); // 홈이 다 그려졌다 (D-050)
     expect(counting.calls['recommendations'], 1);
     expect(counting.calls['saved'], 1);
   });

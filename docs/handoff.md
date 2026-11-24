@@ -1,6 +1,6 @@
 # 인수인계 (handoff)
 
-마지막 갱신: 2026-11-23 (1주차 UI)
+마지막 갱신: 2026-11-24 (홈 한 목록, 신청 완료까지 챙기기 설계)
 
 ## 현재 상태
 
@@ -628,3 +628,9 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 - 1주차 UI(`feat/ui-week1`): 폰에서 탈퇴 완료 팝업·큰 글자 확인. 숭의 공지 추천 순서·관심 분야 태그, 숭의 학과 졸업생 진로 통계는 따로 정함
 - 숭의 정답 초안 20건 팀장 확인 → 공통 평가셋 55건
 - 커밋 안 된 문서: `docs/final-prep-todo.md`(3주 계획, UI 다듬기·작은 기능 시기, 앱 밖 할 일 결정 대기, 크레딧 값 다시 보기), `docs/stage2-results.md`(한 줄)
+
+## 홈 한 목록 (2026-11-24, D-050, `feat/home-single-list`)
+
+- 홈은 마감순 한 목록: 귀띔 말풍선(달라진 것의 건수) → 이번 주 마감 → 새 공고 → 마감이 먼 맞춤 공고. 같은 공고는 한 번만. 명세 [home-single-list-spec.md](home-single-list-spec.md), 검토 뒤 수정 [home-single-list-fix-spec.md](home-single-list-fix-spec.md)
+- 제목 줄바꿈(`keepAll`): 끝 어절 묶음이 길면 묶지 않음
+- 남은 것: 브리핑 범위(달라진 것만) 구현 전이라 말풍선 건수와 브리핑 머리 숫자가 다를 수 있음. 같은 공모전이 출처 두 곳에서 따로 게시되면 같은 제목이 두 줄 나옴(데이터 쪽). 폰·다크 화면 확인 전

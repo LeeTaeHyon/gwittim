@@ -52,7 +52,7 @@ Widget? ddayPill(NoticeSummary n, DateTime today) {
   return Pill(label, tone: left <= 7 ? PillTone.urgent : PillTone.chip);
 }
 
-/// 홈 공고 카드의 조건 상태: 글자 칩 대신 지름 26 원 아이콘. 색은 [Pill]과 같은 톤
+/// 홈 목록 줄의 조건 상태: 글자 칩 대신 지름 26 원 아이콘. 색은 [Pill]과 같은 톤
 /// (충족 chip·onChip, 확인 필요 checkSoft·check, 미충족 urgentSoft·urgent).
 class EligibilityDot extends StatelessWidget {
   const EligibilityDot(this.status, {super.key});

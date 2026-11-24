@@ -341,7 +341,7 @@ class _SavedRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    keepAll(n.title),
+                    keepTitle(n.title),
                     style: TextStyle(
                       fontSize: 16,
                       height: 1.45,

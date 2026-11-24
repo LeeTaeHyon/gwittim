@@ -67,15 +67,14 @@ class SkeletonBox extends StatelessWidget {
 
 /// 화면 바탕 위의 카드 자리. 라이트의 neutral은 바탕색과 같아서, 카드 면 위에 회색 면을 올린다.
 class _CardShape extends StatelessWidget {
-  const _CardShape({required this.children, this.bubble = false});
+  const _CardShape({required this.children});
 
   final List<Widget> children;
-  final bool bubble;
 
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(color: context.gw.card, borderRadius: bubble ? Gw.bubble : BorderRadius.circular(20)),
+    decoration: BoxDecoration(color: context.gw.card, borderRadius: BorderRadius.circular(20)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
   );
 }
@@ -119,9 +118,30 @@ class ListSkeleton extends StatelessWidget {
   );
 }
 
-/// 홈: 머리 → 오늘의 귀띔 → 다가오는 마감 → 나에게 맞는 공고
+/// 홈 (D-050): 머리 → 구역 제목 → 줄 5개 카드(이번 주 마감) → 구역 제목 → 줄 3개 카드
 class HomeSkeleton extends StatelessWidget {
   const HomeSkeleton({super.key});
+
+  static Widget _rows(int count) => _CardShape(
+    children: [
+      for (var i = 0; i < count; i++)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              SkeletonBox(width: 44, height: 44, radius: 12),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [SkeletonBox(height: 15), SizedBox(height: 6), SkeletonBox(width: 120, height: 12)],
+                ),
+              ),
+            ],
+          ),
+        ),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) => GwSkeleton(
@@ -137,51 +157,13 @@ class HomeSkeleton extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-        const _CardShape(
-          bubble: true,
-          children: [
-            SkeletonBox(width: 70, height: 14),
-            SizedBox(height: 10),
-            SkeletonBox(width: 190, height: 24),
-            SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(child: SkeletonBox(height: 48, radius: 14)),
-                SizedBox(width: 8),
-                Expanded(child: SkeletonBox(height: 48, radius: 14)),
-                SizedBox(width: 8),
-                Expanded(child: SkeletonBox(height: 48, radius: 14)),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 28),
         const SkeletonBox(width: 110, height: 20),
         const SizedBox(height: 12),
-        _CardShape(
-          children: [
-            for (var i = 0; i < 3; i++)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    SkeletonBox(width: 44, height: 44, radius: 22),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [SkeletonBox(height: 15), SizedBox(height: 6), SkeletonBox(width: 120, height: 12)],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
+        _rows(5),
         const SizedBox(height: 28),
         const SkeletonBox(width: 130, height: 20),
         const SizedBox(height: 12),
-        _noticeShape(),
+        _rows(3),
       ],
     ),
   );
