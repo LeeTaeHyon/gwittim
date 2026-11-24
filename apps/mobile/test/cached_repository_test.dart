@@ -115,6 +115,9 @@ void main() {
   });
 
   testWidgets('앱을 켜면 네 탭이 추천 목록·저장 목록을 한 번씩만 받는다', (tester) async {
+    tester.view.physicalSize = const Size(800, 2400); // 홈 전체가 한 화면에 보이게
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final counting = CountingRepository();
     await tester.runAsync(counting.preload);
     await tester.pumpWidget(
@@ -126,7 +129,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('나에게 맞는 공고'), findsOneWidget);
+    expect(find.text('다음 마감'), findsOneWidget); // 홈이 다 그려졌다 (D-050)
     expect(counting.calls['recommendations'], 1);
     expect(counting.calls['saved'], 1);
   });

@@ -75,6 +75,8 @@ void main() {
     double top(String text) => tester.getTopLeft(find.text(text)).dy;
     expect(top('입력한 정보 없음'), lessThan(top('입력한 정보는 추천에만 사용')));
     await tester.scrollUntilVisible(find.text('라이트'), 200, scrollable: profileList());
+    await tester.ensureVisible(find.text('다크')); // 이용 칸이 늘어 가장자리에 걸치지 않게
+    await tester.pumpAndSettle();
     expect(top('설정'), lessThan(top('화면')));
     expect(find.text('계정'), findsNothing); // 로그인 모드가 아니면 계정 칸이 없다
   });
@@ -104,8 +106,12 @@ void main() {
 
     // 1단계 학적
     expect(find.bySemanticsLabel('1/3단계'), findsOneWidget);
-    expect(find.text('명지전문대학'), findsOneWidget); // P0 학교가 기본
+    expect(find.text('명지전문대학'), findsNothing); // 학교는 기본값 없이 비어 있다 (사용자가 말하지 않은 값을 채우지 않음)
     expect(find.text('저장하기'), findsNothing);
+    await tapIn(tester, editList(), find.text('학교'));
+    await tester.tap(find.text('명지전문대학'));
+    await tester.pumpAndSettle();
+    expect(find.text('명지전문대학'), findsOneWidget);
     await tapIn(tester, editList(), find.text('2학년'));
     await tapIn(tester, editList(), find.text('2학년')); // 고른 칸을 다시 누르면 비운다
     await tapIn(tester, editList(), find.text('3학년'));
@@ -158,6 +164,139 @@ void main() {
     expect(find.text('AI·데이터'), findsOneWidget);
     expect(find.text('소프트웨어 개발자'), findsOneWidget);
     expect(find.text('고치기'), findsOneWidget);
+  });
+
+  group('목록에 없는 학교 (D-043)', () {
+    final consent = AgentConsent(version: 'v-test', agreedAt: DateTime.utc(2026, 11, 20));
+
+    Future<SampleNoticeRepository> openEdit(WidgetTester tester, [UserProfile? saved]) async {
+      final repo = SampleNoticeRepository(personalized: false);
+      if (saved != null) await repo.updateProfile(saved);
+      await openProfile(tester, repository: repo);
+      await tester.tap(find.text(saved == null ? '입력하기' : '고치기'));
+      await tester.pumpAndSettle();
+      return repo;
+    }
+
+    Finder inDialog(String text) => find.descendant(of: find.byType(Dialog), matching: find.text(text));
+
+    Future<void> pickSchool(WidgetTester tester, String name) async {
+      await tapIn(tester, editList(), find.text('학교'));
+      await tester.tap(inDialog(name));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> saveAll(WidgetTester tester) async {
+      await next(tester);
+      await next(tester);
+      await tester.tap(find.text('저장하기'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('학교 선택지는 선택 안 함, 명지전문대학, 목록에 없는 학교 세 가지', (tester) async {
+      await openEdit(tester);
+      await tapIn(tester, editList(), find.text('학교'));
+      expect(inDialog('선택 안 함'), findsOneWidget);
+      expect(inDialog('명지전문대학'), findsOneWidget);
+      expect(inDialog('목록에 없는 학교'), findsOneWidget);
+    });
+
+    testWidgets('목록에 없는 학교를 고르면 학과 칸이 꺼지고 안내가 보이며, 저장 값은 학과 없음', (tester) async {
+      final repo = await openEdit(
+        tester,
+        UserProfile(universityId: 'mjc', majorId: 'mjc.computer_engineering', agentConsent: consent),
+      );
+      expect(find.text('컴퓨터공학과'), findsOneWidget);
+      await pickSchool(tester, '목록에 없는 학교');
+      expect(find.text('목록에 없는 학교'), findsOneWidget);
+      expect(find.text('학과'), findsNothing);
+      expect(find.text('컴퓨터공학과'), findsNothing);
+      expect(find.text('학교 공지는 지원 학교 학생에게만 보입니다. 교외 공모전은 그대로 추천됩니다.'), findsOneWidget);
+      await saveAll(tester);
+
+      final p = (await repo.getProfile())!;
+      expect(p.universityId, 'unlisted');
+      expect(p.majorId, isNull);
+      expect(p.agentConsent?.version, 'v-test'); // 동의 기록은 그대로 이어 보낸다 (#118)
+      expect(find.text('목록에 없는 학교'), findsOneWidget); // 요약 카드
+    });
+
+    testWidgets('선택 안 함으로 학교를 비우면 null로 저장되고 명지로 채워지지 않는다', (tester) async {
+      final repo = await openEdit(tester, const UserProfile(universityId: 'mjc', interestIds: ['software']));
+      await pickSchool(tester, '선택 안 함');
+      expect(find.text('명지전문대학'), findsNothing);
+      await saveAll(tester);
+      expect((await repo.getProfile())!.universityId, isNull);
+    });
+  });
+
+  group('숭의여자대학교 (D-045)', () {
+    Finder inDialog(String text) => find.descendant(of: find.byType(Dialog), matching: find.text(text));
+
+    Future<void> pickSchool(WidgetTester tester, String name) async {
+      await tapIn(tester, editList(), find.text('학교'));
+      await tester.tap(inDialog(name));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('학교 선택지는 사전 순서대로 선택 안 함, 명지, 숭의, 목록에 없는 학교', (tester) async {
+      await openProfile(tester);
+      await tester.tap(find.text('입력하기'));
+      await tester.pumpAndSettle();
+      await tapIn(tester, editList(), find.text('학교'));
+      final names = tester.widgetList<Text>(find.descendant(of: find.byType(Dialog), matching: find.byType(Text)));
+      final order = [for (final t in names) t.data].whereType<String>().where(
+        (s) => ['선택 안 함', '명지전문대학', '숭의여자대학교', '목록에 없는 학교'].contains(s),
+      );
+      expect(order.toList(), ['선택 안 함', '명지전문대학', '숭의여자대학교', '목록에 없는 학교']);
+    });
+
+    testWidgets('숭의를 고르면 숭의 학과만 보이고 sewu로 저장되며, 학교를 바꾸면 학과가 비워진다', (tester) async {
+      final repo = await openProfile(tester);
+      await tester.tap(find.text('입력하기'));
+      await tester.pumpAndSettle();
+
+      await pickSchool(tester, '숭의여자대학교');
+      await tapIn(tester, editList(), find.text('학과'));
+      final sewuMajors = (await tester.runAsync(() => repo.dictionary('majors')))!.where((m) => m.universityId == 'sewu');
+      expect(sewuMajors, isNotEmpty);
+      expect(inDialog('컴퓨터공학과'), findsNothing); // 명지 학과
+      final first = sewuMajors.first;
+      await tester.tap(inDialog(first.name));
+      await tester.pumpAndSettle();
+      expect(find.text(first.name), findsOneWidget);
+
+      // 관심 분야 단계: 통계가 없는 학과라도 화면이 정상이다
+      await next(tester);
+      expect(findTextContaining('졸업생이 많이 가는 분야'), findsNothing);
+      expect(find.text('소프트웨어 개발'), findsOneWidget);
+      await tester.tap(find.byTooltip('뒤로'));
+      await tester.pumpAndSettle();
+
+      await pickSchool(tester, '명지전문대학');
+      expect(find.text(first.name), findsNothing); // 다른 학교 학과는 남지 않는다
+      await pickSchool(tester, '숭의여자대학교');
+      expect(find.text(first.name), findsNothing);
+      await tapIn(tester, editList(), find.text('학과'));
+      await tester.tap(inDialog(first.name));
+      await tester.pumpAndSettle();
+
+      await next(tester);
+      await next(tester);
+      await tester.tap(find.text('저장하기'));
+      await tester.pumpAndSettle();
+      final p = (await repo.getProfile())!;
+      expect(p.universityId, 'sewu');
+      expect(p.majorId, first.id);
+      expect(find.text('숭의여자대학교 ${first.name}'), findsOneWidget);
+    });
+
+    testWidgets('학교를 선택 안 함으로 두면 학과 칸은 그대로 있다 (기존 동작)', (tester) async {
+      await openProfile(tester);
+      await tester.tap(find.text('입력하기'));
+      await tester.pumpAndSettle();
+      expect(find.text('학과'), findsWidgets);
+    });
   });
 
   testWidgets('학과를 고르지 않았으면 관심 분야 단계에 학과 통계 칸이 없다', (tester) async {
@@ -231,6 +370,9 @@ void main() {
     await openProfile(tester);
     await tester.tap(find.text('입력하기'));
     await tester.pumpAndSettle();
+    await tapIn(tester, editList(), find.text('학교'));
+    await tester.tap(find.text('명지전문대학'));
+    await tester.pumpAndSettle();
     await tapIn(tester, editList(), find.text('학과'));
     final sheet = find.byType(Dialog);
     Finder inSheet(Finder f) => find.descendant(of: sheet, matching: f);
@@ -271,6 +413,9 @@ void main() {
     final repo = await openProfile(tester);
     await tester.tap(find.text('입력하기'));
     await tester.pumpAndSettle();
+    await tapIn(tester, editList(), find.text('학교'));
+    await tester.tap(find.text('명지전문대학'));
+    await tester.pumpAndSettle();
     await tapIn(tester, editList(), find.text('학과'));
     await tester.tap(find.text('컴퓨터공학과'));
     await tester.pumpAndSettle();
@@ -290,6 +435,8 @@ void main() {
     await openProfile(tester);
     final thumb = find.byKey(const ValueKey('segment-thumb'));
     await tester.scrollUntilVisible(find.text('라이트'), 200, scrollable: profileList());
+    await tester.ensureVisible(find.text('다크')); // 이용 칸이 늘어 가장자리에 걸치지 않게
+    await tester.pumpAndSettle();
     await tester.pumpAndSettle();
     double x() => tester.getCenter(thumb).dx;
     double center(String label) => tester.getCenter(find.text(label)).dx;
@@ -308,6 +455,8 @@ void main() {
 
     // 고치기의 학년: 고른 칸을 다시 누르면 바탕이 그 자리에서 흐려진다
     await tester.scrollUntilVisible(find.text('입력하기'), -200, scrollable: profileList());
+    await tester.ensureVisible(find.text('입력하기'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('입력하기'));
     await tester.pumpAndSettle();
     final grade = find.descendant(
@@ -330,6 +479,8 @@ void main() {
     addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
     await openProfile(tester);
     await tester.scrollUntilVisible(find.text('라이트'), 200, scrollable: profileList());
+    await tester.ensureVisible(find.text('다크')); // 이용 칸이 늘어 가장자리에 걸치지 않게
+    await tester.pumpAndSettle();
     await tester.tap(find.text('다크'));
     await tester.pump();
     await tester.pump();

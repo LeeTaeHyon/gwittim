@@ -1,0 +1,13 @@
+{
+  "_expect": {
+    "keyword": "maxItems",
+    "path": "regions"
+  },
+  "data": {
+    "request_id": "synthetic-req-0105",
+    "regions": [
+      "any",
+      "seoul"
+    ]
+  }
+}

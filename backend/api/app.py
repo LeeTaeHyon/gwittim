@@ -9,6 +9,11 @@
   GET    /v1/saved                 list_saved_notices
   PUT    /v1/saved/{notice_id}     save_notice (반복 요청 안전)
   DELETE /v1/saved/{notice_id}     delete_saved_notice (반복 요청 안전)
+  POST   /v1/analysis              request_detail_analysis: AI 상세 분석 요청 (동의·크레딧 필요, 성공해야 차감)
+  GET    /v1/analysis/{notice_id}  get_detail_analysis: 받은 분석 다시 보기 (차감 없음)
+  POST   /v1/external-search       request_external_search: 외부 공고 찾기 (웹 검색, 동의·크레딧 2개, 결과 없으면 환불, D-047)
+  GET    /v1/credits               get_credits: 잔액·다음 충전·사용 내역
+  POST   /v1/credits/demo-refill   시연용: 잔액을 5까지 채움. 서버 설정 GWITTIM_DEMO_CREDITS=1일 때만, 아니면 404
   POST   /v1/ingest/kakao          팀장 폰 수집기의 학교 채널 알림톡 올리기 (D-036). 수집 토큰(X-Ingest-Token)으로만.
                                    토큰이 설정되지 않은 서버에서는 없는 경로처럼 404
 """
@@ -22,9 +27,11 @@ from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
+from backend.agent import external
+from backend.agent import service as agent
 from backend.collectors.mjc_kakao.inbox import InboxError, accept
 from backend.contracts import schema_errors
-from backend.dictionaries import codes, unknown_profile_codes
+from backend.dictionaries import codes, unknown_profile_codes, unlisted_with_major
 from backend.recommendation import recommend
 
 from .deps import Deps
@@ -37,6 +44,10 @@ _STATUS = {
     "invalid_argument": 400,
     "not_found": 404,
     "unavailable": 503,
+    # 크레딧은 결제가 아니라 무료 지급분이지만, 다른 오류와 구분되는 상태가 필요해 402로 둔다
+    "insufficient_credits": 402,
+    "request_in_progress": 409,
+    "consent_required": 403,
 }
 _MESSAGES = {
     "unauthenticated": "다시 로그인해 주세요.",
@@ -44,6 +55,9 @@ _MESSAGES = {
     "invalid_argument": "입력 값을 확인해 주세요.",
     "not_found": "찾을 수 없어요.",
     "unavailable": "잠시 후 다시 시도해 주세요.",
+    "insufficient_credits": "크레딧이 부족합니다.",
+    "request_in_progress": "같은 요청을 처리하고 있습니다.",
+    "consent_required": "AI 상세 분석 동의가 필요합니다.",
 }
 _SUMMARY_FIELDS = (
     "notice_id",
@@ -78,6 +92,10 @@ def create_app(deps: Deps) -> FastAPI:
     async def _api_error(_: Request, exc: ApiError):
         return _error(exc.code)
 
+    @app.exception_handler(agent.AgentError)
+    async def _agent_error(_: Request, exc: agent.AgentError):
+        return _error(exc.code)
+
     @app.exception_handler(RequestValidationError)
     async def _bad_request(_: Request, __: RequestValidationError):
         return _error("invalid_argument")
@@ -107,12 +125,27 @@ def create_app(deps: Deps) -> FastAPI:
         profile = {**body, "updated_at": deps.now_iso()}
         if schema_errors("user_profile", profile) or not _codes_known(profile):
             raise ApiError("invalid_argument")
+        previous = (deps.profiles.get(uid) or {}).get("agent_consent")
+        consent = profile.get("agent_consent")
+        if consent is not None:
+            # 동의 시각은 앱 시계를 믿지 않는다: 새 동의나 version 변경이면 서버 시각, 그대로면 이전 값
+            same = previous is not None and previous["version"] == consent["version"]
+            profile["agent_consent"] = {
+                "version": consent["version"],
+                "agreed_at": previous["agreed_at"] if same else deps.now_iso(),
+            }
+        elif previous is not None:
+            # agent_consent가 빠지면 철회다. 저장된 리포트도 지운다(명세 §5). 프로필을 쓰기 전에 지워
+            # 중간에 실패해도 철회한 사용자에게 저장본이 남지 않게 한다
+            deps.reports.delete_all(uid)
         deps.profiles.put(uid, profile)
         return profile
 
     @app.delete("/v1/profile", status_code=204)
     def delete_account_data(uid: str = Depends(current_uid)):
         deps.saved.delete_all(uid)
+        deps.reports.delete_all(uid)
+        deps.credits.delete(uid)
         deps.profiles.delete(uid)
         return Response(status_code=204)
 
@@ -175,6 +208,28 @@ def create_app(deps: Deps) -> FastAPI:
         deps.saved.delete(uid, notice_id)
         return Response(status_code=204)
 
+    @app.post("/v1/analysis")
+    def request_detail_analysis(body: dict, uid: str = Depends(current_uid)):
+        return agent.request_analysis(uid, body, deps)
+
+    @app.get("/v1/analysis/{notice_id}")
+    def get_detail_analysis(notice_id: str, uid: str = Depends(current_uid)):
+        return agent.get_analysis(uid, notice_id, deps)
+
+    @app.post("/v1/external-search")
+    def request_external_search(body: dict, uid: str = Depends(current_uid)):
+        return external.request_external_search(uid, body, deps)
+
+    @app.get("/v1/credits")
+    def get_credits(uid: str = Depends(current_uid)):
+        return agent.get_credits(uid, deps)
+
+    @app.post("/v1/credits/demo-refill")
+    def demo_refill_credits(uid: str = Depends(current_uid)):
+        if not agent.demo_credits_enabled():
+            raise ApiError("not_found")
+        return agent.demo_refill_credits(uid, deps)
+
     @app.post("/v1/ingest/kakao")
     def ingest_kakao(body: dict, x_ingest_token: str | None = Header(default=None)):
         # 사용자 로그인과 따로: 팀장 폰의 수집 앱은 Firebase가 없는 별도 패키지라 수집 전용 토큰을 쓴다
@@ -209,5 +264,5 @@ def _empty_profile() -> dict:
 
 
 def _codes_known(profile: dict) -> bool:
-    """사전에 있는 코드만 받는다."""
-    return not unknown_profile_codes(profile)
+    """사전에 있는 코드만 받는다. '목록에 없는 학교'(unlisted)는 학과를 가질 수 없다."""
+    return not unknown_profile_codes(profile) and not unlisted_with_major(profile)

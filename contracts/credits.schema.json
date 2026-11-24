@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/credits.schema.json",
+  "title": "get_credits 응답 — 크레딧 잔액·사용 내역",
+  "description": "잔액은 서버만 씀(앱은 읽기만). balance는 지금 쓸 수 있는 개수이며 0~5. next_refill_at은 다음 충전 시각(다음 날 0시 KST)이고 최대 보유면 null. entries는 최근 90일, 최신순이며 실패해서 차감하지 않은 요청은 넣지 않음. docs/agent-privacy-spec.md §10.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "balance",
+    "next_refill_at",
+    "entries"
+  ],
+  "properties": {
+    "balance": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "next_refill_at": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/utc_timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "amount",
+          "at",
+          "ref"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "signup",
+              "daily",
+              "detail_analysis",
+              "external_search",
+              "demo"
+            ],
+            "description": "signup 가입 선물, daily 매일 충전, detail_analysis 상세 분석, external_search 외부 공고 찾기, demo 시연용 채우기(서버 설정으로 켰을 때만)"
+          },
+          "amount": {
+            "type": "integer",
+            "description": "충전은 +, 사용은 −. signup +5, daily +1, detail_analysis −1, external_search −2, demo +1~+5(5까지 채운 만큼)."
+          },
+          "at": {
+            "$ref": "common.schema.json#/$defs/utc_timestamp"
+          },
+          "ref": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "사용 내역이 가리키는 id(상세 분석은 공고 id). 충전 내역은 null."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "demo"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "amount": {
+                  "minimum": 1,
+                  "maximum": 5
+                },
+                "ref": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "signup"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "amount": {
+                  "const": 5
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "daily"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "amount": {
+                  "const": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "detail_analysis"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "amount": {
+                  "const": -1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "external_search"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "amount": {
+                  "const": -2
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -34,6 +34,7 @@ class NoticeSink(Protocol):
     def get_public(self, notice_id: str) -> dict | None: ...
     def put_public(self, notice: dict) -> None: ...
     def delete_public(self, notice_id: str) -> None: ...
+    def touch_public(self, notice_id: str, fields: dict) -> None: ...
     def put_review(self, notice: dict, issues: list[str]) -> None: ...
     def delete_review(self, notice_id: str) -> None: ...
 
@@ -51,6 +52,12 @@ class InMemorySink:
 
     def delete_public(self, notice_id):
         self.public.pop(notice_id, None)
+
+    def touch_public(self, notice_id, fields):
+        notice = {**self.public[notice_id], **fields}
+        if "poster_url" in fields and fields["poster_url"] is None:
+            notice.pop("poster_url")
+        self.public[notice_id] = notice
 
     def put_review(self, notice, issues):
         self.review[notice["notice_id"]] = {"notice": notice, "issues": issues}
@@ -73,10 +80,21 @@ def publish(notice: dict, issues: list[str], sink: NoticeSink) -> PublishOutcome
 
     current = sink.get_public(notice["notice_id"])
     if current and _same(current, notice):
+        # 내용은 그대로여도 원문을 다시 확인한 시각은 공개본에 남긴다. 안 그러면 앱에 계속 '오래된 정보'로 보인다 (D-006)
+        updates = {k: notice[k] for k in _CHECK_TIMES if current.get(k) != notice[k]}
+        if current.get("poster_url") != notice.get("poster_url"):
+            updates["poster_url"] = notice.get("poster_url")  # None은 선택 필드 삭제
+            sink.touch_public(notice["notice_id"], updates)
+            return PublishOutcome.PUBLISHED
+        if updates:
+            sink.touch_public(notice["notice_id"], updates)
         return PublishOutcome.SKIPPED
     sink.put_public(notice)
     sink.delete_review(notice["notice_id"])
     return PublishOutcome.PUBLISHED
+
+
+_CHECK_TIMES = ("last_collected_at", "last_verified_at")
 
 
 def _same(a: dict, b: dict) -> bool:

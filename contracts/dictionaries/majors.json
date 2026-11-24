@@ -1,8 +1,8 @@
 {
   "dictionary": "majors",
   "status": "draft",
-  "updated": "2026-10-17",
-  "source": "www.mjc.ac.kr 하단 '학과 홈페이지' 목록 (2026-10-17 확인). '계약학과'는 단일 학과 여부 미확인으로 제외.",
+  "updated": "2026-11-22",
+  "source": "www.mjc.ac.kr 하단 '학과 홈페이지' 목록 (2026-10-17 확인). '계약학과'는 단일 학과 여부 미확인으로 제외. 숭의: www.sewu.ac.kr/sewu/main.do 학과안내 메뉴(2026-11-22 확인). 학과명 뒤 '(3년제)' 표기는 뺐고, '학사학위 전공심화과정'은 별도 과정이라 제외.",
   "items": [
     {
       "id": "mjc.ai_game_software",
@@ -163,6 +163,106 @@
       "id": "mjc.undeclared",
       "name_ko": "자유전공학과",
       "university_id": "mjc"
+    },
+    {
+      "id": "sewu.early_childhood_education",
+      "name_ko": "유아교육과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.social_welfare",
+      "name_ko": "사회복지과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.child_care",
+      "name_ko": "아동보육과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.library_information",
+      "name_ko": "문헌정보과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.hotel_tourism",
+      "name_ko": "호텔관광과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.smart_office_administration",
+      "name_ko": "스마트사무행정과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.tax_accounting",
+      "name_ko": "세무회계과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.business_management",
+      "name_ko": "경영과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.business_tax",
+      "name_ko": "경영세무과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.food_nutrition",
+      "name_ko": "식품영양과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.health_administration",
+      "name_ko": "보건행정과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.fashion_design",
+      "name_ko": "패션디자인과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.jewelry_design",
+      "name_ko": "주얼리디자인과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.visual_design",
+      "name_ko": "시각디자인과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.webtoon",
+      "name_ko": "웹툰과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.film_video_production",
+      "name_ko": "영상제작과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.performing_arts",
+      "name_ko": "연기예술과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.applied_music",
+      "name_ko": "실용음악과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.software_convergence",
+      "name_ko": "소프트웨어융합과",
+      "university_id": "sewu"
+    },
+    {
+      "id": "sewu.liberal_studies",
+      "name_ko": "자유전공학과",
+      "university_id": "sewu"
     }
   ]
 }

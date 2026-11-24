@@ -1,0 +1,26 @@
+{
+  "_expect": {
+    "keyword": "additionalProperties",
+    "path": "items/0"
+  },
+  "data": {
+    "items": [
+      {
+        "title": "합성",
+        "url": "https://x.example.invalid/",
+        "source_name": "합성",
+        "deadline": null,
+        "reason": "합성 예시입니다.",
+        "organizer": null,
+        "verified": true,
+        "verdict": null,
+        "target": null,
+        "read": false,
+        "prize": "지어낸 상금"
+      }
+    ],
+    "charged": true,
+    "searched_at": "2026-11-23T03:00:00Z",
+    "excluded_not_met": 0
+  }
+}

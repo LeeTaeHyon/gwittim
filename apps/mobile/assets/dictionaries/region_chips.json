@@ -1,0 +1,25 @@
+{
+  "dictionary": "region_chips",
+  "status": "draft",
+  "updated": "2026-11-21",
+  "source": "docs/agent-privacy-spec.md §2.2 (2026-11-19) 칩 제안, P6 계약 변경 (팀장 승인 2026-11-21)",
+  "description": "갈 수 있는 지역 칩. 여러 개 선택. any(상관없음)는 단독 선택이며 다른 칩과 함께 선택할 수 없음.",
+  "items": [
+    {
+      "id": "seoul",
+      "name_ko": "서울"
+    },
+    {
+      "id": "gyeonggi_incheon",
+      "name_ko": "경기·인천"
+    },
+    {
+      "id": "online_only",
+      "name_ko": "온라인만"
+    },
+    {
+      "id": "any",
+      "name_ko": "상관없음"
+    }
+  ]
+}

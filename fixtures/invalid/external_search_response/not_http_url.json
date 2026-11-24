@@ -1,0 +1,25 @@
+{
+  "_expect": {
+    "keyword": "pattern",
+    "path": "items/0/url"
+  },
+  "data": {
+    "items": [
+      {
+        "title": "합성",
+        "url": "javascript:alert(1)",
+        "source_name": "합성",
+        "deadline": null,
+        "reason": "합성 예시입니다.",
+        "verified": true,
+        "verdict": null,
+        "target": null,
+        "read": false,
+        "organizer": null
+      }
+    ],
+    "charged": true,
+    "searched_at": "2026-11-23T03:00:00Z",
+    "excluded_not_met": 0
+  }
+}

@@ -97,7 +97,7 @@ def test_grounded_llm_output_is_merged(ollama):
     assert conds["major_id"] == "mjc.computer_engineering"
     assert fields["eligibility"]["extraction_complete"] is False  # 우대 조건 → 미완성
     assert fields["summary"].startswith("컴퓨터공학과")
-    assert "_analysis_version" not in fields and a.version == "rule-0.9+ollama:test-model"
+    assert "_analysis_version" not in fields and a.version == "rule-0.11+ollama:test-model"
 
 
 def test_summary_only_mode_keeps_base_extraction(ollama):
@@ -114,7 +114,7 @@ def test_summary_only_mode_keeps_base_extraction(ollama):
     fields = a.analyze(raw(body=body), MJC)
     assert fields["summary"].startswith("컴퓨터공학과")
     assert {k: v for k, v in fields.items() if k != "summary"} == {k: v for k, v in expected.items() if k != "summary"}
-    assert a.version == "rule-0.9+ollama:test-model-summary"
+    assert a.version == "rule-0.11+ollama:test-model-summary"
 
 
 def test_hallucinations_are_rejected(ollama):
@@ -167,7 +167,7 @@ def test_ollama_failure_falls_back_to_rule_version(ollama):
     store = InMemoryStore()
     result = ingest(raw(), store)
     notice, issues = build_notice(store.records[result.key], today=date(2026, 10, 17), analyzer=analyzer(ollama))
-    assert notice["analysis_version"] == "rule-0.9"
+    assert notice["analysis_version"] == "rule-0.11"
     assert issues == [] and schema_errors("notice", notice) == []
 
 
@@ -182,7 +182,7 @@ def test_llm_notice_passes_validation(ollama):
     result = ingest(raw(), store)
     notice, issues = build_notice(store.records[result.key], today=date(2026, 10, 17), analyzer=analyzer(ollama))
     assert issues == []
-    assert notice["analysis_version"] == "rule-0.9+ollama:test-model"
+    assert notice["analysis_version"] == "rule-0.11+ollama:test-model"
 
 
 def test_summary_with_wrong_weekday_or_unknown_date_is_rejected(ollama):
@@ -229,6 +229,23 @@ def test_llm_excluded_status_is_not_condition(ollama):
     assert elig["conditions"] == []
     assert [u["evidence"] for u in elig["unresolved_conditions"]] == [line.lstrip("- ")]
 
+
+def test_llm_graduating_line_is_not_graduated_condition(ollama):
+    """LLM이 '졸업 예정자 또는 기졸업자'를 졸업생으로 답해도 받지 않는다. 규칙이 직접 확인으로 둔다 (D-046)."""
+    line = "- 2027년 2월 졸업 예정자 또는 기졸업자"
+    ollama.reply = {
+        "summary": None,
+        "deadline": None,
+        "conditions": [{"field": "enrollment_status", "operator": "eq", "value": "graduated", "evidence": line}],
+        "unresolved": [],
+    }
+    a = analyzer(ollama)
+    elig = a.analyze(raw(body="지원자격\n" + line), MJC)["eligibility"]
+    assert not any(c["field"] == "enrollment_status" for c in elig["conditions"])
+    assert any(r.startswith("재학 상태로 판정할 수 없는 학적") for r in a.rejected)
+    assert any("예정" in u["evidence"] for u in elig["unresolved_conditions"])
+
+
 def test_counts_llm_use_and_unloads(ollama):
     ollama.reply = {"summary": None, "deadline": None, "conditions": [], "unresolved": []}
     a = analyzer(ollama)
@@ -253,3 +270,28 @@ def test_llm_unresolved_condition_turns_off_unrestricted(ollama):
     elig = analyzer(ollama).analyze(raw(body), MJC)["eligibility"]
     assert [u["evidence"] for u in elig["unresolved_conditions"]] == ["토익 700점 이상"]
     assert elig["explicitly_unrestricted"] is False and elig["unrestricted_evidence"] is None
+
+
+def test_llm_grade_covering_all_years_is_rejected(ollama):
+    ollama.reply = {
+        "summary": None, "deadline": None, "unresolved": [],
+        "conditions": [{"field": "grade", "operator": "in", "value": [1, 2, 3, 4], "evidence": "대상: 컴퓨터공학과 학생"}],
+    }
+    a = analyzer(ollama)
+    fields = a.analyze(raw(), MJC)
+    assert all(c["field"] != "grade" for c in fields["eligibility"]["conditions"])
+    assert any("값 검증 실패" in r for r in a.rejected)
+
+
+def test_admin_notice_ignores_llm_deadline_and_conditions(ollama):
+    ollama.reply = {
+        "summary": None,
+        "deadline": {"evidence": "접수는 2026.11.05.(목) 17:00까지 이메일로 제출"},
+        "conditions": [{"field": "major_id", "operator": "eq", "value": "mjc.computer_engineering", "evidence": "대상: 컴퓨터공학과 학생"}],
+        "unresolved": ["토익 700점 이상 우대"],
+    }
+    r = raw()
+    r["title"] = "[입찰공고] 전산 용역"
+    fields = analyzer(ollama).analyze(r, MJC)
+    assert fields["category"] == "admin_notice" and fields["application_deadline"] is None
+    assert fields["eligibility"]["conditions"] == [] and fields["eligibility"]["unresolved_conditions"] == []

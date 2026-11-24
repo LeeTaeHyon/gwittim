@@ -1,0 +1,57 @@
+{
+  "dictionary": "experience_chips",
+  "status": "draft",
+  "updated": "2026-11-21",
+  "source": "docs/agent-privacy-spec.md §2.2 (2026-11-19) 칩 제안, P6 계약 변경 (팀장 승인 2026-11-21)",
+  "description": "해 본 것 칩. 여러 개 선택. none_yet(아직 없음)은 단독 선택이며 다른 칩과 함께 선택할 수 없음.",
+  "items": [
+    {
+      "id": "python",
+      "name_ko": "파이썬"
+    },
+    {
+      "id": "java",
+      "name_ko": "자바"
+    },
+    {
+      "id": "web_ui",
+      "name_ko": "웹 화면"
+    },
+    {
+      "id": "app_dev",
+      "name_ko": "앱 개발"
+    },
+    {
+      "id": "data_analysis",
+      "name_ko": "데이터 분석"
+    },
+    {
+      "id": "design_tool",
+      "name_ko": "디자인 도구"
+    },
+    {
+      "id": "video_editing",
+      "name_ko": "영상 편집"
+    },
+    {
+      "id": "team_project",
+      "name_ko": "팀 프로젝트"
+    },
+    {
+      "id": "contest",
+      "name_ko": "공모전 참가"
+    },
+    {
+      "id": "outside_activity",
+      "name_ko": "대외활동"
+    },
+    {
+      "id": "internship",
+      "name_ko": "현장실습·인턴"
+    },
+    {
+      "id": "none_yet",
+      "name_ko": "아직 없음"
+    }
+  ]
+}

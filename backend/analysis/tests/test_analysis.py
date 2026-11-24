@@ -285,6 +285,16 @@ def test_change_tracking_and_analysis_reuse():
     assert second["changed_fields"] == ["application_deadline"]
 
 
+def test_unchanged_recollect_refreshes_verified_time():
+    """원문이 그대로여도 다시 확인한 시각으로 last_verified_at을 옮긴다 (D-006 오래된 정보 표시)."""
+    record, store = record_for(raw_notice(CONTEST))
+    first, _ = build_notice(record, today=TODAY)
+    ingest(raw_notice(CONTEST, collected_at="2026-10-19T00:00:00Z"), store)
+    again, _ = build_notice(store.records[record.key], today=TODAY, previous=first)
+    assert again["notice_version"] == 1 and again["changed_fields"] == []
+    assert again["last_verified_at"] == again["last_collected_at"] == "2026-10-19T00:00:00Z"
+
+
 def test_end_to_end_into_recommendation():
     """RawNotice → 파이프라인 → 분석 → 추천까지 연결된다 (합성 데이터)."""
     store = InMemoryStore()
@@ -461,3 +471,186 @@ def test_llm_preferred_items_are_kept_without_keywords():
     assert is_llm_condition("주말, 야간 촬영 및 외근 등 유연근무 가능자", [], [], lines) is True
     assert is_llm_condition("무관심 또는 거절 고객을 설득해본 경험이 있으신 분", [], [], lines) is True
     assert is_llm_condition("취재, 보도 업무에 이해가 있는 자", [], [], lines) is False  # 우대 항목 밖, 낱말 없음
+
+
+# ---------- 공통 규칙 개선 (rule-0.9): 학교와 무관한 합성 문장 ----------
+
+SEWU = source_config("sewu_www_notice")
+
+
+def cond(fields: dict, field: str):
+    return next((c for c in fields["eligibility"]["conditions"] if c["field"] == field), None)
+
+
+@pytest.mark.parametrize(
+    "line",
+    ["대상: 우리대학 학생 또는 졸업생 누구나", "대상: 재학생 및 졸업생", "대상: 졸업생 또는 학생"],
+)
+def test_student_and_graduate_gives_both_statuses(line):
+    c = cond(RuleBasedAnalyzer().analyze(raw_notice(line), MJC), "enrollment_status")
+    assert c["operator"] == "in" and c["value"] == ["enrolled", "graduated"]
+
+
+def test_graduate_only_stays_single_value():
+    c = cond(RuleBasedAnalyzer().analyze(raw_notice("대상: 졸업생"), MJC), "enrollment_status")
+    assert (c["operator"], c["value"]) == ("eq", "graduated")
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "- 2027년 2월 졸업 예정자 또는 기졸업자로, 풀타임 근무가 가능하신 분",
+        "- 기졸업자 또는 2027년 2월 졸업예정자",
+        "* 관련 학과 졸업자 및 2027년 2월 졸업 예정인 분",
+        "졸업생 및 27년 2월 졸업 예정자",
+    ],
+)
+def test_graduating_students_line_is_checked_by_hand(line):
+    """졸업 예정자는 재학생 중 일부라 졸업생만으로 읽지 않고 직접 확인으로 둔다 (D-046)."""
+    fields = RuleBasedAnalyzer().analyze(raw_notice("지원자격\n" + line), MJC)
+    assert cond(fields, "enrollment_status") is None
+    assert any("예정" in u["evidence"] for u in fields["eligibility"]["unresolved_conditions"])  # 글머리표는 정리됨
+    assert fields["eligibility"]["extraction_complete"] is False
+
+
+def test_graduating_included_still_widens_enrolled():
+    """'재학생(졸업예정자 포함)'은 재학생 조건 그대로다."""
+    c = cond(RuleBasedAnalyzer().analyze(raw_notice("대상: 재학생(졸업예정자 포함)"), MJC), "enrollment_status")
+    assert (c["operator"], c["value"]) == ("eq", "enrolled")
+
+
+def test_high_school_or_more_with_graduating_keeps_all_statuses():
+    """고졸 이상 학력 줄은 졸업 예정 문구가 같이 있어도 재학·휴학·졸업 모두 (D-023)."""
+    line = "전문대/대학교 졸업자 및 2027년 2월이내 졸업예정자, 고등학교 졸업 이상"
+    c = cond(RuleBasedAnalyzer().analyze(raw_notice("지원자격\n" + line), MJC), "enrollment_status")
+    assert c["value"] == ["enrolled", "on_leave", "graduated"]
+
+
+def test_period_with_from_until_uses_end_date_as_deadline():
+    body = "※ 수강신청 실시 기간 : 2026. 11. 30. (월), 10:00부터 2026. 12. 03. (목), 23:59까지"
+    fields = RuleBasedAnalyzer().analyze(raw_notice(body, title="[알림] 계절학기 운영 공고"), MJC)
+    d = fields["application_deadline"]
+    assert (d["date"], d["time"], d["precision"]) == ("2026-12-03", "23:59", "minute")
+    s = fields["application_start"]
+    assert (s["date"], s["time"]) == ("2026-11-30", "10:00")
+
+
+def test_start_only_from_line_is_not_deadline():
+    fields = RuleBasedAnalyzer().analyze(raw_notice("신청은 2026.11.30.(월) 10:00부터 시작합니다"), MJC)
+    assert fields["application_deadline"] is None
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "가. 직전학기 성적 백분위 75점 이상이며 채플 출석 통과자(1차 PASS)",
+        "직전학기 평점평균 3.0 이상인 학생",
+        "다. 정규학기를 초과하여 재학 중인 초과학기생은 수혜 불가",
+        "모든 출품작은 타인의 저작물을 표절·도용하거나, 기존 발표·수상 이력이 있는 작품은 응모할 수 없습니다",
+        "타 공모전 수상작은 응모 불가",
+    ],
+)
+def test_applicant_condition_lines_become_unresolved(line):
+    elig = RuleBasedAnalyzer().analyze(raw_notice(line), MJC)["eligibility"]
+    assert any(line.lstrip("가다. ") in u["evidence"] or u["evidence"] in line for u in elig["unresolved_conditions"])
+    assert elig["extraction_complete"] is False
+
+
+def test_attendance_notice_line_is_not_a_condition():
+    elig = RuleBasedAnalyzer().analyze(raw_notice("출석 확인은 현장에서 진행합니다"), MJC)["eligibility"]
+    assert elig["unresolved_conditions"] == []
+
+
+@pytest.mark.parametrize(
+    "title",
+    ["[입찰공고] 전산 정보보안 운영 인력 용역", "교수 초빙 공고(2027.3.1부)", "전산시스템 보안 업데이트에 따른 서비스 일시 중단 안내"],
+)
+def test_admin_notice_has_no_conditions(title):
+    body = "본교 재학생은 참고 바랍니다\n공고 기간: 2026.11.20.(금) ~ 2026.11.27.(금)"
+    fields = RuleBasedAnalyzer().analyze(raw_notice(body, title=title), SEWU)
+    assert fields["category"] == "admin_notice"
+    elig = fields["eligibility"]
+    assert elig["conditions"] == [] and elig["unresolved_conditions"] == []
+    assert elig["extraction_complete"] is False and elig["explicitly_unrestricted"] is False
+    assert fields["interest_tags"] == []
+
+
+def test_vendor_contract_notice_has_no_deadline_but_recruitment_keeps_it():
+    body = "접수 기간: 2026.11.20.(금) ~ 2026.11.27.(금)"
+    bid = RuleBasedAnalyzer().analyze(raw_notice(body, title="[입찰공고] 시설 용역"), SEWU)
+    assert bid["application_deadline"] is None and bid["application_start"] is None
+    staff = RuleBasedAnalyzer().analyze(raw_notice(body, title="교원 초빙 공고"), SEWU)
+    assert staff["application_deadline"]["date"] == "2026-11-27"
+
+
+def test_staff_hiring_title_with_student_target_is_not_admin():
+    plain = RuleBasedAnalyzer().analyze(raw_notice("지원 안내", title="OO센터 직원 채용 공고"), SEWU)
+    assert plain["category"] == "admin_notice"
+    student = RuleBasedAnalyzer().analyze(raw_notice("지원 안내", title="캠퍼스 리크루팅 직원 채용 설명회"), SEWU)
+    assert student["category"] == "job"
+
+
+@pytest.mark.parametrize("line", ["대상: 본교 재학생(1~4학년)", "대상: 본교 1, 2, 3, 4학년", "대상: 본교 4~1학년 재학생"])
+def test_all_grades_listed_means_no_grade_condition(line):
+    assert cond(RuleBasedAnalyzer().analyze(raw_notice(line), MJC), "grade") is None
+
+
+def test_partial_grades_still_conditions():
+    assert cond(RuleBasedAnalyzer().analyze(raw_notice("대상: 본교 1, 2, 3학년"), MJC), "grade")["value"] == [1, 2, 3]
+    assert cond(RuleBasedAnalyzer().analyze(raw_notice("대상: 본교 2~3학년"), MJC), "grade")["value"] == [2, 3]
+
+
+def test_own_school_name_before_status_is_university_condition():
+    for line in ("대상: 숭의여자대학교 재학생 40명", "대상: 숭의여자대학교 학생 또는 졸업생 누구나"):
+        assert cond(RuleBasedAnalyzer().analyze(raw_notice(line), SEWU), "university_id")["value"] == "sewu"
+    greeting = RuleBasedAnalyzer().analyze(raw_notice("숭의여자대학교 학생 여러분을 기다립니다"), SEWU)
+    assert cond(greeting, "university_id") is None
+
+
+@pytest.mark.parametrize(
+    ("title", "category"),
+    [
+        ("[봉사단] 초등학생 놀이대회 자원봉사자 모집 안내", "volunteer"),
+        ("[센터] 창의성 발견하기 특강 프로그램 안내", "education_program"),
+        ("[센터] 역량기반 창의성 특강", "education_program"),
+        ("실전직무 부트캠프 모집", "education_program"),
+        ("[알림] 계절학기 수업 운영 계획 시행공고", "academic"),
+        ("[봉사단] 텀블러 세척기 OPEN", "admin_notice"),
+        ("전산시스템 점검에 따른 서비스 중단 안내", "admin_notice"),
+        ("[공모전] 창업 아이디어 공모전", "contest"),
+    ],
+)
+def test_category_rules(title, category):
+    assert RuleBasedAnalyzer().analyze(raw_notice("안내드립니다", title=title), SEWU)["category"] == category
+
+
+@pytest.mark.parametrize("fallback", [False, True])
+def test_poster_changes_publish_without_reanalysis(monkeypatch, fallback):
+    from backend.publish import InMemorySink, publish
+
+    raw = raw_notice(CONTEST)
+    fields = dict(raw["source_fields"])
+    first_url = fields.pop("poster_url")
+    raw["source_fields"] = fields
+    record, store = record_for(raw)
+    previous, issues = build_notice(record, today=TODAY)
+    # 이미 본문 변경 이력이 있는 게시본에서도 이력을 유지한다.
+    previous["changed_fields"] = ["title"]
+    sink = InMemorySink()
+    publish(previous, issues, sink)
+    analyzer = RuleBasedAnalyzer()
+    if fallback:
+        monkeypatch.setattr(analyzer, "version", analyzer.version + "+ollama:test")
+    monkeypatch.setattr(analyzer, "analyze", lambda *_: pytest.fail("poster update invoked analyzer"))
+    for url in (first_url, first_url.replace("sample-", "updated-"), None):
+        incoming = dict(raw, source_fields=dict(fields, **({"poster_url": url} if url else {})))
+        assert content_hash(incoming) == raw["content_hash"]
+        result = ingest(incoming, store)
+        assert result.notice_version == 1
+        notice, issues = build_notice(store.get(result.key), today=TODAY, previous=previous, analyzer=analyzer)
+        publish(notice, issues, sink)
+        public = dict(sink.get_public(notice["notice_id"]))
+        assert ("poster_url" in public) == bool(url)
+        assert public.pop("poster_url", None) == url
+        assert public == {k: v for k, v in previous.items() if k != "poster_url"}
+        previous = notice

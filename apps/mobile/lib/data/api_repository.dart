@@ -20,12 +20,16 @@ class ApiNoticeRepository implements NoticeRepository {
     http.Client? client,
     AssetDictionaries? dictionaries,
     this.timeout = const Duration(seconds: 15),
+    this.analysisTimeout = const Duration(seconds: 90),
   }) : _client = client ?? http.Client(),
        _dictionaries = dictionaries ?? AssetDictionaries();
 
   final Uri baseUrl;
   final TokenProvider tokenProvider;
   final Duration timeout;
+
+  /// 상세 분석은 AI가 답할 때까지 30초 안팎 걸린다.
+  final Duration analysisTimeout;
   final http.Client _client;
   final AssetDictionaries _dictionaries;
 
@@ -35,23 +39,32 @@ class ApiNoticeRepository implements NoticeRepository {
     'invalid_argument': RepositoryErrorKind.invalidArgument,
     'not_found': RepositoryErrorKind.notFound,
     'unavailable': RepositoryErrorKind.unavailable,
+    'insufficient_credits': RepositoryErrorKind.insufficientCredits,
+    'request_in_progress': RepositoryErrorKind.requestInProgress,
+    'consent_required': RepositoryErrorKind.consentRequired,
   };
 
-  Future<http.Response> _send(String method, String path, {Map<String, dynamic>? body}) async {
+  Future<http.Response> _send(String method, String path, {Map<String, dynamic>? body, Duration? wait}) async {
     final token = await tokenProvider();
     if (token == null) throw const RepositoryException(RepositoryErrorKind.unauthenticated);
-    var response = await _request(method, path, token, body);
+    var response = await _request(method, path, token, body, wait ?? timeout);
     // 기기 시계가 틀리면 만료된 토큰을 아직 쓸 수 있다고 보고 그대로 줄 수 있다.
     // 401이면 토큰을 새로 받아 한 번만 다시 보낸다. 서버는 401일 때 요청을 처리하지 않으므로 저장·삭제도 다시 보내도 된다.
     if (response.statusCode == 401) {
       final fresh = await tokenProvider(refresh: true);
-      if (fresh != null && fresh != token) response = await _request(method, path, fresh, body);
+      if (fresh != null && fresh != token) response = await _request(method, path, fresh, body, wait ?? timeout);
     }
     if (response.statusCode >= 200 && response.statusCode < 300) return response;
-    throw RepositoryException(_kindOf(response));
+    throw RepositoryException(_kindOf(response), fromServer: true);
   }
 
-  Future<http.Response> _request(String method, String path, String token, Map<String, dynamic>? body) async {
+  Future<http.Response> _request(
+    String method,
+    String path,
+    String token,
+    Map<String, dynamic>? body,
+    Duration wait,
+  ) async {
     final request = http.Request(method, baseUrl.resolve(path))
       ..headers['Authorization'] = 'Bearer $token'
       ..headers['Accept'] = 'application/json';
@@ -60,7 +73,7 @@ class ApiNoticeRepository implements NoticeRepository {
       request.body = jsonEncode(body);
     }
     try {
-      return await http.Response.fromStream(await _client.send(request).timeout(timeout));
+      return await http.Response.fromStream(await _client.send(request).timeout(wait));
     } on TimeoutException {
       throw const RepositoryException(RepositoryErrorKind.unavailable);
     } on SocketException {
@@ -80,6 +93,8 @@ class ApiNoticeRepository implements NoticeRepository {
         403 => RepositoryErrorKind.permissionDenied,
         404 => RepositoryErrorKind.notFound,
         400 => RepositoryErrorKind.invalidArgument,
+        402 => RepositoryErrorKind.insufficientCredits,
+        409 => RepositoryErrorKind.requestInProgress,
         _ => RepositoryErrorKind.unavailable,
       };
     }
@@ -164,4 +179,47 @@ class ApiNoticeRepository implements NoticeRepository {
   Future<void> deleteSaved(String noticeId) async {
     await _send('DELETE', 'v1/saved/${Uri.encodeComponent(noticeId)}');
   }
+
+  @override
+  Future<AnalysisResponse> requestAnalysis({
+    required String noticeId,
+    required String requestId,
+    AnalysisChips chips = const AnalysisChips(),
+  }) async {
+    final body = {'notice_id': noticeId, 'request_id': requestId, 'chips': chips.toJson()};
+    return AnalysisResponse.fromJson(_json(await _send('POST', 'v1/analysis', body: body, wait: analysisTimeout)));
+  }
+
+  @override
+  Future<ExternalSearchResult> requestExternalSearch({
+    required String requestId,
+    String? category,
+    List<String> interests = const [],
+    String? period,
+    List<String> regions = const [],
+    String query = '',
+  }) async {
+    var text = query.trim();
+    if (text.runes.length > externalQueryMax) text = String.fromCharCodes(text.runes.take(externalQueryMax));
+    final body = {
+      'request_id': requestId,
+      'category': ?category,
+      if (interests.isNotEmpty) 'interests': interests,
+      'period': ?period,
+      if (regions.isNotEmpty) 'regions': regions,
+      if (text.isNotEmpty) 'query': text,
+    };
+    return ExternalSearchResult.fromJson(_json(await _send('POST', 'v1/external-search', body: body, wait: analysisTimeout)));
+  }
+
+  @override
+  Future<AnalysisResponse?> getAnalysis(String noticeId) => _orNullIfNotFound(
+    () async => AnalysisResponse.fromJson(_json(await _send('GET', 'v1/analysis/${Uri.encodeComponent(noticeId)}'))),
+  );
+
+  @override
+  Future<Credits> getCredits() async => Credits.fromJson(_json(await _send('GET', 'v1/credits')));
+
+  @override
+  Future<Credits> demoRefillCredits() async => Credits.fromJson(_json(await _send('POST', 'v1/credits/demo-refill')));
 }

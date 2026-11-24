@@ -24,6 +24,10 @@
     4. 그 밖(구조 조건이 모두 맞음) -> met
   4번은 누구나 N인데 구조 조건·자유조건이 모두 없는 행도 met으로 만든다. 이런 행은 따로 세어 알린다.
 
+- 카테고리: 정답표에 '카테고리' 열이 있고 값이 있는 행만 분석 결과 category와 비교한 일치율.
+- 학교별: 정답표에 '학교팩' 열이 있으면 전체 뒤에 학교팩별로 같은 지표를 따로 낸다(--json은 "학교별").
+  판정 프로필은 학교팩별(PROFILE_SETS). 학교팩이 없거나 비어 있으면 명지 프로필.
+
 실행: uv run python tools/eval_board_extraction.py [--gold PATH] [--notices PATH] [--json]
 """
 from __future__ import annotations
@@ -53,6 +57,16 @@ PROFILES = {
     "졸업": {"university_id": "mjc", "major_id": "mjc.computer_engineering", "grade": 3, "enrollment_status": "graduated"},
     "1학년 재학": {"university_id": "mjc", "major_id": "mjc.computer_engineering", "grade": 1, "enrollment_status": "enrolled"},
 }
+# 숭의 프로필: 명지 프로필 4개와 같은 구성(경영 2학년 휴학 / 학과 2학년 재학 / 졸업 / 1학년 재학).
+SEWU_PROFILES = {
+    "숭의 경영과 2학년 휴학": {"university_id": "sewu", "major_id": "sewu.business_management", "grade": 2, "enrollment_status": "on_leave"},
+    "숭의 소프트웨어융합과 2학년 재학": {"university_id": "sewu", "major_id": "sewu.software_convergence", "grade": 2, "enrollment_status": "enrolled"},
+    "숭의 졸업": {"university_id": "sewu", "major_id": "sewu.software_convergence", "grade": 3, "enrollment_status": "graduated"},
+    "숭의 1학년 재학": {"university_id": "sewu", "major_id": "sewu.software_convergence", "grade": 1, "enrollment_status": "enrolled"},
+}
+PROFILE_SETS = {"mjc": PROFILES, "sewu": SEWU_PROFILES}
+DEFAULT_PACK = "mjc"
+CATEGORY_EXAMPLES = 5
 
 
 def normalize(text: str) -> str:
@@ -170,12 +184,22 @@ def gold_status(row: dict, profile: dict) -> str:
     return "needs_check" if free else "met"
 
 
+def pack_of(row: dict) -> str:
+    """판정에 쓸 프로필 묶음 이름. 학교팩이 없거나 비어 있거나 모르는 값이면 명지."""
+    pack = (row.get("학교팩") or "").strip()
+    return pack if pack in PROFILE_SETS else DEFAULT_PACK
+
+
 def score_judgement(rows: list[dict], notices: dict) -> dict:
-    tables = {name: {g: {p: 0 for p in STATUSES} for g in STATUSES} for name in PROFILES}
+    used = {pack_of(r) for r in rows}
+    tables = {
+        name: {g: {p: 0 for p in STATUSES} for g in STATUSES}
+        for pack, profiles in PROFILE_SETS.items() if pack in used for name in profiles
+    }
     wrong_met = []
     for r in rows:
         el = notices[r["notice_id"]]["eligibility"]
-        for name, profile in PROFILES.items():
+        for name, profile in PROFILE_SETS[pack_of(r)].items():
             gold = gold_status(r, profile)
             pred, _ = evaluate(el, profile)
             tables[name][gold][pred] += 1
@@ -190,23 +214,89 @@ def score_judgement(rows: list[dict], notices: dict) -> dict:
             "혼동표_프로필별": tables, "누구나N_조건없음_행": empty_n}
 
 
+def score_category(rows: list[dict], notices: dict) -> dict | None:
+    """정답 카테고리가 적힌 행만 비교. 그런 행이 없으면 None."""
+    target = [(r, (r.get("카테고리") or "").strip()) for r in rows]
+    target = [(r, g) for r, g in target if g]
+    if not target:
+        return None
+    wrong = [
+        {"notice_id": r["notice_id"], "정답": g, "분석": notices[r["notice_id"]].get("category")}
+        for r, g in target if notices[r["notice_id"]].get("category") != g
+    ]
+    hit = len(target) - len(wrong)
+    return {"일치율": _ratio(hit, len(target)), "일치": hit, "대상": len(target),
+            "어긋난_건수": len(wrong), "어긋난_예": wrong[:CATEGORY_EXAMPLES]}
+
+
+def score_pack(rows: list[dict], notices: dict) -> dict:
+    res = {
+        "채점_건수": len(rows),
+        "판정": score_judgement(rows, notices),
+        "마감일": score_deadlines(rows, notices),
+        "구조_조건": score_structure(rows, notices),
+        "자유_조건": score_free(rows, notices),
+    }
+    cat = score_category(rows, notices)
+    if cat:
+        res["카테고리"] = cat
+    return res
+
+
 def evaluate_all(gold_rows: list[dict], notices: dict) -> dict:
     present = [r for r in gold_rows if r["notice_id"] in notices]
     absent = [r["notice_id"] for r in gold_rows if r["notice_id"] not in notices]
-    return {
-        "채점_건수": len(present), "notices에_없는_공고": absent,
-        "판정": score_judgement(present, notices),
-        "마감일": score_deadlines(present, notices),
-        "구조_조건": score_structure(present, notices),
-        "자유_조건": score_free(present, notices),
-    }
+    res = {"채점_건수": len(present), "notices에_없는_공고": absent, **{k: v for k, v in score_pack(present, notices).items() if k != "채점_건수"}}
+    if any("학교팩" in r for r in present):
+        packs: dict[str, list[dict]] = {}
+        for r in present:
+            packs.setdefault((r.get("학교팩") or "").strip() or "(빈 값)", []).append(r)
+        res["학교별"] = {pack: score_pack(rows, notices) for pack, rows in packs.items()}
+    return res
 
 
 def _f(x: float | None) -> str:
     return "-" if x is None else f"{x:.3f}"
 
 
+def _render_category(cat: dict) -> list[str]:
+    out = [f"\n[카테고리] 일치율 {_f(cat['일치율'])} ({cat['일치']}/{cat['대상']}), 어긋남 {cat['어긋난_건수']}건"]
+    out += [f"  어긋남 {w['notice_id']}: 정답 {w['정답']} / 분석 {w['분석']}" for w in cat["어긋난_예"]]
+    if cat["어긋난_건수"] > len(cat["어긋난_예"]):
+        out.append(f"  (예 {len(cat['어긋난_예'])}건만 표시)")
+    return out
+
+
+def _render_pack(name: str, p: dict) -> list[str]:
+    d, s, fr, j = p["마감일"], p["구조_조건"], p["자유_조건"], p["판정"]
+    out = [f"\n  <{name}> {p['채점_건수']}건, 틀린 지원 가능 {j['틀린_지원_가능_건수']}건"]
+    out.append(f"    마감일 정밀도 {_f(d['정밀도'])} ({d['일치']}/{d['분석이_낸_날짜']}), 재현율 {_f(d['재현율'])} ({d['일치']}/{d['정답_날짜']})")
+    c = s["합계"]
+    out.append(f"    구조 조건 정밀도 {_f(c['정밀도'])} ({c['tp']}/{c['tp'] + c['fp']}), 재현율 {_f(c['재현율'])} ({c['tp']}/{c['tp'] + c['fn']})")
+    out.append(f"    자유 조건 포착률 {_f(fr['포착률'])} ({fr['포착']}/{fr['정답_문구']})")
+    cat = p.get("카테고리")
+    if cat:
+        out.append(f"    카테고리 일치율 {_f(cat['일치율'])} ({cat['일치']}/{cat['대상']})")
+        out += [f"      어긋남 {w['notice_id']}: 정답 {w['정답']} / 분석 {w['분석']}" for w in cat["어긋난_예"]]
+    return out
+
+
 def render(res: dict) -> str:
+    return "\n".join(_render_main(res) + _render_extra(res))
+
+
+def _render_extra(res: dict) -> list[str]:
+    out = []
+    if "카테고리" in res:
+        out += _render_category(res["카테고리"])
+    if "학교별" in res:
+        out.append("\n[학교별] 학교팩마다 따로 채점(판정은 학교별 프로필)")
+        for name, p in res["학교별"].items():
+            out += _render_pack(name, p)
+    return out
+
+
+def _render_main(res: dict) -> list[str]:
     j, d, s, fr = res["판정"], res["마감일"], res["구조_조건"], res["자유_조건"]
     out = [f"틀린 지원 가능: {j['틀린_지원_가능_건수']}건 (합격 기준 0건)"]
     out += [f"  {w['notice_id']} [{w['프로필']}] 정답 {w['정답']}: {w['제목']}" for w in j["틀린_지원_가능"]]
@@ -225,7 +315,7 @@ def render(res: dict) -> str:
         out.append(f"  {g:<11} " + "  ".join(f"{j['혼동표_합계'][g][p]:>11}" for p in STATUSES))
     if j["누구나N_조건없음_행"]:
         out.append(f"  주의: 누구나 N인데 조건이 전혀 없는 정답 행 {j['누구나N_조건없음_행']}건(규칙 4로 met)")
-    return "\n".join(out)
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:

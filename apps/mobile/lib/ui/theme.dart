@@ -8,6 +8,7 @@ import 'components.dart';
 /// 라이트·다크 값은 D-010 표를 따르고, 표에 없는 보조 값은 목업 v2(다크 줄)의 값을 쓴다.
 @immutable
 class GwColors extends ThemeExtension<GwColors> {
+  Color get posterBackdrop => const Color(0xFF000000);
   const GwColors({
     required this.bg,
     required this.card,
@@ -50,6 +51,8 @@ class GwColors extends ThemeExtension<GwColors> {
     required this.onTab,
     required this.tabActive,
     required this.hero,
+    required this.heroUrgent,
+    required this.categoryColors,
   });
 
   /// 바탕
@@ -137,6 +140,31 @@ class GwColors extends ThemeExtension<GwColors> {
   /// 브랜드 면: 브리핑 머리 (라이트 네이비, 다크는 바탕보다 밝은 남색). 위 글자는 loginInk·loginSub, 배지는 lime.
   final Color hero;
 
+  /// hero 위 마감 임박 숫자·아이콘 (흰색 12% 칸 위에서도 4.5:1 이상)
+  final Color heroUrgent;
+
+  /// 공고 분류 아이콘 색 (분류 id → 색). 홈 공고 카드에서만 쓴다. 모르는 id는 'other'. card 위 3:1 이상.
+  final Map<String, Color> categoryColors;
+
+  /// [categoryColors]의 키 순서. `_all`·`_fromList`가 이 순서로 값을 옮긴다.
+  static const categoryIds = [
+    'contest',
+    'scholarship',
+    'job',
+    'internship',
+    'education_program',
+    'extracurricular',
+    'global',
+    'startup',
+    'volunteer',
+    'event',
+    'academic',
+    'admin_notice',
+    'other',
+  ];
+
+  Color category(String id) => categoryColors[id] ?? categoryColors['other']!;
+
   static const light = GwColors(
     bg: Color(0xFFF3F4F8),
     card: Color(0xFFFFFFFF),
@@ -179,6 +207,22 @@ class GwColors extends ThemeExtension<GwColors> {
     onTab: Color(0xFF646B80),
     tabActive: _navy,
     hero: _navy,
+    heroUrgent: Color(0xFFFFA8AE),
+    categoryColors: {
+      'contest': Color(0xFF7C4DDB),
+      'scholarship': Color(0xFF1E8E50),
+      'job': Color(0xFF2563D8),
+      'internship': Color(0xFF0E8A8A),
+      'education_program': Color(0xFF4B52C8),
+      'extracurricular': Color(0xFF5B7F12),
+      'global': Color(0xFF0B7FB8),
+      'startup': Color(0xFFC2367A),
+      'volunteer': Color(0xFFA0612E),
+      'event': Color(0xFFA23BB5),
+      'academic': _navy,
+      'admin_notice': Color(0xFF646B80),
+      'other': Color(0xFF646B80),
+    },
   );
 
   static const dark = GwColors(
@@ -223,6 +267,22 @@ class GwColors extends ThemeExtension<GwColors> {
     onTab: Color(0xFF8C93AE),
     tabActive: Color(0xFFC9D2FF),
     hero: Color(0xFF26306B),
+    heroUrgent: Color(0xFFFFA8AE),
+    categoryColors: {
+      'contest': Color(0xFFBEA6ED),
+      'scholarship': Color(0xFF8EC6A8),
+      'job': Color(0xFF92B1EC),
+      'internship': Color(0xFF86C4C4),
+      'education_program': Color(0xFFA5A8E4),
+      'extracurricular': Color(0xFFADBF88),
+      'global': Color(0xFF85BFDC),
+      'startup': Color(0xFFE09ABC),
+      'volunteer': Color(0xFFD0B096),
+      'event': Color(0xFFD09DDA),
+      'academic': Color(0xFFC9D2FF),
+      'admin_notice': Color(0xFFB2B5C0),
+      'other': Color(0xFFB2B5C0),
+    },
   );
 
   static const _navy = Color(0xFF22306B);
@@ -233,10 +293,20 @@ class GwColors extends ThemeExtension<GwColors> {
     bg, card, cardSoft, neutral, ink, body, sub, muted, faint, line, cta, onCta, point, onPoint, pointTick, //
     accent, chip, onChip, lime, limeInk, marker, summary, urgent, urgentSoft, urgentFill, onUrgentFill, //
     check, checkSoft, checkBox, checkLine, checkMark, toast, onToast, loginBg, loginCard, loginSub, loginInk, //
-    tab, onTab, tabActive, hero,
+    tab, onTab, tabActive, hero, heroUrgent, //
+    for (final id in categoryIds) categoryColors[id]!,
   ];
 
   static GwColors _fromList(List<Color> c) {
+    var i = 0;
+    Color next() => c[i++];
+    final scalars = List.generate(_scalarCount, (_) => next());
+    return GwColors._build(scalars, {for (final id in categoryIds) id: next()});
+  }
+
+  static const _scalarCount = 42;
+
+  static GwColors _build(List<Color> c, Map<String, Color> categories) {
     var i = 0;
     Color next() => c[i++];
     return GwColors(
@@ -281,6 +351,8 @@ class GwColors extends ThemeExtension<GwColors> {
       onTab: next(),
       tabActive: next(),
       hero: next(),
+      heroUrgent: next(),
+      categoryColors: categories,
     );
   }
 

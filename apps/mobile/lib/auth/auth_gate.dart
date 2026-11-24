@@ -48,6 +48,16 @@ class _AuthGateState extends State<AuthGate> {
   /// 로그인 한 번에 저장소 하나. 다시 그릴 때마다 새로 만들면 받아 둔 응답(CachedNoticeRepository)을 잃는다.
   NoticeRepository? _repository;
 
+  /// 탈퇴가 끝났으면 로그인 화면이 완료 팝업을 한 번 띄운다.
+  /// 계정을 지우면 로그인 상태가 먼저 바뀌어 내 정보 화면이 사라지므로 여기서 기억한다.
+  bool _deleted = false;
+
+  Future<bool> _deleteAccount(NoticeRepository repository) async {
+    final done = await widget.auth.deleteAccount(repository.deleteAccountData);
+    if (done && mounted) setState(() => _deleted = true);
+    return done;
+  }
+
   ThemeController get _theme => widget.themeController ?? (_ownTheme ??= ThemeController());
 
   @override
@@ -75,14 +85,19 @@ class _AuthGateState extends State<AuthGate> {
             repository: repository,
             openUrl: widget.openUrl,
             onSignOut: widget.auth.signOut,
-            onDeleteAccount: () => widget.auth.deleteAccount(repository.deleteAccountData),
+            onDeleteAccount: () => _deleteAccount(repository),
             briefingStore: widget.briefingStore,
             themeController: _theme,
           );
         }
         return GwMaterialApp(
           themeController: _theme,
-          home: SignInScreen(auth: widget.auth, openUrl: widget.openUrl),
+          home: SignInScreen(
+            auth: widget.auth,
+            openUrl: widget.openUrl,
+            accountDeleted: _deleted,
+            onDeletedShown: () => _deleted = false,
+          ),
         );
       },
     );
@@ -91,12 +106,22 @@ class _AuthGateState extends State<AuthGate> {
 
 /// 로그인 화면 (D-010). 소개 문구에서 알림을 약속하지 않는다 (푸시 알림은 P0 제외).
 class SignInScreen extends StatefulWidget {
-  const SignInScreen({super.key, required this.auth, required this.openUrl});
+  const SignInScreen({
+    super.key,
+    required this.auth,
+    required this.openUrl,
+    this.accountDeleted = false,
+    this.onDeletedShown,
+  });
 
   final AuthService auth;
 
   /// 약관·처리방침 문서를 연다.
   final OpenUrl openUrl;
+
+  /// 방금 탈퇴했으면 true. 완료 팝업을 한 번 띄우고 [onDeletedShown]을 부른다.
+  final bool accountDeleted;
+  final VoidCallback? onDeletedShown;
 
   @override
   State<SignInScreen> createState() => _SignInScreenState();
@@ -118,9 +143,51 @@ class _SignInScreenState extends State<SignInScreen> {
   (Size, double)? _fittedFor;
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.accountDeleted) _showDeletedLater();
+  }
+
+  @override
+  void didUpdateWidget(SignInScreen old) {
+    super.didUpdateWidget(old);
+    // 로그인 화면으로 바뀐 뒤에 탈퇴가 끝났다고 알려 오는 경우
+    if (widget.accountDeleted && !old.accountDeleted) _showDeletedLater();
+  }
+
+  @override
   void dispose() {
     _scroll.dispose();
     super.dispose();
+  }
+
+  void _showDeletedLater() {
+    widget.onDeletedShown?.call();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showDeleted();
+    });
+  }
+
+  /// 탈퇴 완료 팝업. 탈퇴 확인 창과 같은 모양.
+  Future<void> _showDeleted() {
+    final c = context.gw;
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: c.card,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          '탈퇴 완료',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.ink),
+        ),
+        content: Text(
+          keepAll('프로필과 저장한 공고를 모두 삭제했습니다.\n\n그동안 귀띔을 이용해 주셔서 감사합니다.'),
+          style: TextStyle(fontSize: 15, height: 1.5, color: c.body),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('확인'))],
+      ),
+    );
   }
 
   void _fitLater() {

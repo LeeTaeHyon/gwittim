@@ -42,7 +42,7 @@
      "eligibility_met"
     ],
     "generated_at": "2026-10-17T03:05:00Z",
-    "ranking_version": "rank-0.6"
+    "ranking_version": "rank-0.8"
    },
    "notice": {
     "notice_id": "n_synthetic_0004",
@@ -98,7 +98,7 @@
      "eligibility_met"
     ],
     "generated_at": "2026-10-17T03:05:00Z",
-    "ranking_version": "rank-0.6"
+    "ranking_version": "rank-0.8"
    },
    "notice": {
     "notice_id": "n_synthetic_0001",
@@ -135,7 +135,7 @@
      "eligibility_met"
     ],
     "generated_at": "2026-10-17T03:05:00Z",
-    "ranking_version": "rank-0.6"
+    "ranking_version": "rank-0.8"
    },
    "notice": {
     "notice_id": "n_synthetic_0003",
@@ -179,7 +179,7 @@
      "eligibility_needs_check"
     ],
     "generated_at": "2026-10-17T03:05:00Z",
-    "ranking_version": "rank-0.6"
+    "ranking_version": "rank-0.8"
    },
    "notice": {
     "notice_id": "n_synthetic_kakao_0001",
@@ -207,6 +207,37 @@
   },
   {
    "recommendation": {
+    "notice_id": "n_synthetic_0101",
+    "notice_version": 1,
+    "score": 3.53,
+    "eligibility_status": "needs_check",
+    "condition_results": [],
+    "reason_codes": [
+     "eligibility_needs_check"
+    ],
+    "generated_at": "2026-10-17T03:05:00Z",
+    "ranking_version": "rank-0.8"
+   },
+   "notice": {
+    "notice_id": "n_synthetic_0101",
+    "notice_version": 1,
+    "title": "[합성 샘플] 대학생 아이디어 공모전",
+    "category": "contest",
+    "source_url": "https://www.wevity.com/?c=find&s=1&gub=1&gbn=viewok&ix=999990001",
+    "published": null,
+    "application_deadline": {
+     "date": "2026-12-31",
+     "time": null,
+     "timezone": null,
+     "precision": "date",
+     "evidence": "접수기간: 2026-12-01 ~ 2026-12-31"
+    },
+    "deadline_note": null,
+    "lifecycle_status": "open"
+   }
+  },
+  {
+   "recommendation": {
     "notice_id": "n_synthetic_kakao_0002",
     "notice_version": 1,
     "score": 0.0,
@@ -216,7 +247,7 @@
      "eligibility_needs_check"
     ],
     "generated_at": "2026-10-17T03:05:00Z",
-    "ranking_version": "rank-0.6"
+    "ranking_version": "rank-0.8"
    },
    "notice": {
     "notice_id": "n_synthetic_kakao_0002",
@@ -247,7 +278,7 @@
      "eligibility_needs_check"
     ],
     "generated_at": "2026-10-17T03:05:00Z",
-    "ranking_version": "rank-0.6"
+    "ranking_version": "rank-0.8"
    },
    "notice": {
     "notice_id": "n_synthetic_0002",

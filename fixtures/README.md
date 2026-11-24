@@ -16,8 +16,13 @@
 | 내용 변경·버전 | `valid/notice/minute_precision_changed_deadline` |
 | review_pending·closed | `valid/notice/closed_review_pending` |
 | 웹 원문 없는 출처 (카카오톡 알림톡, D-019) | `valid/raw_notice/kakao_no_url`, `valid/notice/kakao_no_url`, `invalid/raw_notice/no_url_no_id` |
+| 교외 공모전 출처 (D-038, 학교 없음·게시일 null·시간대 null) | `valid/raw_notice/external_contest`, `valid/notice/external_contest` |
 | 개인화 불가 (latest) | `valid/recommendation_list_response/latest_no_profile` |
 | 저장 후 마감 변경 | `valid/saved_notice_list_response/deadline_changed_after_save` |
 | 학과만 입력 → 학과 통계 보조 점수(D-020) | `valid/user_profile/major_only`, `valid/recommendation_list_response/major_only` |
+| AI 전송 동의 기록 | `valid/user_profile/with_agent_consent`, `invalid/user_profile/agent_consent_without_agreed_at` |
+| 상세 분석 칩: 단독 선택(`none_yet`, 지역 `any`), 시기 하나만, 자유 입력 없음 | `valid/analysis_request/*`, `invalid/analysis_request/*` |
+| 리포트 4칸·저장본 여부 | `valid/analysis_response/*`, `invalid/analysis_response/*` |
+| 크레딧 잔액 0~5, 내역 종류·부호 | `valid/credits/*`, `invalid/credits/*` |
 
 실제 동작 검증이 아직 없는 사례: 재수집 중복 방지, 분석 실패·단일 403 처리, 기본 추천 제외 규칙, 평가 불가 요소의 분모 제외와 동점 정렬. 이 사례들은 수집기·파이프라인·추천기 구현 후 소비자 테스트로 확인합니다.

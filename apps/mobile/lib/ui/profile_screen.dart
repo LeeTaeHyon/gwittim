@@ -5,6 +5,7 @@ import '../data/repository.dart';
 import 'app_info.dart';
 import 'common.dart';
 import 'components.dart';
+import 'credits_screen.dart';
 import 'format.dart';
 import 'legal.dart';
 import 'logo.dart';
@@ -59,8 +60,8 @@ class _ProfileData {
   _ProfileData withProfile(UserProfile p) => _ProfileData(p, universities, majors, interests, roles, majorInterests);
 }
 
-/// P0 대상 학교는 명지전문대 하나 (D-005 #6). 저장된 학교가 없을 때만 쓴다.
-const _p0University = 'mjc';
+/// 지원 학교(학교 팩) 밖의 학교를 고르는 사전 항목 (D-043). 학교 이름은 받지 않고 학과는 비운다.
+const _unlistedUniversity = 'unlisted';
 
 const _statusNames = {'enrolled': '재학', 'on_leave': '휴학', 'graduated': '졸업'};
 
@@ -69,6 +70,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /// 저장한 뒤 다시 받지 않고 바꿔 끼운 내용
   _ProfileData? _data;
+
+  /// 크레딧 줄에 보일 잔액. 읽지 못하면 null이고 줄은 값 없이 보인다.
+  late Future<Credits?> _credits = _loadCredits();
+
+  Future<Credits?> _loadCredits() async {
+    try {
+      return await widget.repository.getCredits();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _openCredits() async {
+    await Navigator.of(context).push(gwRoute(context, (_) => CreditsScreen(repository: widget.repository)));
+    // 화살표 함수로 쓰면 setState가 Future를 돌려받아 디버그 단언에 걸린다.
+    if (mounted) {
+      setState(() {
+        _credits = _loadCredits();
+      });
+    }
+  }
+
+  /// 확인 창 → 동의 기록 지우기. 서버가 받은 분석도 함께 지운다.
+  Future<void> _withdrawConsent(_ProfileData data) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (await _confirmWithdrawConsent() != true || !mounted) return;
+    try {
+      await widget.repository.withdrawAgentConsent();
+      if (!mounted) return;
+      setState(() {
+        final p = data.profile;
+        if (p != null) _data = data.withProfile(p.withAgentConsent(null));
+      });
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('AI 상세 분석 동의가 철회되었습니다.')));
+    } catch (e) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(keepAll(errorMessage(e)))));
+    }
+  }
+
+  Future<bool?> _confirmWithdrawConsent() {
+    final c = context.gw;
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: c.card,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'AI 상세 분석 동의를 철회하시겠습니까?',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.ink),
+        ),
+        content: Text(
+          keepAll(
+            '철회하면 받은 분석이 모두 삭제되고 되돌릴 수 없습니다.\n\n'
+            '다시 상세 분석을 받으려면 동의 화면에서 다시 동의해야 합니다.',
+          ),
+          style: TextStyle(fontSize: 15, height: 1.5, color: c.body),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: c.urgent),
+            child: const Text('철회'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<_ProfileData> _load() async {
     final r = widget.repository;
@@ -219,6 +293,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: TipBubble(title: '입력한 정보는 추천에만 사용', detail: '지원 조건 비교와 추천 순서에만 사용하며, 성적·학번은 받지 않습니다.'),
         ),
         const SizedBox(height: 32),
+        const Padding(padding: EdgeInsets.symmetric(horizontal: 24), child: SectionTitle('이용')),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: GwCard(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+            child: _CreditRow(future: _credits, onTap: _openCredits),
+          ),
+        ),
+        const SizedBox(height: 32),
         const Padding(padding: EdgeInsets.symmetric(horizontal: 24), child: SectionTitle('설정')),
         const SizedBox(height: 12),
         Padding(
@@ -300,6 +384,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   padding: const EdgeInsets.only(top: 20, bottom: 4),
                   child: Divider(height: 1, color: c.line),
                 ),
+                if (data.profile?.agentConsent != null) ...[
+                  _InfoRow(label: 'AI 상세 분석 동의 철회', onTap: () => _withdrawConsent(data)),
+                  Divider(height: 1, color: c.line),
+                ],
                 const _InfoRow(label: '버전', value: appVersion),
                 Divider(height: 1, color: c.line),
                 _InfoRow(label: '이용약관', onTap: () => openLegal(context, widget.openUrl, termsUrl)),
@@ -312,6 +400,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 이용 > 크레딧 줄. 남은 개수 '3 / 5'를 보이고 누르면 크레딧 페이지로 간다.
+class _CreditRow extends StatelessWidget {
+  const _CreditRow({required this.future, required this.onTap});
+
+  final Future<Credits?> future;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 56),
+        child: Row(
+          children: [
+            Icon(Icons.toll_rounded, size: 22, color: c.sub),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text('크레딧', style: TextStyle(fontSize: 16, color: c.body)),
+            ),
+            FutureBuilder(
+              future: future,
+              builder: (context, snapshot) {
+                final credits = snapshot.data;
+                if (credits == null) return const SizedBox.shrink();
+                return Text(
+                  '${credits.balance} / ${Credits.max}',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.sub),
+                );
+              },
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right_rounded, size: 20, color: c.muted),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -330,7 +460,8 @@ class _SummaryCard extends StatelessWidget {
     String? name(List<DictionaryItem> items, String? id) => items.where((i) => i.id == id).firstOrNull?.name;
     final empty =
         p == null ||
-        (p.majorId == null &&
+        (p.universityId == null &&
+            p.majorId == null &&
             p.grade == null &&
             p.enrollmentStatus == null &&
             p.interestIds.isEmpty &&
@@ -480,7 +611,7 @@ const _maxPicks = 5;
 const _suggestedPicks = 3;
 
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
-  late String? _universityId = widget.profile?.universityId ?? _p0University;
+  late String? _universityId = widget.profile?.universityId;
   late String? _majorId = widget.profile?.majorId;
   late int? _grade = widget.profile?.grade;
   late String? _status = widget.profile?.enrollmentStatus;
@@ -522,6 +653,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       enrollmentStatus: _status,
       interestIds: _interests.toList()..sort(),
       targetRoleIds: _roles.toList()..sort(),
+      // 프로필 PUT은 통째로 바꾼다. 동의 기록을 빼면 철회가 되므로 그대로 이어 보낸다.
+      agentConsent: widget.profile?.agentConsent,
     );
     try {
       await widget.repository.updateProfile(profile);
@@ -633,9 +766,17 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     final names = {
       for (final i in [...widget.universities, ...widget.majors]) i.id: i.name,
     };
+    final unlisted = _universityId == _unlistedUniversity;
+    // 지원 학교(사전 순) → 목록에 없는 학교. '선택 안 함'은 팝업이 맨 위에 붙인다.
+    final schools = [
+      for (final u in widget.universities)
+        if (u.id != _unlistedUniversity) u,
+      ...widget.universities.where((u) => u.id == _unlistedUniversity),
+    ];
+    // 고른 학교의 학과만. 학교를 고르지 않았으면 모든 학교의 학과(기존 동작).
     final majors = [
       for (final m in widget.majors)
-        if (_universityId == null || m.id.startsWith('$_universityId.')) m,
+        if (_universityId == null || m.universityId == _universityId) m,
     ];
     final (title, detail, body) = switch (_step) {
       0 => (
@@ -649,26 +790,32 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
               value: names[_universityId],
               onTap: () => _pick(
                 title: '학교',
-                items: widget.universities,
+                items: schools,
                 selected: _universityId,
-                allowNone: false,
+                allowNone: true,
                 onPicked: (id) {
                   if (id != _universityId) _majorId = null;
                   _universityId = id;
                 },
               ),
             ),
-            _PickRow(
-              label: '학과',
-              value: names[_majorId],
-              onTap: () => _pick(
-                title: '학과',
-                items: majors,
-                selected: _majorId,
-                allowNone: true,
-                onPicked: (id) => _majorId = id,
+            if (unlisted)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('학교 공지는 지원 학교 학생에게만 보입니다. 교외 공모전은 그대로 추천됩니다.', style: caption),
+              )
+            else
+              _PickRow(
+                label: '학과',
+                value: names[_majorId],
+                onTap: () => _pick(
+                  title: '학과',
+                  items: majors,
+                  selected: _majorId,
+                  allowNone: true,
+                  onPicked: (id) => _majorId = id,
+                ),
               ),
-            ),
             const SizedBox(height: 18),
             const _FieldLabel('학년'),
             const SizedBox(height: 8),

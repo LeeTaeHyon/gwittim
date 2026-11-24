@@ -19,7 +19,7 @@ from backend.dictionaries import codes
 from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
-from .rules import EXCLUDES, RuleBasedAnalyzer, is_activity_line, is_llm_condition, tidy_unresolved
+from .rules import EXCLUDES, OTHER_STATUS, RuleBasedAnalyzer, is_activity_line, is_llm_condition, tidy_unresolved
 
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _PHONE = re.compile(r"(?:\+?82[-\s]?)?0\d{1,2}[-\s.)]?\d{3,4}[-\s.]?\d{4}")
@@ -153,7 +153,8 @@ class OllamaAnalyzer:
             return {**fields, "_analysis_version": fields.pop("_analysis_version", self.base.version)}
 
         source_text = _normalize(title + " " + raw["body_text"])
-        if not self.extract:
+        if fields["category"] == "admin_notice" or not self.extract:
+            # 업체·교직원 대상 행정 공지(학생 지원 자격·마감을 LLM에게서도 받지 않음)이거나 자체 모델이 추출을 맡으면(D-042) 요약만 쓴다
             year = int(raw["published"]["date"][:4]) if raw.get("published") else None
             fields["summary"] = self._checked_summary(out.get("summary"), source_text, year, [title, *raw["body_text"].splitlines()])
             return fields
@@ -187,6 +188,10 @@ class OllamaAnalyzer:
                 continue
             if EXCLUDES.search(c["evidence"]):
                 self.rejected.append(f"빼는 조건을 허용으로 답함: {c['evidence'][:40]}")
+                continue
+            if c["field"] == "enrollment_status" and OTHER_STATUS.search(c["evidence"]):
+                # 졸업 예정자·복학생 등은 프로필 재학 상태로 판정할 수 없다. 규칙처럼 직접 확인으로 둔다 (D-046)
+                self.rejected.append(f"재학 상태로 판정할 수 없는 학적: {c['evidence'][:40]}")
                 continue
             if not self._valid_value(c["field"], c["operator"], c.get("value")):
                 self.rejected.append(f"값 검증 실패: {c['field']}={c.get('value')!r}")
@@ -225,7 +230,8 @@ class OllamaAnalyzer:
         if operator == "eq" and isinstance(value, list):
             return False
         if field == "grade":
-            return all(isinstance(v, int) and 1 <= v <= 4 for v in values)
+            # 1~4학년 전체는 학년 제한이 아니다
+            return all(isinstance(v, int) and 1 <= v <= 4 for v in values) and set(values) != {1, 2, 3, 4}
         if field == "enrollment_status":
             return all(v in ("enrolled", "on_leave", "graduated") for v in values)
         dictionary = "universities" if field == "university_id" else "majors"

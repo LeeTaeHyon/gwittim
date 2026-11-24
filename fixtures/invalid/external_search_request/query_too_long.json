@@ -1,0 +1,10 @@
+{
+  "_expect": {
+    "keyword": "maxLength",
+    "path": "query"
+  },
+  "data": {
+    "request_id": "synthetic-req-0104",
+    "query": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가"
+  }
+}

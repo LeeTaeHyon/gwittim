@@ -165,7 +165,7 @@ def test_latest_mode_without_personal_input(notices):
 
 
 def test_tie_break_by_published_then_id(notices):
-    empty = fixture("user_profile/empty.json")
+    empty = dict(fixture("user_profile/empty.json"), university_id="mjc")  # 학교 공지가 보이도록 학교만 (rank-0.8)
     a, b, c = (copy.deepcopy(notices[2]) for _ in range(3))
     a["notice_id"], a["published"]["date"] = "n_b", "2026-10-10"
     b["notice_id"], b["published"]["date"] = "n_a", "2026-10-10"
@@ -217,7 +217,7 @@ def test_old_notice_without_deadline_excluded(notices, profile):
     recent["published"]["date"] = "2026-08-18"  # 60일 전까지는 남긴다
     dated = copy.deepcopy(notices[0])  # 마감일을 아는 공고는 게시일과 무관
     dated["published"]["date"] = "2026-01-02"
-    for p in (profile, {}):
+    for p in (profile, {"university_id": "mjc"}):
         ids = [i["notice"]["notice_id"] for i in recommend([old, recent, dated], p, today=TODAY, generated_at=NOW)["items"]]
         assert ids.count("n_synthetic_0002") == 0 and "n_recent" in ids and "n_synthetic_0001" in ids
 
@@ -287,5 +287,94 @@ def test_major_only_profile_ranks_by_major_stats(notices):
 def test_major_prior_table_covers_dictionary():
     majors = json.loads((ROOT / "contracts/dictionaries/majors.json").read_text(encoding="utf-8"))["items"]
     table = load_prior()
-    missing = sorted(m["id"] for m in majors if m["id"] not in table)
+    # 숭의(sewu.*)는 학과 통계를 넣지 않는다 (D-045)
+    missing = sorted(m["id"] for m in majors if m["id"] not in table and m["university_id"] != "sewu")
     assert missing == ["mjc.undeclared"]  # 자유전공학과는 대응하는 커리어넷 학과가 없다
+
+
+# ---------- 목록에 없는 학교 (unlisted, D-043) ----------
+
+def _ids(out: dict) -> list[str]:
+    return [i["notice"]["notice_id"] for i in out["items"]]
+
+
+def _school_and_external() -> list[dict]:
+    school = fixture("notice/explicitly_unrestricted.json")  # mjc_www_notice, 조건 없음
+    external = fixture("notice/external_contest.json")  # wevity_contest
+    school_cond = fixture("notice/date_only_timezone_unknown.json")  # mjc 본교 조건 포함
+    return [school, external, school_cond]
+
+
+@pytest.mark.parametrize("university_id", ["unlisted", None])
+def test_unlisted_or_no_school_student_sees_only_external_notices(profile, university_id):
+    """목록에 없는 학교·학교 안 고른 학생은 교외 공고만 (D-043, rank-0.8)."""
+    notices = _school_and_external()
+    unlisted = dict(profile, university_id=university_id, major_id=None)
+    out = recommend(notices, unlisted, today=TODAY, generated_at=NOW)
+    assert schema_errors("recommendation_list_response", out) == []
+    assert _ids(out) == [notices[1]["notice_id"]]
+    # 검색·분류에서도 같은 규칙
+    searched = recommend(notices, unlisted, today=TODAY, generated_at=NOW, query=notices[0]["title"][:4])
+    assert all(i not in _ids(searched) for i in (notices[0]["notice_id"], notices[2]["notice_id"]))
+
+
+def test_mjc_student_sees_school_and_external_notices(profile):
+    notices = _school_and_external()
+    out = recommend(notices, dict(profile, university_id="mjc"), today=TODAY, generated_at=NOW)
+    assert notices[0]["notice_id"] in _ids(out)
+    assert notices[1]["notice_id"] in _ids(out)
+
+
+def test_unlisted_fails_school_condition_without_filter(profile):
+    """'본교 재학생' 조건(university_id eq mjc)은 필터와 별개로 unlisted에게 not_met이다."""
+    cond_notice = fixture("notice/date_only_timezone_unknown.json")
+    status, results = evaluate(cond_notice["eligibility"], dict(profile, university_id="unlisted", major_id=None))
+    assert status == "not_met"
+    assert [r["status"] for r in results if r["field"] == "university_id"] == ["not_met"]
+    # null 학생은 비교할 수 없어 needs_check 쪽
+    status_null, _ = evaluate(cond_notice["eligibility"], dict(profile, university_id=None))
+    assert status_null == "needs_check"
+
+
+# ---------- 학교 출처 공지는 같은 학교 학생에게만 (두 번째 학교 숭의, D-045) ----------
+
+SEWU_TODAY = date(2026, 11, 20)  # 숭의 합성 공지(신청 ~ 12-04)가 열려 있는 날
+SEWU_NOW = "2026-11-20T03:05:00Z"
+
+
+def _sewu_notice_and_others() -> tuple[dict, dict, dict]:
+    sewu = fixture("notice/sewu_notice_scholarship.json")
+    mjc = fixture("notice/explicitly_unrestricted.json")
+    external = fixture("notice/external_contest.json")
+    return sewu, mjc, external
+
+
+def _ids_on(notices: list[dict], profile: dict) -> list[str]:
+    out = recommend(notices, profile, today=SEWU_TODAY, generated_at=SEWU_NOW)
+    assert schema_errors("recommendation_list_response", out) == []
+    return _ids(out)
+
+
+def test_sewu_notice_is_visible_only_to_sewu_students(profile):
+    sewu, mjc, external = _sewu_notice_and_others()
+    assert sewu["source_id"] == "sewu_www_notice"
+    for school in ("mjc", "unlisted", None):
+        ids = _ids_on([sewu], dict(profile, university_id=school, major_id=None))
+        assert sewu["notice_id"] not in ids, school
+    ids = _ids_on([sewu, mjc, external], dict(profile, university_id="sewu", major_id=None))
+    assert sewu["notice_id"] in ids
+
+
+def test_mjc_notice_is_hidden_from_sewu_students_but_external_is_kept(profile):
+    sewu, mjc, external = _sewu_notice_and_others()
+    ids = _ids_on([sewu, mjc, external], dict(profile, university_id="sewu", major_id=None))
+    assert mjc["notice_id"] not in ids
+    assert external["notice_id"] in ids
+
+
+def test_sewu_notice_is_hidden_from_search_of_other_schools(profile):
+    sewu, _, _ = _sewu_notice_and_others()
+    out = recommend(
+        [sewu], dict(profile, university_id="mjc"), today=SEWU_TODAY, generated_at=SEWU_NOW, query=sewu["title"][:4]
+    )
+    assert _ids(out) == []

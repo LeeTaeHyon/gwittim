@@ -67,6 +67,12 @@ DICT_FIELDS = {
     "target_role_ids": "roles",
     "related_roles": "roles",
     "related_majors": "majors",
+    # 상세 분석 요청 칩 (analysis_request)
+    "experience": "experience_chips",
+    "period": "period_chips",
+    "regions": "region_chips",
+    # 외부 공고 찾기 요청 (external_search_request)
+    "interests": "interests",
 }
 
 
@@ -87,6 +93,8 @@ def check_dictionary_codes(data, dicts) -> list[str]:
             allowed = dicts[DICT_FIELDS[value["field"]]]
             vals = value["value"] if isinstance(value["value"], list) else [value["value"]]
             errors += [f"dictionary_code: {path}/value = {v!r} 가 사전에 없음" for v in vals if v not in allowed]
+            if value["field"] == "university_id" and "unlisted" in vals:
+                errors.append(f"dictionary_code: {path}/value = 'unlisted' 는 프로필 전용 값이라 공고 조건에 쓸 수 없음")
     return errors
 
 
@@ -112,8 +120,15 @@ def check_eligibility_status(data) -> list[str]:
     return errors
 
 
+def check_unlisted_profile(data) -> list[str]:
+    """SPEC §5: university_id가 unlisted(목록에 없는 학교)이면 major_id는 null. 학교 이름은 받지 않는다."""
+    if isinstance(data, dict) and data.get("university_id") == "unlisted" and data.get("major_id") is not None:
+        return [f"unlisted_profile: university_id = 'unlisted' 이면 major_id 는 null 이어야 함 (major_id = {data['major_id']!r})"]
+    return []
+
+
 def semantic_errors(data, dicts) -> list[str]:
-    return check_dictionary_codes(data, dicts) + check_eligibility_status(data)
+    return check_dictionary_codes(data, dicts) + check_eligibility_status(data) + check_unlisted_profile(data)
 
 
 def check_major_prior(data, dicts) -> list[str]:

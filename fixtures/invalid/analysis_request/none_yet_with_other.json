@@ -1,0 +1,16 @@
+{
+  "_expect": {
+    "keyword": "maxItems",
+    "path": "chips/experience"
+  },
+  "data": {
+    "notice_id": "synthetic-notice-001",
+    "request_id": "synthetic-req-0001",
+    "chips": {
+      "experience": [
+        "none_yet",
+        "python"
+      ]
+    }
+  }
+}

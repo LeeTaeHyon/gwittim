@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../data/application_case.dart';
 import '../data/models.dart';
 import 'briefing_data.dart';
+import 'case_view.dart';
+import 'briefing_stats.dart';
 import 'components.dart';
 import 'format.dart';
 import 'theme.dart';
@@ -14,22 +17,58 @@ typedef AnswerMajorPick = Future<bool> Function(RecommendationEntry entry, bool 
 /// 귀띔 브리핑 (D-009, D-018). 하루 첫 실행 때 전체 화면으로 보이고, 홈의 '오늘의 귀띔'에서 다시 연다.
 /// 조건에 맞는 공고가 있는 소식만 보인다. 문장은 템플릿이다 (사용자별 LLM 생성 아님).
 /// 머리는 브랜드 면(네이비 + 라임), 소식 카드는 흰 바탕.
-class BriefingScreen extends StatelessWidget {
+///
+/// [arrival]이면(하루 첫 접속 때 자동으로 열린 경우만) 화면 위를 덮는 '귀띔 도착' 장면이 먼저 보이고,
+/// 장면이 사라진 뒤에 항목이 떠오른다. 애니메이션 줄이기 설정이면 장면 없이 바로 브리핑.
+class BriefingScreen extends StatefulWidget {
   const BriefingScreen({
     super.key,
     required this.briefing,
     required this.today,
     required this.onOpenNotice,
     this.onAnswerMajorPick,
+    this.arrival = false,
   });
 
   final Briefing briefing;
   final DateTime today;
   final OpenNotice onOpenNotice;
   final AnswerMajorPick? onAnswerMajorPick;
+  final bool arrival;
+
+  @override
+  State<BriefingScreen> createState() => _BriefingScreenState();
+}
+
+class _BriefingScreenState extends State<BriefingScreen> {
+  /// 도착 장면이 떠 있는지. 처음 그릴 때 정한다(애니메이션 줄이기면 장면 없음).
+  bool? _scene;
+
+  Briefing get briefing => widget.briefing;
+  DateTime get today => widget.today;
+  OpenNotice get onOpenNotice => widget.onOpenNotice;
+  AnswerMajorPick? get onAnswerMajorPick => widget.onAnswerMajorPick;
+
+  void _endScene() {
+    if (_scene == true) setState(() => _scene = false);
+  }
 
   @override
   Widget build(BuildContext context) {
+    _scene ??= widget.arrival && MediaQuery.maybeDisableAnimationsOf(context) != true;
+    final scene = _scene!;
+    final page = _page(context, started: !scene);
+    if (!scene) return page;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        page,
+        _ArrivalScene(day: today, count: distinctNoticeCount(briefing), onDone: _endScene),
+      ],
+    );
+  }
+
+  Widget _page(BuildContext context, {required bool started}) {
     final c = context.gw;
     final sections = <Widget>[
       if (briefing.savedSoon.isNotEmpty)
@@ -37,6 +76,12 @@ class BriefingScreen extends StatelessWidget {
           entries: briefing.savedSoon,
           today: today,
           onOpen: () => _open(context, briefing.savedSoon.first.notice, null),
+        ),
+      if (briefing.startToday.isNotEmpty)
+        _StartBubble(
+          entries: briefing.startToday,
+          today: today,
+          onOpen: () => _open(context, briefing.startToday.first.notice, null),
         ),
       if (briefing.urgent case final u?)
         _UrgentBubble(entry: u, today: today, onOpen: () => _open(context, u.notice, u.recommendation)),
@@ -76,11 +121,12 @@ class BriefingScreen extends StatelessWidget {
           children: [
             _Rise(
               delay: 0,
-              child: _Hero(briefing: briefing, today: today),
+              started: started,
+              child: _Hero(briefing: briefing, today: today, sweep: widget.arrival, sweepStarted: started),
             ),
             const SizedBox(height: 14),
             for (var i = 0; i < sections.length; i++) ...[
-              _Rise(delay: 300 + i * 250, child: sections[i]),
+              _Rise(delay: 300 + i * 250, started: started, child: sections[i]),
               const SizedBox(height: 14),
             ],
             Padding(
@@ -131,15 +177,18 @@ class BriefingScreen extends StatelessWidget {
 }
 
 /// 섹션이 차례로 올라온다. 애니메이션 줄이기 설정이면 바로 보인다.
+/// [started]가 false인 동안(도착 장면)은 숨어서 기다리고, true가 되면 그때부터 올라온다.
 class _Rise extends StatelessWidget {
-  const _Rise({required this.delay, required this.child});
+  const _Rise({required this.delay, required this.child, this.started = true});
 
   final int delay;
   final Widget child;
+  final bool started;
 
   @override
   Widget build(BuildContext context) {
     if (MediaQuery.maybeDisableAnimationsOf(context) == true) return child;
+    if (!started) return Opacity(opacity: 0, child: child);
     final total = delay + 600;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
@@ -181,7 +230,7 @@ class _UrgentBubble extends StatelessWidget {
         children: [
           Text('마감 임박', style: _kicker(c).copyWith(color: c.urgent)),
           const SizedBox(height: 6),
-          Text(keepAll(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(keepTitle(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
           Text(
             '${due.month}월 ${due.day}일 마감 · ${left == 0 ? '오늘' : 'D-$left'}',
             style: _title(c).copyWith(color: c.urgent),
@@ -319,7 +368,7 @@ class _MajorPickBubbleState extends State<_MajorPickBubble> {
         children: [
           const MajorPickLabel(),
           const SizedBox(height: 10),
-          Text(keepAll(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(keepTitle(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
           Text(
             '${due.month}월 ${due.day}일 마감 · ${left == 0 ? '오늘' : 'D-$left'}',
             style: _title(c).copyWith(color: c.urgent),
@@ -363,27 +412,19 @@ class _MajorPickBubbleState extends State<_MajorPickBubble> {
 
 /// 브리핑 머리: 네이비 면 위에 귀띔 배지·날짜, 흰 제목('주요 소식'은 라임 면), 소식마다 반투명 배지.
 class _Hero extends StatelessWidget {
-  const _Hero({required this.briefing, required this.today});
+  const _Hero({required this.briefing, required this.today, this.sweep = false, this.sweepStarted = true});
 
   final Briefing briefing;
   final DateTime today;
 
-  /// 네이비 위 소식 배지 바탕 (흰색 12%)
-  static const _tagFill = Color(0x1FFFFFFF);
+  /// '주요 소식' 라임 면을 왼쪽에서 오른쪽으로 칠한다 (도착 장면 뒤). [sweepStarted]가 true가 되면 시작.
+  final bool sweep;
+  final bool sweepStarted;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
     final headline = TextStyle(fontSize: 26, height: 1.4, fontWeight: FontWeight.w700, color: c.loginInk);
-    final b = briefing;
-    final tags = [
-      if (b.savedSoon.isNotEmpty) '저장 공고 곧 마감 ${b.savedSoon.length}건',
-      if (b.urgent != null) '마감 임박',
-      if (b.fresh.isNotEmpty) '새 공고 ${b.fresh.length}건',
-      if (b.career.isNotEmpty) '진로 관련 ${b.career.length}건',
-      if (b.majorPick != null) '졸업생 진로 추천',
-      if (b.changed.isNotEmpty) '마감 변경 ${b.changed.length}건',
-    ];
     return Container(
       padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
       decoration: BoxDecoration(color: c.hero, borderRadius: Gw.bubble),
@@ -395,7 +436,7 @@ class _Hero extends StatelessWidget {
               const GwBadge(),
               const SizedBox(width: 8),
               Text(
-                '${today.month}월 ${today.day}일 ${weekdayName(today)}요일',
+                briefingDay(today),
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.loginSub),
               ),
             ],
@@ -410,33 +451,131 @@ class _Hero extends StatelessWidget {
                 WidgetSpan(
                   alignment: PlaceholderAlignment.baseline,
                   baseline: TextBaseline.alphabetic,
-                  // 라임 면 위 짙은 글자: 투명한 형광펜은 네이비 위에서 탁해져서 면으로 칠한다.
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(color: c.lime, borderRadius: BorderRadius.circular(8)),
-                    child: Text('주요 소식', style: headline.copyWith(color: c.limeInk)),
-                  ),
+                  child: LimeFace('주요 소식', style: headline, animate: sweep, started: sweepStarted),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final t in tags)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: _tagFill, borderRadius: BorderRadius.circular(12)),
-                  child: Text(
-                    t,
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.loginInk),
+          if (briefingStats(briefing).isNotEmpty) ...[const SizedBox(height: 14), BriefingStatRow(briefing: briefing)],
+        ],
+      ),
+    );
+  }
+}
+
+/// 하루 첫 접속 '귀띔 도착' 장면 (약 2.75초). hero 면이 브리핑 화면 전체를 덮는다.
+/// 200ms 뒤 라임 말풍선이 꼬리 쪽에서 커지며 나타나고(아주 살짝 넘침), 안에서 '…' 점 셋이 깜빡인다 →
+/// 1.1초 날짜 줄, 1.3초 '확인할 공고 N건'이 흐리게 나타남 → 2.3초부터 450ms 동안 장면이 흐려지며 사라진다.
+/// 아무 곳이나 누르면 바로 넘어간다.
+class _ArrivalScene extends StatefulWidget {
+  const _ArrivalScene({required this.day, required this.count, required this.onDone});
+
+  final DateTime day;
+  final int count;
+  final VoidCallback onDone;
+
+  @override
+  State<_ArrivalScene> createState() => _ArrivalSceneState();
+}
+
+class _ArrivalSceneState extends State<_ArrivalScene> with SingleTickerProviderStateMixin {
+  static const _totalMs = 2750;
+  late final AnimationController _c =
+      AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: _totalMs),
+        )
+        ..addStatusListener((s) {
+          if (s == AnimationStatus.completed) widget.onDone();
+        })
+        ..forward();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  /// 시작 [from]ms부터 [length]ms 동안 0→1 (곡선 적용)
+  double _seg(double ms, double from, double length, Curve curve) =>
+      curve.transform(((ms - from) / length).clamp(0.0, 1.0));
+
+  /// 깜빡임: 1초 주기, 가운데에서 가장 옅음
+  double _blink(double ms, double delay) {
+    if (ms < delay) return 1;
+    final p = ((ms - delay) / 1000) % 1;
+    return p < 0.5 ? 1 - 0.75 * (p / 0.5) : 0.25 + 0.75 * ((p - 0.5) / 0.5);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return Semantics(
+      label: '오늘의 귀띔 도착, 확인할 공고 ${widget.count}건',
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onDone,
+        child: AnimatedBuilder(
+          animation: _c,
+          builder: (context, _) {
+            final ms = _c.value * _totalMs;
+            return Opacity(
+              opacity: 1 - _seg(ms, 2300, 450, Curves.ease),
+              child: Material(
+                color: c.hero,
+                child: SizedBox.expand(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // 꼬리(왼쪽 아래)를 기준으로 0→1배
+                      Transform.scale(
+                        scale: _seg(ms, 200, 450, const Cubic(0.34, 1.25, 0.64, 1)),
+                        alignment: Alignment.bottomLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+                          decoration: BoxDecoration(color: c.lime, borderRadius: Gw.bubble),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (var i = 0; i < 3; i++) ...[
+                                if (i > 0) const SizedBox(width: 5),
+                                Opacity(
+                                  opacity: _blink(ms, 200 + i * 150.0),
+                                  child: Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(color: c.limeInk, shape: BoxShape.circle),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Opacity(
+                        opacity: _seg(ms, 1100, 400, Curves.ease),
+                        child: Text(
+                          '${briefingDay(widget.day)} · 오늘의 귀띔',
+                          style: TextStyle(fontSize: 14, color: c.loginSub),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Opacity(
+                        opacity: _seg(ms, 1300, 400, Curves.ease),
+                        child: Text(
+                          '확인할 공고 ${widget.count}건',
+                          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: c.loginInk),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-            ],
-          ),
-        ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -456,6 +595,9 @@ class _SavedSoonBubble extends StatelessWidget {
     final n = entries.first.notice;
     final left = daysLeft(n, today)!;
     final deadline = n.applicationDeadline!;
+    // 지원 건이면 남은 날은 모든 화면과 같은 문구 (D-052)
+    final cases = ApplicationCaseScope.maybeOf(context);
+    final view = cases == null ? null : caseView(n, cases[n.noticeId], now: today);
     return GwCard(
       bubble: true,
       padding: const EdgeInsets.all(22),
@@ -464,16 +606,89 @@ class _SavedSoonBubble extends StatelessWidget {
         children: [
           Text('저장한 공고', style: _kicker(c)),
           const SizedBox(height: 6),
-          Text(keepAll(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
-          Text(left == 0 ? '오늘 신청 마감' : '신청 마감 D-$left', style: _title(c).copyWith(color: c.urgent)),
-          const SizedBox(height: 6),
-          Text(
-            '${deadline.day.month}월 ${deadline.day.day}일${deadline.hasTime ? ' ${deadline.time}' : ''} 마감',
-            style: TextStyle(fontSize: 14, color: c.sub),
-          ),
+          Text(keepTitle(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          if (view != null) ...[
+            Text(keepAll(view.remaining), style: _title(c).copyWith(color: c.urgent)),
+            // 오늘 신청을 시작하는 건은 신청 시작 카드 대신 여기에 한 줄 (D-052)
+            if (startsToday(entries.first, cases?[n.noticeId], today)) ...[
+              const SizedBox(height: 6),
+              Text(
+                _startTodayText(cases?[n.noticeId]),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.accent),
+              ),
+            ],
+            if (view.next case final next?) ...[
+              const SizedBox(height: 6),
+              Text(keepAll('${view.stateLabel} · ${next.text}'), style: TextStyle(fontSize: 14, color: c.sub)),
+            ],
+          ] else ...[
+            Text(left == 0 ? '오늘 신청 마감' : '신청 마감 D-$left', style: _title(c).copyWith(color: c.urgent)),
+            const SizedBox(height: 6),
+            Text(
+              '${deadline.day.month}월 ${deadline.day.day}일${deadline.hasTime ? ' ${deadline.time}' : ''} 마감',
+              style: TextStyle(fontSize: 14, color: c.sub),
+            ),
+          ],
           if (entries.length > 1) ...[
             const SizedBox(height: 4),
-            Text('저장한 공고 ${entries.length - 1}건도 이틀 안에 마감', style: captionStyle(context)),
+            Text(
+              keepAll(
+                '저장한 공고 ${entries.length - 1}건도 이틀 안에 마감'
+                '${switch (_alsoStarting(entries.skip(1), cases, today)) {
+                  0 => '',
+                  final k => '(그중 $k건 오늘 신청 시작)',
+                }}',
+              ),
+              style: captionStyle(context),
+            ),
+          ],
+          const SizedBox(height: 16),
+          SoftButton(label: '공고 보기', onPressed: onOpen),
+        ],
+      ),
+    );
+  }
+}
+
+/// '오늘 09:00 신청 시작'(시각이 없으면 '오늘 신청 시작'). 저장한 공고 카드와 신청 시작 카드가 같은 문구를 쓴다.
+String _startTodayText(ApplicationCase? kase) {
+  final start = kase?.applicationStart;
+  return start != null && start.hasTime ? '오늘 ${start.time} 신청 시작' : '오늘 신청 시작';
+}
+
+/// [entries] 중 오늘 신청을 시작하는 지원 건 수.
+int _alsoStarting(Iterable<SavedEntry> entries, ApplicationCaseStore? cases, DateTime today) =>
+    cases == null ? 0 : entries.where((e) => startsToday(e, cases[e.notice.noticeId], today)).length;
+
+/// 신청 시작 소식 (D-052): 저장한 공고 중 오늘 신청이 시작되는 것.
+class _StartBubble extends StatelessWidget {
+  const _StartBubble({required this.entries, required this.today, required this.onOpen});
+
+  final List<SavedEntry> entries;
+  final DateTime today;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final n = entries.first.notice;
+    final kase = ApplicationCaseScope.maybeOf(context)?[n.noticeId];
+    final view = caseView(n, kase, now: today);
+    return GwCard(
+      bubble: true,
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('신청 시작', style: _kicker(c)),
+          const SizedBox(height: 6),
+          Text(keepTitle(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(_startTodayText(kase), style: _title(c).copyWith(color: c.accent)),
+          const SizedBox(height: 6),
+          Text(keepAll(view.remaining), style: TextStyle(fontSize: 14, color: c.sub)),
+          if (entries.length > 1) ...[
+            const SizedBox(height: 4),
+            Text('저장한 공고 ${entries.length - 1}건도 오늘 신청 시작', style: captionStyle(context)),
           ],
           const SizedBox(height: 16),
           SoftButton(label: '공고 보기', onPressed: onOpen),
@@ -585,7 +800,7 @@ class _ChangedBubble extends StatelessWidget {
         children: [
           Text('저장한 공고', style: _kicker(c)),
           const SizedBox(height: 6),
-          Text(keepAll('${entry.notice.title}\n${deadlineChangeText(entry)}'), style: _title(c)),
+          Text(keepTitle('${entry.notice.title}\n${deadlineChangeText(entry)}'), style: _title(c)),
           const SizedBox(height: 16),
           Wrap(
             spacing: 8,

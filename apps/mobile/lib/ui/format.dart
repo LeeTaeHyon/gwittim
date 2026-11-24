@@ -113,15 +113,32 @@ final _sentenceEnd = RegExp(r'[.!?]$');
 /// Flutter는 한글 음절 사이에서도 줄을 바꿔 '주세\n요.'처럼 어절이 갈라진다.
 /// - 어절 안 글자 사이에 단어 연결자를 넣어 띄어쓰기에서만 줄이 바뀌게 한다.
 /// - 끝 문장이 짧으면(14자 이하) 통째로, 아니면 끝 두 어절을 묶어 다음 줄에 한 어절만 남지 않게 한다.
-String keepAll(String text) => text.split('\n').map(_keepAllLine).join('\n');
+/// 공고 제목에는 [keepTitle]을 쓴다.
+String keepAll(String text) => text.split('\n').map((l) => _keepAllLine(l)).join('\n');
 
-String _keepAllLine(String line) {
+/// 공고 제목용 [keepAll]. 끝 묶음이 [_maxTitleBindChars]자를 넘으면 묶지 않는다.
+/// 제목은 끝 어절이 길어(영문 약칭·괄호 등) 묶음이 줄 폭보다 길어지면 글자 엔진이 어절 중간에서 자르기 때문이다.
+/// 안내 문장은 끝 어절이 짧고 마지막 줄 한 어절이 더 거슬려 [keepAll]을 그대로 쓴다.
+String keepTitle(String title) =>
+    title.split('\n').map((l) => _keepAllLine(l, maxBind: _maxTitleBindChars)).join('\n');
+
+/// 짧은 라벨('조건 확인 필요', '여러 개 선택')을 한 덩어리로 둔다. 줄이 모자라면 라벨 앞에서 통째로 줄을 바꾼다.
+String keepTogether(String label) => keepAll(label).replaceAll(' ', _noBreakSpace);
+
+/// [keepTitle]이 끝 어절들을 묶는 상한(공백 포함 화면 글자 수). 공고 제목 611줄 중 91%가 이 안에 든다(2026-11-24).
+const _maxTitleBindChars = 12;
+
+/// [maxBind]: 끝 묶음 글자 수 상한. 넘으면 묶지 않는다(null이면 상한 없음).
+String _keepAllLine(String line, {int? maxBind}) {
   final words = line.split(' ');
+  int length(Iterable<String> w) => w.join(' ').characters.length;
+  bool fits(Iterable<String> w) => maxBind == null || length(w) <= maxBind;
   var bind = 2;
   final end = words.lastIndexWhere(_sentenceEnd.hasMatch, words.length - 2);
-  if (end >= 0 && words.length - end - 1 > bind && words.skip(end + 1).join(' ').length <= 14) {
+  if (end >= 0 && words.length - end - 1 > bind && length(words.skip(end + 1)) <= 14 && fits(words.skip(end + 1))) {
     bind = words.length - end - 1;
   }
+  if (words.length >= bind && !fits(words.skip(words.length - bind))) bind = 1; // 묶지 않음
   final joined = words.map(_joinWord).toList();
   final split = (words.length - bind).clamp(0, words.length);
   return [...joined.take(split), joined.skip(split).join(_noBreakSpace)].join(' ');

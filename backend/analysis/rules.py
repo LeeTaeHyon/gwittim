@@ -16,7 +16,7 @@ from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
 
-ANALYSIS_VERSION = "rule-0.9"  # 0.9: 날짜 범위 끝 형식 보강(D-042). 0.8: 미해석 조건이 남으면 제한 없음 아님, 제한 없음 줄은 '무관' 면제 없음. 0.7: LLM 미해석 조건은 신청자 본인 조건만(D-023). 0.6: 미해석 조건 정리·우대 사항 표시(D-015). 0.5: 근로·근무 기간은 마감 아님. 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
+ANALYSIS_VERSION = "rule-0.11"  # 0.11: 날짜 범위 끝 형식 보강(D-042). 0.10: 졸업 예정자 줄은 재학 상태 조건으로 만들지 않고 직접 확인(D-046). 0.9: 재학상태 여러 값·기간형 신청 끝날짜·신청자 조건 줄·행정 공지 조건 제외·학년 전체 나열 무시·카테고리 보강. 0.8: 미해석 조건이 남으면 제한 없음 아님, 제한 없음 줄은 '무관' 면제 없음. 0.7: LLM 미해석 조건은 신청자 본인 조건만(D-023). 0.6: 미해석 조건 정리·우대 사항 표시(D-015). 0.5: 근로·근무 기간은 마감 아님. 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
 
 
 class Analyzer(Protocol):
@@ -39,9 +39,15 @@ def _dictionary(name: str) -> list[dict]:
 
 # 학생 대상 기회가 아닌 공지(교직원 채용, 시설·행정 안내). 제목으로만 판단하고, 추천에서는 빼되 게시는 한다.
 ADMIN_TITLE = re.compile(
-    r"(?:교수|교원|강사|직원|조교)\s*(?:초빙|공개\s*채용|채용)|교직원|정기\s*점검|안전\s*진단|주차장|청소\s*작업|보건실"
-    r"|국민\s*행동\s*요령|라이선스|입찰|휴무|정전|단수|시스템\s*점검"
+    r"(?:교수|교원|강사|조교)\s*(?:초빙|공개\s*채용|채용)|교직원|정기\s*점검|안전\s*진단|주차장|청소\s*작업|보건실"
+    r"|국민\s*행동\s*요령|라이선스|입찰|용역|휴무|정전|단수|시스템\s*점검"
+    r"|전산\s*(?:시스템|서비스)|서비스\s*(?:일시\s*)?중단|세척기|복사기|프린터|정수기|자판기|엘리베이터|냉난방"
 )
+# '직원 채용'은 학교 직원일 수도, 학생이 지원하는 기업 채용일 수도 있다. 학생·인턴·캠퍼스 리크루팅 같은 말이 제목에 있으면 행정 공지로 보지 않는다.
+STAFF_TITLE = re.compile(r"직원\s*(?:초빙|공개\s*채용|채용|모집)")
+STUDENT_TARGET_TITLE = re.compile(r"학생|재학생|졸업생|인턴|신입|캠퍼스|리크루팅|현장\s*실습")
+# 업체를 상대로 한 계약 공고: 마감이 학생 신청 마감이 아니다. (교원·직원 채용의 접수 마감은 그 채용의 마감이라 남긴다)
+VENDOR_TITLE = re.compile(r"입찰|용역|견적|수의\s*계약")
 # 채용공지 게시판의 외부 기관 '직원 채용'은 학생이 지원할 채용이다. 이 게시판에서는 학교의 교원·교직원 채용만 행정 공지로 본다.
 JOB_BOARD_ADMIN_TITLE = re.compile(r"(?:교수|교원|강사|조교)\s*(?:초빙|공개\s*채용|채용)|교직원|명지전문대학?\s*(?:신규\s*)?직원")
 JOB_BOARDS = {"mjc_www_job"}
@@ -55,6 +61,7 @@ TAG_NOISE = re.compile(
 )
 
 CATEGORY_RULES = [
+    ("volunteer", r"(?:자원\s*)?봉사자\s*(?:모집|지원)|봉사단\s*모집"),  # '놀이대회 자원봉사자 모집'은 대회가 아니다
     ("contest", r"공모전|경진대회|해커톤|대회"),
     ("scholarship", r"장학"),
     ("internship", r"인턴|현장실습"),
@@ -62,10 +69,11 @@ CATEGORY_RULES = [
     ("volunteer", r"봉사"),
     ("global", r"해외|연수|교환학생|유학(?!생)"),
     ("startup", r"창업"),
+    ("education_program", r"특강"),  # '역량기반 … 특강'은 비교과 안내가 아니라 교육 프로그램
     ("extracurricular", r"비교과|마일리지|역량"),
-    ("education_program", r"교육생|특강|강좌|과정|교육"),
+    ("education_program", r"교육생|강좌|과정|교육|부트\s*캠프|워크\s*[숍샵]|아카데미"),
     ("event", r"행사|박람회|축제|설명회|포럼|바자회"),
-    ("academic", r"수강\s*(?:신청|정정|철회)|학사|성적|졸업|등록금|강의평가|시험"),  # '콘텐츠 수강 안내'는 학사 안내가 아님
+    ("academic", r"수강\s*(?:신청|정정|철회)|계절\s*학기|학사|성적|졸업|등록금|강의평가|시험"),  # '콘텐츠 수강 안내'는 학사 안내가 아님
 ]
 
 # 공공기관 채용(채용공지의 공단·공사 공고). '공사'는 건설 공사와 겹쳐서 기관 이름 꼴만 본다.
@@ -162,10 +170,13 @@ def is_activity_line(line: str) -> bool:
     return bool(ACTIVITY.search(line)) and not APPLY.search(line)
 
 
+# '2026.11.30.(월) 10:00부터 …'처럼 시작만 읽힌 줄의 날짜는 마감이 아니다 (끝 날짜가 읽히면 범위로 본다)
+FROM_START = re.compile(r"\d\s*(?:\([월화수목금토일]\))?\s*(?:,\s*\d{1,2}:\d{2})?\s*부터")
+
 NOTE = re.compile(r"선착순|예산\s*소진|조기\s*마감")
 
 GRADE_RANGE = re.compile(r"([1-4])\s*[~\-–]\s*([1-4])\s*학년")
-GRADE_LIST = re.compile(r"([1-4])\s*[,·]\s*([1-4])\s*학년")
+GRADE_LIST = re.compile(r"(?<![\d~\-–])([1-4](?:\s*[,·]\s*[1-4])+)\s*학년")
 GRADE_ONE = re.compile(r"(?<![~\-–,·\d])([1-4])\s*학년\s*(?:만|대상|재학생|학생)")
 UNIVERSITY = re.compile(r"우리\s*대학|본교")
 # '분량 제한 없음' 같은 문구는 지원 자격이 아니다. 대상·자격에 대한 제한 없음만 본다.
@@ -173,8 +184,20 @@ UNRESTRICTED = re.compile(
     r"누구나|(?:학년|학과|전공|자격|대상|지원|참여|신청)\s*제한\s*없|제한\s*없이\s*(?:누구나|지원|참여|신청)|학년\s*무관|전공\s*무관"
 )
 UNRESOLVED = re.compile(r"평점|학점|성적|소득|연령|나이|만\s*\d+\s*세|우대|요건|거주|주민등록|소재|출신|국적")
+# 신청자·작품이 갖춰야 하거나 피해야 하는 조건 줄: 성적 기준, 채플 출석 통과, 초과학기, 표절·기존 발표·수상작 응모 불가.
+# '출석'·'성적' 낱말 때문에 안내 문구로 면제되지 않게 따로 본다
+APPLICANT_CONDITION = re.compile(
+    r"(?:성적|평점|학점|백분위)[^\n]{0,25}?(?:이상|이하|미만|초과|\d\s*점)"
+    r"|채플[^\n]{0,15}(?:통과|이수|출석)|출석[^\n]{0,8}(?:통과|이수)"
+    r"|초과\s*학기\s*(?:생|자)|정규\s*학기[^\n]{0,10}초과"
+    r"|(?:표절|도용|기존\s*발표|수상\s*(?:이력|경력|작)|타\s*공모전)[^\n]{0,60}?(?:불가|없는|없을|없습니다|수\s*없|제외|않은|아니)"
+)
+# 학생·졸업생을 함께 말하는 표현 ('학생 또는 졸업생'): 재학생 낱말이 없어도 재학 중인 학생과 졸업생 둘 다다
+STUDENT_OR_GRADUATE = re.compile(r"(?<![재휴대])학생\s*(?:또는|혹은|및|,|/)\s*졸업(?:생|자)|졸업(?:생|자)\s*(?:또는|혹은|및|,|/)\s*(?<![재휴대])학생")
 # 재학·휴학·졸업 밖의 학적 (같은 줄에 있으면 재학 상태 조건으로 만들지 않는다)
-OTHER_STATUS = re.compile(r"복학|입학\s*예정|편입|재입학|신입생")
+# '졸업 예정자'는 재학생 중 일부라 프로필 재학 상태(재학·휴학·졸업)로 판정할 수 없다. '기졸업자 또는 졸업예정자'를
+# 졸업생만으로 읽으면 졸업 예정인 재학생이 미충족이 된다 (D-046). '재학생(졸업예정자 포함)'처럼 넓히는 말은 그대로 둔다
+OTHER_STATUS = re.compile(r"복학|입학\s*예정|편입|재입학|신입생|졸업\s*예정(?!자?\s*(?:도\s*)?포함)")
 # 고졸 이상 학력: 대학생은 재학·휴학·졸업 모두 갖춘다 ('고등학교 졸업예정자'만은 해당 없음) (D-023)
 HIGH_SCHOOL_OR_MORE = re.compile(r"고등학교\s*졸업(?:자|\s*이상|\s*학력)|고졸\s*(?:이상|자|학력)")
 # 제출 서류 목록(성적증명서 등)과 '성적에 관계없이'는 지원 조건이 아니다. 혜택·출결·성적 조회 안내도 (D-023)
@@ -265,7 +288,7 @@ def tidy_unresolved(items: list[dict], lines: list[str]) -> tuple[list[dict], bo
 
 # 신청자 본인이 갖춰야 하는 조건을 말하는 낱말. 프로필로 판정하지 못하는 속성들
 PERSONAL_HINT = re.compile(
-    r"평점|학점|성적|백분위|이수(?:자|한|했|\s*중)"
+    r"초과\s*학기|채플|표절|도용|수상\s*(?:이력|작)|평점|학점|성적|백분위|이수(?:자|한|했|\s*중)"
     r"|소득|학자금\s*지원|\d\s*구간|분위|기초\s*생활|차상위|저소득|수급"
     r"|연령|나이|만\s*\d+\s*세|\d+\s*세\s*(?:이하|이상|미만)|출생"
     r"|거주|주민등록|주소지|출신|국적|외국인|유학생"
@@ -298,7 +321,7 @@ def is_llm_condition(text: str, conditions: list[dict], unresolved: list[dict], 
     LLM은 일정·혜택·제출 방법·팀 구성·주제·대상 설명도 조건으로 내곤 한다. 받는 쪽을 좁게 둔다.
     우대 사항은 지원 자격과 따로 묶여 확인 필요 수에 들지 않으니(D-015) 낱말과 관계없이 받는다.
     """
-    if NOT_ELIGIBILITY.search(text) or NOT_CONDITION.search(text):
+    if NOT_ELIGIBILITY.search(text) or (NOT_CONDITION.search(text) and not APPLICANT_CONDITION.search(text)):
         return False
     if OPEN_TO.search(text) and not LIMIT.search(text):
         return False
@@ -311,6 +334,14 @@ def is_llm_condition(text: str, conditions: list[dict], unresolved: list[dict], 
         return True
     # 이미 재학 상태·학년 조건으로 읽은 줄의 일부면 빼고, 따로 나온 학적 문구만 받는다
     return bool(PROFILE_HINT.search(text)) and not any(key in _compact(c["evidence"]) for c in conditions)
+
+
+def is_admin_title(title: str, source_id: str) -> bool:
+    if source_id in JOB_BOARDS:
+        return bool(JOB_BOARD_ADMIN_TITLE.search(title))
+    if ADMIN_TITLE.search(title):
+        return True
+    return bool(STAFF_TITLE.search(title)) and not STUDENT_TARGET_TITLE.search(title)
 
 
 def _lines(raw: dict) -> list[str]:
@@ -333,13 +364,13 @@ class RuleBasedAnalyzer:
     def analyze(self, raw: dict, source: SourceConfig) -> dict:
         title, lines = raw["title"], _lines(raw)
         text = title + "\n" + "\n".join(lines)
-        admin = bool((JOB_BOARD_ADMIN_TITLE if raw["source_id"] in JOB_BOARDS else ADMIN_TITLE).search(title))
+        admin = is_admin_title(title, raw["source_id"])
         category = "admin_notice" if admin else self._category(TAG_NOISE.sub(" ", title), TAG_NOISE.sub(" ", text))
         tag_source = title if category in TITLE_ONLY_TAG_CATEGORIES else text
         tag_text = "" if admin else TAG_NOISE.sub(" ", tag_source)  # 비학생 공지는 꼬리표 없음
         majors = {m["id"] for m in _dictionary("majors")}
         named = [m["id"] for m in _dictionary("majors") if m["name_ko"] in tag_text]
-        return {
+        fields = {
             "summary": None,  # 검증된 요약은 LLM 단계 이후
             "category": category,
             "interest_tags": _codes(INTEREST_RULES, tag_text, {i["id"] for i in _dictionary("interests")}),
@@ -348,6 +379,16 @@ class RuleBasedAnalyzer:
             **self._dates(lines, source),
             "eligibility": self._eligibility(raw, lines, source),
         }
+        if admin:
+            # 업체·교직원 대상 공지는 학생 지원 자격을 읽지 않는다: 학교 조건 등을 붙이지 않고, 업체 계약 공고는 마감도 잡지 않는다.
+            # 읽지 않은 것이므로 완전·제한 없음으로 표시하지 않는다.
+            fields["eligibility"] = {
+                "conditions": [], "unresolved_conditions": [], "extraction_complete": False,
+                "explicitly_unrestricted": False, "unrestricted_evidence": None,
+            }
+            if VENDOR_TITLE.search(title):
+                fields.update(application_start=None, application_deadline=None, deadline_note=None)
+        return fields
 
     @staticmethod
     def _category(title: str, text: str) -> str:
@@ -367,7 +408,7 @@ class RuleBasedAnalyzer:
             start, end = parse_line(line)
             if start is None:
                 continue
-            if out["application_deadline"] is None and START_DEADLINE.search(line) and not is_activity_line(line):
+            if out["application_deadline"] is None and START_DEADLINE.search(line) and not is_activity_line(line) and not (end is None and FROM_START.search(line)):
                 if end:
                     out["application_start"] = date_info(start, line, tz)
                     out["application_deadline"] = date_info(end, line, tz)
@@ -393,17 +434,28 @@ class RuleBasedAnalyzer:
             if not any(c["field"] == field for c in conditions):
                 conditions.append({"field": field, "operator": operator, "value": value, "evidence": evidence, "validation_status": "validated"})
 
+        def add_grades(values: list[int], line: str):
+            if values == [1, 2, 3, 4]:
+                return  # 전 학년을 나열한 것은 학년 조건이 아니다
+            add("grade", "in", values, line)
+
+        # 출처 학교 이름 바로 뒤에 재학생·졸업생이 오면 그 학교 조건 ('숭의여자대학교 재학생'). '○○대학교 학생 여러분' 같은 호칭은 아님
+        school_name = next((u["name_ko"] for u in _dictionary("universities") if u["id"] == source.university_id), None)
+        school_status = re.compile(re.escape(school_name) + r"\s*(?:재학생|졸업생|재학\s*중|학생\s*(?:또는|혹은|및)\s*졸업)") if school_name else None
+
         unrestricted_line = None
         for line in lines:
             if m := GRADE_RANGE.search(line):
                 lo, hi = sorted((int(m[1]), int(m[2])))
-                add("grade", "in", list(range(lo, hi + 1)), line)
+                add_grades(list(range(lo, hi + 1)), line)
             elif m := GRADE_LIST.search(line):
-                add("grade", "in", sorted({int(m[1]), int(m[2])}), line)
+                add_grades(sorted({int(d) for d in re.findall(r"[1-4]", m[1])}), line)
             elif m := GRADE_ONE.search(line):
                 add("grade", "eq", int(m[1]), line)
 
             statuses = [s for s, p in (("enrolled", r"재학생|재\s*[·ㆍ･,/]\s*휴학생"), ("on_leave", r"휴학생"), ("graduated", r"졸업생|졸업자")) if re.search(p, line)]
+            if "enrolled" not in statuses and STUDENT_OR_GRADUATE.search(line):
+                statuses.insert(0, "enrolled")  # '학생 또는 졸업생'은 졸업생만이 아니다
             if HIGH_SCHOOL_OR_MORE.search(line) and not NOT_CONDITION.search(line):
                 add("enrollment_status", "in", ["enrolled", "on_leave", "graduated"], line)
             elif statuses and OTHER_STATUS.search(line):
@@ -411,7 +463,7 @@ class RuleBasedAnalyzer:
             elif statuses:
                 add("enrollment_status", "eq" if len(statuses) == 1 else "in", statuses[0] if len(statuses) == 1 else statuses, line)
 
-            if source.university_id and UNIVERSITY.search(line):
+            if source.university_id and (UNIVERSITY.search(line) or (school_status and school_status.search(line))):
                 add("university_id", "eq", source.university_id, line)
 
             named = [m["id"] for m in majors if m["name_ko"] in line and re.search(re.escape(m["name_ko"]) + r"\s*(?:재학생|학생|대상|소속)", line)]
@@ -420,7 +472,7 @@ class RuleBasedAnalyzer:
 
             # 제한 없음 문구가 있는 줄은 '무관' 등으로 면제하지 않는다 ('학년 무관, 소득분위 3분위 이하')
             exempt = NOT_CONDITION.search(line) and not UNRESTRICTED.search(line)
-            if (UNRESOLVED.search(line) and not exempt) or SEE_ATTACHMENT.search(line):
+            if (UNRESOLVED.search(line) and not exempt) or SEE_ATTACHMENT.search(line) or APPLICANT_CONDITION.search(line):
                 unresolved.append({"evidence": line, "note": None})
             if unrestricted_line is None and UNRESTRICTED.search(line):
                 unrestricted_line = line

@@ -1,7 +1,7 @@
 # 귀띔 (Gwittim) — 공통 개발 명세
 
-- 버전: 0.16
-- 작성일: 2026-10-16 / 0.2 갱신: 2026-10-17 (D-005 계약 결정 반영, `contracts/` 초안 작성) / 0.3 갱신: 2026-10-26 (D-013 수집 게시판 4개, 오래된 마감 미상 공고 추천 제외, D-014 이미지 대체텍스트) / 0.4 갱신: 2026-10-30 (D-019 카카오톡 알림톡 출처, 알림톡 분류 모델) / 0.5 갱신: 2026-10-30 (D-020 학과 통계 보조 점수, 프로필 학과 통계 칩) / 0.6 갱신: 2026-10-30 (D-021 학과 통계 추천 분리 표시와 관심 있음·없음) / 0.7 갱신: 2026-11-01 (D-027 마감일 없는 공고의 시기 점수 0) / 0.8 갱신: 2026-11-01 (D-025 알림톡과 게시판 공고 짝, 신청 사이트) / 0.9 갱신: 2026-11-01 (D-026 공고 탭 검색·분류 칩) / 0.10 갱신: 2026-11-03 (D-028 '졸업생 진로 추천' 표시 이름) / 0.11 갱신: 2026-11-05 (D-031 관심사·직무 최대 5개) / 0.12 갱신: 2026-11-10 (D-032 고른 관심사·직무 꼬리표가 없는 공고는 불일치) / 0.13 갱신: 2026-11-15 (D-034 알림톡 자동 수집용 팀장 폰, 기기 안 거르기·분류) / 0.14 갱신: 2026-11-15 (D-035 알림톡 종류·관심사 모델을 사람 정답 학습으로, LLM은 배운 적 없는 분야의 관심사만) / 0.15 갱신: 2026-11-15 (D-036 수집기 폰 → 서버 받은편지함 → 배치) / 0.16 갱신: 2026-11-17 (D-040 폰 알림으로만 받은 알림톡의 본문 미리보기 표시)
+- 버전: 0.20
+- 작성일: 2026-10-16 / 0.2 갱신: 2026-10-17 (D-005 계약 결정 반영, `contracts/` 초안 작성) / 0.3 갱신: 2026-10-26 (D-013 수집 게시판 4개, 오래된 마감 미상 공고 추천 제외, D-014 이미지 대체텍스트) / 0.4 갱신: 2026-10-30 (D-019 카카오톡 알림톡 출처, 알림톡 분류 모델) / 0.5 갱신: 2026-10-30 (D-020 학과 통계 보조 점수, 프로필 학과 통계 칩) / 0.6 갱신: 2026-10-30 (D-021 학과 통계 추천 분리 표시와 관심 있음·없음) / 0.7 갱신: 2026-11-01 (D-027 마감일 없는 공고의 시기 점수 0) / 0.8 갱신: 2026-11-01 (D-025 알림톡과 게시판 공고 짝, 신청 사이트) / 0.9 갱신: 2026-11-01 (D-026 공고 탭 검색·분류 칩) / 0.10 갱신: 2026-11-03 (D-028 '졸업생 진로 추천' 표시 이름) / 0.11 갱신: 2026-11-05 (D-031 관심사·직무 최대 5개) / 0.12 갱신: 2026-11-10 (D-032 고른 관심사·직무 꼬리표가 없는 공고는 불일치) / 0.13 갱신: 2026-11-15 (D-034 알림톡 자동 수집용 팀장 폰, 기기 안 거르기·분류) / 0.14 갱신: 2026-11-15 (D-035 알림톡 종류·관심사 모델을 사람 정답 학습으로, LLM은 배운 적 없는 분야의 관심사만) / 0.15 갱신: 2026-11-15 (D-036 수집기 폰 → 서버 받은편지함 → 배치) / 0.16 갱신: 2026-11-17 (D-040 폰 알림으로만 받은 알림톡의 본문 미리보기 표시) / 0.17 갱신: 2026-11-21 (D-038 교외 공모전 출처 1차 위비티·콘테스트코리아를 범위에 포함) / 0.18 갱신: 2026-11-22 (D-043 학교 공지는 같은 학교 학생에게만, 학교 안 고른 학생은 교외 공고만) / 0.19 갱신: 2026-11-22 (D-045 두 번째 학교 숭의여대 공지 게시판) / 0.20 갱신: 2026-11-23 (D-052 기기 예약 알림도 P0 제외, 신청 챙기기는 앱 안 표시만)
 - 상태: 구현 착수용 제안 초안. 팀 합의 후 기준 버전으로 사용한다.
 - 대상: 팀장, 팀원, 각자의 AI 코딩 에이전트
 - 이 문서는 목표 동작을 정의한다. 구현 완료를 의미하지 않는다.
@@ -23,6 +23,8 @@
   - 게시판 공고와 같은 공고인 알림톡은 게시하지 않고, 여러 프로그램 묶음 등 관련 게시판 공고가 있으면 '관련 학교 공지'로 붙인다. 본문에 적힌 학교 사이트(스마트케어 등)는 '신청 사이트'로 열기만 하고 수집하지 않는다(D-025).
   - 2단계(D-034): 팀장 폰 한 대가 학교 채널 알림톡을 받아 자동 수집한다. 개인 알림은 그 폰에서 거르고, 분류도 그 폰에서 서버와 같은 모델·계산으로 한 뒤 공통 공지만 서버로 보낸다. 일반 사용자에게는 알림 읽기 권한을 요구하지 않는다. PC 내보내기는 보충용으로 남긴다.
   - 수집 경로(D-036): 폰 → 서버 받은편지함(`kakao_inbox`, 클라이언트 접근 금지) → 정기 배치가 카톡 내보내기와 함께 분석·게시. 서버는 받은 글을 같은 파서로 다시 확인해 공통 공지만 두고, 원문 대신 가린 본문만 저장한다. 폰 알림과 내보내기의 같은 공지는 한 공고가 되고, 공지 ID는 폰이 먼저 받은 발송 기준이다(재발송이면 처음 발송 기준).
+- 교외 공모전 출처(D-038): 위비티·콘테스트코리아에서 하루 2번 새 공고를 모아 게시한다. 게시 규칙은 명지 공고와 같다(검증을 통과하면 게시, 아니면 review_pending). 대학생이 지원할 수 없는 공고(응모 대상 칸이 초·중·고·청소년뿐)는 규칙으로 거르고, 애매하면 포함해 조건 판정에 맡긴다. 사이트가 접수 끝남으로 표시한 공고는 가져오지 않는다. 앱에는 출처 사이트 이름과 원문 링크를 함께 보인다. 주최 측 공식 페이지 따라가기, 링커리어·씽굿 등 나머지 출처, 모델(Gemma) 기반 대상 판별은 다음 단계다.
+- 숭의여자대학교 공지사항 게시판 1개(학교 팩, D-045). 학교 공지는 같은 학교 학생에게만 보이고, 게시 규칙은 명지 공고와 같다. 학과 사전(`sewu.*`)만 두고 학과 통계 추천·알림톡은 넣지 않는다. 본문 이미지(`/_attach/`)는 robots가 막아 받지 않으며, 포스터에만 있는 내용은 원문 확인으로 안내한다.
 - 중복 저장 방지, 수정 감지, 수집 실패 기록.
 - 공고 구조화와 날짜·지원 조건 검증. 해석이 필요한 본문에 LLM 적용.
 - 기본 인증, 사용자 프로필 입력·수정.
@@ -37,7 +39,7 @@
 
 ### P0 제외
 
-위 4개 게시판과 알림톡 외 출처 확대(홍보게시판, ctl 비교과, 다른 사이트), 일반 사용자 폰의 알림 읽기(알림톡 자동 수집은 D-034의 팀장 폰 한 대로 포함), 받은 사람의 개인 알림함, 임베딩 추천, 학습 기반 추천(점수·순위를 학습. 꼬리표 분류 모델은 D-019, 공개 통계 기반 학과 보조 점수는 D-020으로 포함), 피드백 가중치 학습, 개인 시간표, 일정 충돌 검사, 기기 캘린더 연동, 푸시 알림, 대화형 비서, LLM 실시간 브리핑, iOS.
+위 명지 4개 게시판·알림톡과 숭의여대 공지사항 게시판 외 학교 출처 확대(명지 홍보게시판·ctl 비교과, 숭의의 다른 게시판, 그 밖의 학교), D-038 교외 출처(위비티·콘테스트코리아) 밖의 다른 사이트(링커리어 등은 출처별 승인 뒤), 일반 사용자 폰의 알림 읽기(알림톡 자동 수집은 D-034의 팀장 폰 한 대로 포함), 받은 사람의 개인 알림함, 임베딩 추천, 학습 기반 추천(점수·순위를 학습. 꼬리표 분류 모델은 D-019, 공개 통계 기반 학과 보조 점수는 D-020으로 포함), 피드백 가중치 학습, 개인 시간표, 일정 충돌 검사, 기기 캘린더 연동, 푸시 알림(서버 푸시와 앱을 열지 않아도 뜨는 기기 예약 알림 모두. 마감·신청 챙기기는 앱 안 표시만, D-052), 대화형 비서, LLM 실시간 브리핑, iOS.
 
 토스형 브리핑 표현은 참고하되 P0에서는 저장된 데이터와 문장 템플릿으로 표시한다. 타 서비스 화면·자산을 복제하지 않는다.
 
@@ -91,11 +93,15 @@ M1의 수동 검증 표본은 20건을 목표로 한다. 부족하면 실제 건
 | body_text | string | 메뉴·푸터를 제거한 본문. 본문 이미지의 대체텍스트(alt)는 `[이미지 설명]` 줄 아래에 붙인다(D-014) |
 | published | object 또는 null | 원문 게시일 날짜 정보. 날짜만 있으면 precision=date, 미표기는 null |
 | collected_at | string | 이번 수집 시각 |
-| content_hash | string | `sha256:<hex>`. title·body_text·published·source_fields·첨부 파일명의 해시 |
+| content_hash | string | `sha256:<hex>`. title·body_text·published·source_fields(poster_url 제외)·첨부 파일명의 해시 |
 | source_fields | object | 출처가 제공한 날짜·대상·작성 부서 등 원래 필드. 조회수처럼 매번 바뀌는 값 제외 |
 | attachments | array | file_name·url(직접 URL 없으면 null)·type. 배열에 있다고 다운로드 허용된 것은 아님 |
 
+교외 출처(D-038)의 RawNotice: `source_id`는 출처 사이트 단위(`wevity_contest`, `contestkorea_contest`)이고 학교에 속하지 않아 출처 설정의 `university_id`가 없다(null). `source_url`은 출처 사이트의 상세 페이지다(주최 측 공식 주소는 `source_fields`에만 남긴다). 게시일이 없는 사이트는 `published`가 null이고, 접수 기간 등 날짜는 본문에 적힌 대로만 읽으며 시간대는 확인되지 않아 null이다. 출처 이름은 출처 설정의 `name`이며 계약에 따로 필드를 두지 않는다.
+
 수집기는 DB 저장을 직접 책임지지 않는다. 저장·분석은 공통 파이프라인에서 처리한다. 수집시각처럼 매번 달라지는 값은 content_hash에서 제외한다.
+
+명지 게시판의 선택형 `source_fields.poster_url`은 본문 편집기 이미지 첫 후보의 HTTPS 주소다. 추가·교체·제거 시 원문 해시, 버전 및 요약·분석을 유지한다.
 
 ### Notice — 앱이 사용하는 공고
 
@@ -103,6 +109,7 @@ M1의 수동 검증 표본은 20건을 목표로 한다. 부족하면 실제 건
 |---|---|---|
 | schema_version / notice_id | string | 계약 버전 / 내부 ID |
 | source_id / source_url | string / string 또는 null | 출처 / 원문 링크 (알림톡은 null, 앱은 원문 열기 대신 안내를 보인다) |
+| poster_url | string (선택) | 명지 게시판 원문 포스터. 상세에서만 제공하며 없으면 생략 |
 | title | string | 표시 제목 |
 | apply_url | string 또는 null, 선택 | 알림톡 본문에 적힌 학교 사이트(*.mjc.ac.kr) 주소. 앱의 '신청 사이트 열기' (D-025) |
 | body_preview | boolean, 선택 | 폰 알림으로만 받은 알림톡. 카카오톡 알림 본문 한도(200자)로 뒷부분이 빠졌을 수 있다. 앱은 안내 문구를 보인다. 내보내기가 들어오면 전체 본문으로 바뀌고 이 필드는 없어진다 (D-040) |
@@ -143,14 +150,17 @@ P0 자동 비교 지원 필드는 university_id, major_id, grade, enrollment_sta
 
 ### UserProfile — 사용자 입력
 
-university_id, major_id, grade, enrollment_status, interest_ids, target_role_ids, updated_at.
+university_id, major_id, grade, enrollment_status, interest_ids, target_role_ids, updated_at, 선택: agent_consent.
 
 - 학교·학과·상태·관심사·직무는 공통 선택 사전(`contracts/dictionaries/`)을 사용한다. 코드는 학교 접두사를 붙인 불투명 ID다(예: `mjc`, `mjc.computer_engineering`).
+- university_id: null은 미입력, `unlisted`(표시 이름 '목록에 없는 학교')는 지원 학교(학교 팩) 밖의 학교를 사용자가 직접 고른 것이다(D-043, 2026-11-22). 학교 이름은 받지 않는다(자유 입력 없음). `unlisted`면 그 학교의 학과 사전이 없으므로 major_id는 null이어야 하고, 아니면 서버는 `invalid_argument`로 거절한다. 공고 조건(EligibilityCondition)의 값에는 `unlisted`를 쓰지 않는다. 앱은 학교 기본값을 채우지 않는다.
 - grade는 1~4 정수, enrollment_status는 enrolled / on_leave / graduated.
 - 미입력은 null 또는 빈 선택 배열로 보존한다.
 - 관심사·희망 직무는 각각 최대 5개까지 고른다. 앱은 3개를 넘으면 '3개 이하일 때 추천이 더 정확합니다.'라고 안내한다. 점수는 하나라도 겹치면 1이라 많이 고를수록 덜 원하는 분야 공고가 같은 점수로 섞인다(D-031).
 - 성적·소득·주민등록번호·학생증은 수집하지 않는다.
 - 사용자 ID는 인증 정보에서 얻는다. 요청 본문의 사용자 ID를 신뢰하지 않는다.
+- agent_consent(선택): `{version, agreed_at}`. AI 상세 분석의 외부 AI 전송 첫 사용 동의 기록이다. 없으면 동의하지 않은 것이다. 동의 문구가 바뀌면 version을 올리고 다시 묻는다. 탈퇴 때까지 프로필과 함께 보관한다(`docs/agent-privacy-spec.md` §4·§5.1).
+- 동의 철회는 `PUT /v1/profile`에서 agent_consent를 빼서 보내는 것이다. 이전 프로필에 있던 agent_consent가 새 프로필에 없으면 철회로 보고 그 사용자의 리포트 저장본을 모두 지운다. agreed_at은 서버가 정한다(새 동의나 version 변경이면 서버 시각, 그대로면 이전 값).
 
 ### RecommendationItem — 추천 출력
 
@@ -167,6 +177,38 @@ notice_id, notice_version, score, eligibility_status, condition_results, reason_
 notice_id, saved_at, saved_notice_version, saved_deadline_snapshot(저장 당시 application_deadline 복사본 또는 null).
 
 저장 목록은 최신 Notice와 연결한다. 저장 당시 정보는 변경 안내용이며 최신 마감일을 덮어쓰는 근거가 아니다.
+
+### 상세 분석 칩 사전 — experience_chips, period_chips, region_chips
+
+요청 때만 묻는 세 질문의 선택지다(`docs/agent-privacy-spec.md` §2.2). 모두 선택 질문이며 자유 입력은 없다. 코드는 영어 snake_case, 이름은 한국어이며 `contracts/dictionaries/`에 `draft`로 둔다.
+
+- 해 본 것(experience_chips): 여러 개 선택. `none_yet`(아직 없음)은 단독 선택이다.
+- 가능한 시기(period_chips): 하나만 선택. `semester`, `vacation`, `any`.
+- 갈 수 있는 지역(region_chips): 여러 개 선택. `any`(상관없음)는 단독 선택이다.
+- 서버는 사전에 없는 값을 오류 없이 무시한다. 칩 값은 요청이 끝나면 버리며 서버에 저장하지 않는다.
+
+### AnalysisRequest — 상세 분석 요청
+
+notice_id, request_id, chips(experience, period, regions. 모두 선택, 건너뛰면 빈 객체).
+
+- request_id는 재시도 안전 식별자다. 같은 id로 두 번 차감하지 않는다.
+- 사용자 ID·이름·이메일·자유 입력 글을 받는 칸은 없다.
+
+### AnalysisResponse — 상세 분석 응답
+
+notice_id, report, expires_at, from_cache.
+
+- report는 fit(나에게 맞는 점·안 맞는 점), eligibility(지원 자격), todo(지원 전 할 일), skills(필요한 역량) 네 칸이며 모두 필수 문자열이다. 지원 자격은 이미 계산된 조건 판정과 다르게 말하지 않는다.
+- expires_at은 저장본 삭제 기준 시각이다(마감일 + 30일, 마감일 `null`이면 생성 후 60일).
+- from_cache가 true이면 저장본이며 LLM을 새로 부르지 않은 응답이다.
+
+### Credits — 크레딧 잔액·사용 내역
+
+balance(0~5), next_refill_at(다음 충전 시각, 최대 보유면 `null`), entries(kind, amount, at, ref).
+
+- kind는 signup(+5) / daily(+1) / detail_analysis(−1) / external_search(−2) / demo(+1~+5, 시연용 채우기)이고 amount는 충전이 +, 사용이 −다. ref는 사용 내역이 가리키는 id(상세 분석은 공고 id)이며 충전 내역은 `null`이다.
+- 내역은 최근 90일, 최신순이다. 실패해서 차감하지 않은 요청은 넣지 않는다.
+- 잔액은 서버만 쓰고 앱은 읽기만 한다(`docs/agent-privacy-spec.md` §10).
 
 ## 6. 처리 규칙
 
@@ -193,6 +235,7 @@ notice_id, saved_at, saved_notice_version, saved_deadline_snapshot(저장 당시
 
 1. review_pending, closed, removed 공고와 학생 대상이 아닌 행정 공지(category admin_notice: 교직원 채용, 시설·점검 안내 등)는 기본 추천에서 제외한다. 행정 공지는 게시는 하되 관심사·직무·전공 꼬리표를 붙이지 않는다.
    마감일을 모르는(lifecycle unknown) 공고는 게시 후 60일이 지나면 기본 추천에서 제외한다(D-013). 게시일 미상이면 제외하지 않는다.
+   학교 출처(출처 설정의 university_id가 있는 출처) 공지는 프로필 university_id가 그 학교인 학생에게만 기본 추천과 공고 탭 검색에 보인다. university_id가 `unlisted`이거나 null(학교 안 고름)이면 교외 공고(출처 university_id 없음)만 보이고, 앱은 null일 때 "학교를 고르면 학교 공지도 볼 수 있습니다."를 한 줄 안내한다(rank-0.8, 2026-11-22). "본교 재학생" 같은 학교 조건은 기존 판정대로 `unlisted`이면 not_met이다(D-043).
 2. not_met은 기본 추천에서 제외하되 전체 탐색에서는 상태와 함께 볼 수 있다.
 3. needs_check는 배지를 붙여 후보에 포함할 수 있다. 날짜 미상 공고는 마감 임박 영역에서 제외한다.
 4. 초기 점수: 관심사 40, 직무 35, 전공 15, 시기 10. 각 요소는 0~1이다. 시기는 마감까지 남은 날짜로 0~14일 1.0, 15~30일 0.6, 31일 이상 0.3이며, 마감일이 없거나 지났거나 deadline_note만 있으면 0이다(D-027, 평가 불가로 두면 마감이 확인된 공고보다 점수가 높아진다).
@@ -226,9 +269,16 @@ notice_id, saved_at, saved_notice_version, saved_deadline_snapshot(저장 당시
 | delete_saved_notice | 인증 사용자, notice_id | 삭제 결과. 반복 요청 안전 |
 | list_saved_notices | 인증 사용자, cursor | SavedNotice + 최신 공고 상태 |
 | delete_account_data | 인증 사용자 | 삭제 결과. 프로필·저장을 지우고 공개 공고는 유지. 반복 요청 안전 (D-024) |
+| request_detail_analysis | 인증 사용자, AnalysisRequest | AnalysisResponse. 동의가 없으면 consent_required, 크레딧이 모자라면 insufficient_credits, 같은 요청 id가 진행 중이면 request_in_progress. 성공해야 차감하고 실패는 돌려준다 |
+| get_detail_analysis | 인증 사용자, notice_id | 받은 분석(AnalysisResponse, from_cache=true) 또는 not_found. 크레딧 차감 없음 |
+| get_credits | 인증 사용자 | Credits |
 | ingest_kakao | 수집 토큰(사용자 로그인과 별개), 방·발송 분·가린 본문·폰 분류 | 저장 여부. 공통 공지가 아니면 저장하지 않음. 같은 알림은 한 건. 토큰이 설정되지 않은 서버에서는 not_found (D-036) |
 
-인증 실패·권한 없음·입력 오류·미존재·일시 장애를 구분한다. 오류 응답은 `{error: {code, message}}`이고 code는 unauthenticated / permission_denied / invalid_argument / not_found / unavailable이다. 목록 응답은 items, next_cursor(불투명 문자열 또는 null), generated_at을 가지며 limit은 최대 50이다. 앱에 스택 추적·비밀키를 반환하지 않는다. 추천 페이지 이동 중 중복·누락을 줄이도록 초기에는 소량 결과를 한 번에 받아 표시해도 된다.
+인증 실패·권한 없음·입력 오류·미존재·일시 장애를 구분한다. 오류 응답은 `{error: {code, message}}`이고 code는 unauthenticated / permission_denied / invalid_argument / not_found / unavailable이고, 상세 분석 경로에서는 insufficient_credits / request_in_progress / consent_required도 쓴다. 목록 응답은 items, next_cursor(불투명 문자열 또는 null), generated_at을 가지며 limit은 최대 50이다. 앱에 스택 추적·비밀키를 반환하지 않는다. 추천 페이지 이동 중 중복·누락을 줄이도록 초기에는 소량 결과를 한 번에 받아 표시해도 된다.
+
+상세 분석·크레딧의 HTTP 경로(확정, D-039): `POST /v1/analysis`(request_detail_analysis), `GET /v1/analysis/{notice_id}`(get_detail_analysis), `GET /v1/credits`(get_credits). 시연용 `POST /v1/credits/demo-refill`은 잔액을 5까지 채우고 크레딧 페이지와 같은 모양을 돌려준다. 서버 설정 `GWITTIM_DEMO_CREDITS=1`일 때만 열리고 아니면 404(not_found). 켜도 월 비용 상한은 그대로 막는다. 동의 기록은 `PUT /v1/profile`의 agent_consent로 보낸다. 오류 HTTP 상태는 insufficient_credits 402, request_in_progress 409, consent_required 403이다.
+
+외부 공고 찾기(D-047): `POST /v1/external-search`(request_external_search, 계약 `external_search_request`·`external_search_response`). DeepSeek 웹 검색 결과 최대 5개(검색 출처로 확인된 것 먼저, 확인 못 한 것은 '출처 확인 안 됨' 표시), 결과 페이지는 DeepSeek가 다시 열어 응모 대상을 읽고 귀띔 판정 규칙으로 충족·확인 필요를 붙이며 미충족은 뺀다. 크레딧 2개, 결과가 없으면 환불. 결과와 학생이 적은 한 줄은 저장하지 않는다(docs/agent-privacy-spec.md §12.1).
 
 앱 데이터 접근은 Repository 인터페이스로 감싼다. 샘플 구현과 실제 구현을 교체할 수 있어야 한다. UI에 추천 점수 계산을 중복 구현하지 않는다.
 

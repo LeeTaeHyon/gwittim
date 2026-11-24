@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gwittim/data/application_case.dart';
 import 'package:gwittim/data/models.dart';
 import 'package:gwittim/data/repository.dart';
 import 'package:gwittim/main.dart';
@@ -76,7 +77,7 @@ void main() {
     expect(find.byType(ProfileScreen), findsOneWidget); // 저장하면 내 정보로 돌아온다
 
     final profile = await repo.getProfile();
-    expect(profile!.universityId, 'mjc');
+    expect(profile!.universityId, isNull); // 학교는 기본값 없이 비어 있다
     expect(profile.interestIds, ['software']);
     expect(profile.majorId, isNull); // 선택하지 않은 항목은 추정하지 않음
 
@@ -87,8 +88,9 @@ void main() {
 
   testWidgets('상세에서 저장 → 저장 탭에 마감 변경 안내 → 저장 취소 → 다시 열면 빈 목록', (tester) async {
     final repo = await loaded(tester);
+    final cases = ApplicationCaseStore(storage: MemoryCaseStorage(), now: () => today);
     await tester.pumpWidget(
-      GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: noBriefing),
+      GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: noBriefing, caseStore: cases),
     );
     await tester.pumpAndSettle();
 
@@ -111,6 +113,14 @@ void main() {
       'evidence': '2026. 10. 28.(수) 17:00까지',
     });
 
+    // 리포트는 지금 마감(10/30)을 보여 줬으므로 '본 마감'도 10/30이다. 그 전에 본 마감이 10/28이었다고 맞춘다(D-052)
+    await cases.markDeadlineSeen('n_synthetic_0004', DateInfo.fromJson(const {
+      'date': '2026-10-28',
+      'time': '17:00',
+      'timezone': 'Asia/Seoul',
+      'precision': 'minute',
+      'evidence': '2026. 10. 28.(수) 17:00까지',
+    }));
     await tester.tap(find.byTooltip('뒤로'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('저장함'));
@@ -118,7 +128,7 @@ void main() {
     expect(findText(title), findsOneWidget);
     expect(find.text('1개'), findsOneWidget);
     expect(find.text('그 이후'), findsOneWidget); // 10/17(토) 기준 10/30은 다다음 주
-    expect(find.text('D-13 · 17:00 마감 · 행사'), findsOneWidget);
+    expect(findText('D-13 · 10월 30일 17:00 마감 · 행사'), findsOneWidget);
     expect(find.text('마감일이 바뀐 공고 1개'), findsOneWidget);
     expect(findText('$title · 10월 28일(수) 17:00 → 10월 30일(금) 17:00'), findsOneWidget);
     expect(find.text('마감일 바뀜'), findsOneWidget);

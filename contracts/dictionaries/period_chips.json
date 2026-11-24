@@ -1,0 +1,21 @@
+{
+  "dictionary": "period_chips",
+  "status": "draft",
+  "updated": "2026-11-21",
+  "source": "docs/agent-privacy-spec.md §2.2 (2026-11-19) 칩 제안, P6 계약 변경 (팀장 승인 2026-11-21)",
+  "description": "가능한 시기 칩. 하나만 선택. 여러 개를 선택할 수 없음.",
+  "items": [
+    {
+      "id": "semester",
+      "name_ko": "학기 중"
+    },
+    {
+      "id": "vacation",
+      "name_ko": "방학"
+    },
+    {
+      "id": "any",
+      "name_ko": "상관없음"
+    }
+  ]
+}

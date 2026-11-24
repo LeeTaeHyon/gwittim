@@ -38,15 +38,86 @@ abstract class NoticeRepository {
 
   /// 반복 요청 안전
   Future<void> deleteSaved(String noticeId);
+
+  /// AI 상세 분석 (docs/agent-privacy-spec.md §5·§10). 서버가 분석이 성공했을 때만 크레딧 1개를 차감한다.
+  /// [requestId]는 요청마다 새로 만들고 재시도 때만 같은 값을 쓴다(같은 id로 두 번 차감하지 않음).
+  /// 오류: consentRequired, insufficientCredits, requestInProgress, notFound, unavailable(차감 안 됨)
+  Future<AnalysisResponse> requestAnalysis({
+    required String noticeId,
+    required String requestId,
+    AnalysisChips chips = const AnalysisChips(),
+  });
+
+  /// 외부 공고 찾기 (D-047, docs/agent-privacy-spec.md §2.3). 결과가 있을 때만 크레딧 2개를 차감한다.
+  /// 비어 있는 조건은 보내지 않는다. [query]는 앞뒤 공백을 떼고 50자까지만 보낸다. 서버는 결과를 저장하지 않는다.
+  /// [requestId]는 요청마다 새로 만들고 재시도 때만 같은 값을 쓴다.
+  /// 오류: consentRequired, insufficientCredits, requestInProgress, notFound, unavailable(차감 안 됨)
+  Future<ExternalSearchResult> requestExternalSearch({
+    required String requestId,
+    String? category,
+    List<String> interests = const [],
+    String? period,
+    List<String> regions = const [],
+    String query = '',
+  });
+
+  /// 받은 분석(저장본). 없으면 null. 크레딧을 쓰지 않는다.
+  Future<AnalysisResponse?> getAnalysis(String noticeId);
+
+  /// 크레딧 잔액과 최근 90일 사용 내역. 앱은 읽기만 한다.
+  Future<Credits> getCredits();
+
+  /// 시연용: 잔액을 5까지 채운다. 서버가 시연 설정을 켰을 때만 되고, 아니면 notFound.
+  Future<Credits> demoRefillCredits();
+}
+
+/// 다른 저장소를 감싸 기능을 더하는 저장소(지원 건 기록 등). 캐시 버리기 같은 일을 안쪽까지 전한다.
+abstract interface class WrappingRepository {
+  NoticeRepository get inner;
+}
+
+/// 동의 기록은 프로필 PUT으로 저장한다(별도 경로 없음). 저장소 구현이 달라도 같은 흐름을 쓴다.
+extension AgentConsentActions on NoticeRepository {
+  /// 지금 문구([agentConsentVersion])에 동의한 기록을 남긴다. 프로필이 없으면 [RepositoryErrorKind.notFound].
+  /// agreed_at은 서버가 서버 시각으로 덮어쓴다.
+  Future<void> grantAgentConsent() async {
+    final profile = await getProfile();
+    if (profile == null) throw const RepositoryException(RepositoryErrorKind.notFound);
+    await updateProfile(
+      profile.withAgentConsent(AgentConsent(version: agentConsentVersion, agreedAt: DateTime.now().toUtc())),
+    );
+  }
+
+  /// 동의를 철회한다. 서버가 받은 분석도 지운다.
+  Future<void> withdrawAgentConsent() async {
+    final profile = await getProfile();
+    if (profile == null) return;
+    await updateProfile(profile.withAgentConsent(null));
+  }
 }
 
 /// API 오류 코드(contracts/api_error.schema.json)와 같은 구분. 화면에는 사용자용 문구만 보여준다.
-enum RepositoryErrorKind { unauthenticated, permissionDenied, invalidArgument, notFound, unavailable }
+enum RepositoryErrorKind {
+  unauthenticated,
+  permissionDenied,
+  invalidArgument,
+  notFound,
+  unavailable,
+
+  /// 상세 분석 경로만: 크레딧 부족 / 같은 요청 id 진행 중 / AI 전송 동의 없음
+  insufficientCredits,
+  requestInProgress,
+  consentRequired,
+}
 
 class RepositoryException implements Exception {
-  const RepositoryException(this.kind);
+  const RepositoryException(this.kind, {this.fromServer = false});
 
   final RepositoryErrorKind kind;
+
+  /// 서버가 응답한 오류인지. false면 연결·시간 초과처럼 서버에 닿았는지 알 수 없는 경우다.
+  /// 상세 분석의 unavailable은 서버가 응답했을 때만 크레딧이 차감되지 않았다고 말할 수 있다.
+  final bool fromServer;
 
   @override
   String toString() => 'RepositoryException(${kind.name})';
@@ -59,7 +130,16 @@ class AssetDictionaries {
   final AssetBundle _bundle;
   final Map<String, List<DictionaryItem>> _cache = {};
 
-  static const names = ['categories', 'majors', 'interests', 'roles', 'universities'];
+  static const names = [
+    'categories',
+    'majors',
+    'interests',
+    'roles',
+    'universities',
+    'experience_chips',
+    'period_chips',
+    'region_chips',
+  ];
 
   Future<void> preload() async {
     for (final name in names) {
@@ -74,7 +154,8 @@ class AssetDictionaries {
     try {
       final dict = jsonDecode(await _bundle.loadString('assets/dictionaries/$name.json')) as Map<String, dynamic>;
       return _cache[name] = [
-        for (final i in dict['items'] as List) DictionaryItem(i['id'] as String, i['name_ko'] as String),
+        for (final i in dict['items'] as List)
+          DictionaryItem(i['id'] as String, i['name_ko'] as String, universityId: i['university_id'] as String?),
       ];
     } on FlutterError {
       throw const RepositoryException(RepositoryErrorKind.unavailable);
@@ -113,7 +194,12 @@ class AssetDictionaries {
 /// 추천 결과는 서버(추천 함수)가 미리 계산한 두 가지 샘플 중 하나를 고른다. 앱은 점수를 계산하지 않는다.
 /// 프로필·저장은 메모리에만 둔다 (앱을 다시 켜면 초기화).
 class SampleNoticeRepository implements NoticeRepository {
-  SampleNoticeRepository({AssetBundle? bundle, this.personalized = true, this.today})
+  SampleNoticeRepository({
+    AssetBundle? bundle,
+    this.personalized = true,
+    this.today,
+    this.analysisDelay = Duration.zero,
+  })
     : _bundle = bundle ?? rootBundle,
       _dictionaries = AssetDictionaries(bundle: bundle);
 
@@ -140,6 +226,34 @@ class SampleNoticeRepository implements NoticeRepository {
   final Map<String, Map<String, dynamic>> _cache = {};
   Future<UserProfile?>? _profile;
   final Map<String, Map<String, dynamic>> _saved = {};
+
+  // 상세 분석·크레딧은 메모리에만 둔다. 서버 규칙(가입 5, 성공해야 차감, 같은 요청 id 한 번만 차감)을 단순하게 흉내 낸다.
+  int _balance = Credits.max;
+  late final List<CreditEntry> _ledger = [CreditEntry(kind: 'signup', amount: 5, at: DateTime.now().toUtc(), ref: null)];
+  final Map<String, AnalysisResponse> _byRequest = {};
+  final Map<String, AnalysisResponse> _byInput = {};
+  final Map<String, AnalysisResponse> _latest = {};
+
+  /// 분석에 걸리는 시간 흉내. 기다리는 화면을 확인할 때 쓴다.
+  final Duration analysisDelay;
+
+  /// 테스트용: 다음 분석 요청 하나를 AI 실패(unavailable)로 만든다. 크레딧은 차감되지 않는다.
+  @visibleForTesting
+  bool failNextAnalysis = false;
+
+  /// 테스트용: 잔액을 바꾼다.
+  @visibleForTesting
+  void debugSetBalance(int value) => _balance = value;
+
+  @override
+  Future<Credits> demoRefillCredits() async {
+    final gap = Credits.max - _balance;
+    if (gap > 0) {
+      _balance = Credits.max;
+      _ledger.insert(0, CreditEntry(kind: 'demo', amount: gap, at: DateTime.now().toUtc(), ref: null));
+    }
+    return getCredits();
+  }
 
   /// 샘플 자료를 미리 읽어 둔다. 위젯 테스트에서는 tester.runAsync 안에서 부른다.
   Future<void> preload() async {
@@ -171,12 +285,137 @@ class SampleNoticeRepository implements NoticeRepository {
   @override
   Future<void> updateProfile(UserProfile profile) async {
     _profile = Future.value(profile);
+    // 서버와 같게: 동의 기록이 빠지면 받은 분석도 지운다.
+    if (profile.agentConsent == null) _clearAnalyses();
   }
 
   @override
   Future<void> deleteAccountData() async {
     _profile = Future<UserProfile?>.value(null);
     _saved.clear();
+    _clearAnalyses();
+  }
+
+  void _clearAnalyses() {
+    _byRequest.clear();
+    _byInput.clear();
+    _latest.clear();
+  }
+
+  @override
+  Future<AnalysisResponse> requestAnalysis({
+    required String noticeId,
+    required String requestId,
+    AnalysisChips chips = const AnalysisChips(),
+  }) async {
+    if (!(await getProfile()).hasAgentConsent) {
+      throw const RepositoryException(RepositoryErrorKind.consentRequired, fromServer: true);
+    }
+    if (await _publishedNotice(noticeId) == null) {
+      throw const RepositoryException(RepositoryErrorKind.notFound, fromServer: true);
+    }
+    final again = _byRequest[requestId];
+    if (again != null) return again; // 같은 요청 id는 다시 차감하지 않는다
+    if (_balance < 1) throw const RepositoryException(RepositoryErrorKind.insufficientCredits, fromServer: true);
+    if (analysisDelay > Duration.zero) await Future<void>.delayed(analysisDelay);
+    if (failNextAnalysis) {
+      failNextAnalysis = false;
+      throw const RepositoryException(RepositoryErrorKind.unavailable, fromServer: true);
+    }
+    // 저장본이 있는 같은 공고·같은 입력은 차감하되 AI를 부르지 않는다 (명세 §10.3)
+    final key = '$noticeId|${jsonEncode(chips.toJson())}';
+    final stored = _byInput[key];
+    final now = DateTime.now().toUtc();
+    final response = AnalysisResponse(
+      noticeId: noticeId,
+      report:
+          stored?.report ??
+          const AnalysisReport(
+            fit: '맞음: 샘플 분석입니다. 공고 과업과 내 경험이 어디서 이어지는지 첫 줄에 보입니다.\n확인 필요: 공고 자료로 알 수 없는 장소·일정은 확인할 점으로 보입니다.',
+            eligibility: '확인 필요: 샘플 분석입니다. 판정을 가른 조건을 첫 줄에 보입니다.\n우대 사항은 필수 자격과 따로 보입니다.',
+            todo: '확인할 대상을 적은 할 일을 1~2개 보입니다.',
+            skills: '문제 해결\n팀 프로젝트',
+          ),
+      expiresAt: now.add(const Duration(days: 30)),
+      fromCache: stored != null,
+    );
+    _balance -= 1;
+    _ledger.insert(0, CreditEntry(kind: 'detail_analysis', amount: -1, at: now, ref: noticeId));
+    _byRequest[requestId] = response;
+    _byInput[key] = response;
+    _latest[noticeId] = AnalysisResponse(
+      noticeId: noticeId,
+      report: response.report,
+      expiresAt: response.expiresAt,
+      fromCache: true,
+    );
+    return response;
+  }
+
+  /// 외부 공고 찾기 샘플: 합성 결과 3건(출처 확인 안 된 1건 포함)을 주고 2크레딧을 차감한다.
+  @override
+  Future<ExternalSearchResult> requestExternalSearch({
+    required String requestId,
+    String? category,
+    List<String> interests = const [],
+    String? period,
+    List<String> regions = const [],
+    String query = '',
+  }) async {
+    if (!(await getProfile()).hasAgentConsent) {
+      throw const RepositoryException(RepositoryErrorKind.consentRequired, fromServer: true);
+    }
+    if (_balance < 2) throw const RepositoryException(RepositoryErrorKind.insufficientCredits, fromServer: true);
+    if (analysisDelay > Duration.zero) await Future<void>.delayed(analysisDelay);
+    final now = DateTime.now().toUtc();
+    _balance -= 2;
+    _ledger.insert(0, CreditEntry(kind: 'external_search', amount: -2, at: now, ref: null));
+    return ExternalSearchResult(
+      items: const [
+        ExternalSearchItem(
+          title: '합성 소프트웨어 공모전',
+          url: 'https://contest.example.invalid/view/1',
+          sourceName: '합성 공모전 사이트',
+          deadline: '2026-12-31',
+          reason: '합성 예시입니다. 관심 분야와 이어지는 공모전입니다.',
+          verified: true,
+          verdict: 'met',
+          target: '전국 대학생(재학생·휴학생) 누구나',
+          organizer: '합성 주최 기관',
+          read: true,
+        ),
+        ExternalSearchItem(
+          title: '합성 AI 아이디어 해커톤',
+          url: 'https://list.example.invalid/contests',
+          sourceName: '합성 목록 사이트',
+          deadline: null,
+          reason: '합성 예시입니다. 온라인으로 참여할 수 있습니다.',
+          verified: true,
+        ),
+        ExternalSearchItem(
+          title: '출처에 없는 합성 대회',
+          url: 'https://nowhere.example.invalid/',
+          sourceName: 'nowhere.example.invalid',
+          deadline: null,
+          reason: '합성 예시입니다.',
+          verified: false,
+        ),
+      ],
+      charged: true,
+      searchedAt: now,
+      excludedNotMet: 1,
+    );
+  }
+
+  @override
+  Future<AnalysisResponse?> getAnalysis(String noticeId) async => _latest[noticeId];
+
+  @override
+  Future<Credits> getCredits() async {
+    // 다음 충전은 다음 날 0시(KST). 최대 보유면 없다.
+    final kst = DateTime.now().toUtc().add(const Duration(hours: 9));
+    final next = DateTime.utc(kst.year, kst.month, kst.day + 1).subtract(const Duration(hours: 9));
+    return Credits(balance: _balance, nextRefillAt: _balance >= Credits.max ? null : next, entries: List.of(_ledger));
   }
 
   @override

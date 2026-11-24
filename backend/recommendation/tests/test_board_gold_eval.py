@@ -169,3 +169,67 @@ def test_validation_reports_row_numbers(tmp_path, notices):
     _fill(b, bad)
     with pytest.raises(SystemExit):
         board_gold_agreement.main(["--a", str(a), "--b", str(b), "--out-dir", str(out)])
+
+
+def _pack_row(pack, nid, **kw):
+    row = {c: "" for c in COLUMNS}
+    row.update({"학교": "없음", "학과": "없음", "학년": "없음", "재학상태": "없음", "누구나": "Y", "마감일": "없음", "학교팩": pack, "카테고리": "", "notice_id": nid})
+    row.update(kw)
+    return row
+
+
+def _pack_notices():
+    items = [
+        _notice("a:1", "x", {**EMPTY_EL, "extraction_complete": True, "explicitly_unrestricted": True, "unrestricted_evidence": "합성 제한 없음"}),
+        _notice("a:2", "x", {**EMPTY_EL, "extraction_complete": True, "explicitly_unrestricted": True, "unrestricted_evidence": "합성 제한 없음"}),
+        _notice("b:1", "x", {**EMPTY_EL, "extraction_complete": True, "conditions": [_cond("major_id", "sewu.software_convergence", "합성 소프트웨어융합과")]}),
+        _notice("b:2", "x", {**EMPTY_EL, "extraction_complete": True, "explicitly_unrestricted": True, "unrestricted_evidence": "합성 제한 없음"}),
+    ]
+    for n, cat in zip(items, ["job", "contest", "scholarship", "other"]):
+        n["category"] = cat
+    return {n["notice_id"]: n for n in items}
+
+
+def test_category_pack_split_and_sewu_profiles():
+    notices = _pack_notices()
+    rows = [
+        _pack_row("mjc", "a:1"),  # 카테고리 비어 있음: 일치율 대상 아님
+        _pack_row("mjc", "a:2", 카테고리="job"),  # 분석 contest -> 어긋남
+        _pack_row("sewu", "b:1", 학교="없음", 학과="sewu.software_convergence", 누구나="N", 카테고리="scholarship"),
+        _pack_row("sewu", "b:2", 카테고리="other"),
+    ]
+    res = eval_board_extraction.evaluate_all(rows, notices)
+    cat = res["카테고리"]
+    assert (cat["일치"], cat["대상"], cat["어긋난_건수"]) == (2, 3, 1)
+    assert cat["어긋난_예"] == [{"notice_id": "a:2", "정답": "job", "분석": "contest"}]
+
+    by = res["학교별"]
+    assert set(by) == {"mjc", "sewu"}
+    assert by["mjc"]["채점_건수"] == by["sewu"]["채점_건수"] == 2
+    assert "카테고리" not in by["mjc"] or by["mjc"]["카테고리"]["대상"] == 1
+    assert by["sewu"]["카테고리"]["일치율"] == 1.0
+
+    # 숭의 행은 숭의 프로필로만 판정
+    tables = res["판정"]["혼동표_프로필별"]
+    assert set(tables) == set(eval_board_extraction.PROFILES) | set(eval_board_extraction.SEWU_PROFILES)
+    assert set(by["sewu"]["판정"]["혼동표_프로필별"]) == set(eval_board_extraction.SEWU_PROFILES)
+    assert set(by["mjc"]["판정"]["혼동표_프로필별"]) == set(eval_board_extraction.PROFILES)
+    sewu_table = by["sewu"]["판정"]["혼동표_프로필별"]
+    # b:1은 소프트웨어융합과만: 경영과 프로필은 not_met, 나머지 3개는 met
+    assert sewu_table["숭의 경영과 2학년 휴학"]["not_met"]["not_met"] == 1
+    assert sewu_table["숭의 졸업"]["met"]["met"] == 2
+    assert by["sewu"]["판정"]["틀린_지원_가능_건수"] == 0
+
+    text = eval_board_extraction.render(res)
+    assert "[카테고리] 일치율" in text and "[학교별]" in text and "<sewu>" in text
+
+
+def test_sheet_without_pack_column_unchanged():
+    notices = _pack_notices()
+    rows = [_pack_row("", "a:1"), _pack_row("", "b:1", 학과="sewu.software_convergence", 누구나="N")]
+    for r in rows:
+        del r["학교팩"], r["카테고리"]
+    res = eval_board_extraction.evaluate_all(rows, notices)
+    assert "학교별" not in res and "카테고리" not in res
+    assert set(res["판정"]["혼동표_프로필별"]) == set(eval_board_extraction.PROFILES)
+    assert "[학교별]" not in eval_board_extraction.render(res) and "[카테고리]" not in eval_board_extraction.render(res)

@@ -123,8 +123,18 @@ def build_notice(
     """(Notice, 검증 문제 목록)을 돌려준다. 같은 원문 버전·분석기 버전이면 이전 분석을 재사용한다."""
     analyzer = analyzer or RuleBasedAnalyzer()
     raw = record.raw
-    if previous and previous["notice_version"] == record.notice_version and previous["analysis_version"] == analyzer.version:
-        reused = dict(previous, last_collected_at=record.last_collected_at, changed_fields=[])
+    poster = raw["source_fields"].get("poster_url")
+    poster_changed = previous is not None and poster != previous.get("poster_url")
+    if (previous and previous["notice_version"] == record.notice_version
+            and (poster_changed or previous["analysis_version"] == analyzer.version)):
+        # 원문을 이번에도 확인했으면 확인 시각은 새로 둔다 (D-006 오래된 정보 표시)
+        reused = dict(previous, last_collected_at=record.last_collected_at,
+                      last_verified_at=record.last_collected_at,
+                      changed_fields=previous["changed_fields"] if poster_changed else [])
+        if poster:
+            reused["poster_url"] = poster
+        else:
+            reused.pop("poster_url", None)
         reused["lifecycle_status"] = "removed" if record.removed else _lifecycle(reused, today)
         if reused["lifecycle_status"] != previous["lifecycle_status"]:
             reused["changed_fields"] = ["lifecycle_status"]
@@ -138,6 +148,7 @@ def build_notice(
         "notice_id": notice_id_for(record.key),
         "source_id": raw["source_id"],
         "source_url": raw["source_url"],
+        **({"poster_url": poster} if poster else {}),
         "title": raw["title"],
         "summary": fields["summary"],
         "category": fields["category"],
@@ -155,7 +166,7 @@ def build_notice(
         "notice_version": record.notice_version,
         "analysis_version": version,
         "last_collected_at": record.last_collected_at,
-        "last_verified_at": raw["collected_at"],
+        "last_verified_at": record.last_collected_at,  # 원문이 그대로면 raw는 처음 받은 것이라 수집 시각이 옛날이다
         "changed_fields": [],
     }
     if "apply_url" in fields:  # 알림톡만 (D-025)

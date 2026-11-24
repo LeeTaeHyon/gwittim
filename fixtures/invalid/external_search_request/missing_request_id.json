@@ -1,0 +1,9 @@
+{
+  "_expect": {
+    "keyword": "required",
+    "path": ""
+  },
+  "data": {
+    "category": "contest"
+  }
+}

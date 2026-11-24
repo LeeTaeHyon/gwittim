@@ -85,6 +85,31 @@ class SavedRepository implements NoticeRepository {
 
   @override
   Future<Map<String, List<String>>> majorInterests() async => {};
+  @override
+  Future<AnalysisResponse> requestAnalysis({
+    required String noticeId,
+    required String requestId,
+    AnalysisChips chips = const AnalysisChips(),
+  }) => throw UnimplementedError();
+
+  @override
+  Future<ExternalSearchResult> requestExternalSearch({
+    required String requestId,
+    String? category,
+    List<String> interests = const [],
+    String? period,
+    List<String> regions = const [],
+    String query = '',
+  }) => throw UnimplementedError();
+
+  @override
+  Future<AnalysisResponse?> getAnalysis(String noticeId) async => null;
+
+  @override
+  Future<Credits> getCredits() => throw const RepositoryException(RepositoryErrorKind.unavailable);
+
+  @override
+  Future<Credits> demoRefillCredits() => throw const RepositoryException(RepositoryErrorKind.unavailable);
 }
 
 void main() {
@@ -105,7 +130,7 @@ void main() {
       expect(savedGroupOf(saved('a'), today), SavedGroup.noDeadline);
     });
 
-    test('마감된·삭제된·마감일 지난 공고는 지난 공고', () {
+    test('마감된·삭제된·마감일 지난 공고는 끝난 지원', () {
       expect(savedGroupOf(saved('a', deadline: '2026-11-20', lifecycle: 'closed'), today), SavedGroup.past);
       expect(savedGroupOf(saved('a', lifecycle: 'removed'), today), SavedGroup.past);
       expect(savedGroupOf(saved('a', deadline: '2026-10-19'), today), SavedGroup.past);
@@ -170,14 +195,14 @@ void main() {
       expect(find.text('4개'), findsOneWidget);
       expect(find.text('이번 주 마감'), findsOneWidget);
       expect(find.text('마감일 없음'), findsOneWidget);
-      expect(find.text('지난 공고'), findsOneWidget);
+      expect(find.text('끝난 지원'), findsOneWidget);
       expect(find.text('다음 주 마감'), findsNothing); // 빈 묶음은 보이지 않는다
 
       expect(find.text('마감일이 바뀐 공고 1개'), findsOneWidget);
       expect(findText('공고 soon · 10월 21일(수) → 10월 23일(금)'), findsOneWidget);
-      expect(find.text('D-3 · 공모전'), findsOneWidget); // 날짜만 확인된 마감은 시각 없이, 남은 날이 앞
-      expect(find.text('선착순 마감 (정원 도달 시 조기 종료) · 공모전'), findsOneWidget);
-      expect(find.text('모집 마감 · 공모전'), findsOneWidget);
+      expect(findText('D-3 · 10월 23일 마감 · 공모전'), findsOneWidget); // 남은 날은 지원 건 문구(모든 화면 같음, D-052)
+      expect(findText('마감일 미상 · 공모전'), findsOneWidget); // 마감 설명 원문은 리포트 일정에만
+      expect(findText('모집 끝남 · 공모전'), findsOneWidget);
       expect(find.text('학교 공지에서 삭제됨'), findsOneWidget);
       expect(find.text('목록에서 지우기'), findsOneWidget);
       expect(findText('마감일과 모집 상태는 학교 공지를 다시 확인할 때마다 최신으로 갱신됩니다.'), findsOneWidget);

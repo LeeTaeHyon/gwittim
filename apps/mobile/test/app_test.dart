@@ -55,6 +55,31 @@ class FailingRepository implements NoticeRepository {
 
   @override
   Future<void> deleteSaved(String noticeId) async {}
+  @override
+  Future<AnalysisResponse> requestAnalysis({
+    required String noticeId,
+    required String requestId,
+    AnalysisChips chips = const AnalysisChips(),
+  }) => throw UnimplementedError();
+
+  @override
+  Future<ExternalSearchResult> requestExternalSearch({
+    required String requestId,
+    String? category,
+    List<String> interests = const [],
+    String? period,
+    List<String> regions = const [],
+    String query = '',
+  }) => throw UnimplementedError();
+
+  @override
+  Future<AnalysisResponse?> getAnalysis(String noticeId) async => null;
+
+  @override
+  Future<Credits> getCredits() => throw const RepositoryException(RepositoryErrorKind.unavailable);
+
+  @override
+  Future<Credits> demoRefillCredits() => throw const RepositoryException(RepositoryErrorKind.unavailable);
 }
 
 /// 처음엔 정상, offline을 켜면 목록 요청이 연결 오류로 실패한다 (비행기 모드 새로고침).
@@ -294,7 +319,7 @@ void main() {
 
       final declined = const MajorPickState().answer('통계 가까움', false, major, today);
       expect(buildBriefing(list(items), const [], today, picks: declined, majorId: major).majorPick?.notice.noticeId, '통계');
-      // 홈 다가오는 마감에는 '관심 없어요'라고 한 공고만 빠진다
+      // 홈 마감 줄에는 '관심 없어요'라고 한 공고만 빠진다
       expect(majorPicks(list(items), declined, major, today).map((e) => e.notice.noticeId), ['통계', '통계 멂']);
     });
 
@@ -522,23 +547,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('다가오는 마감'), findsOneWidget);
-    expect(find.byType(NoticeCard), findsNWidgets(3)); // 홈은 상위 3개만, 나머지는 공고 탭
-    expect(find.text('전체 보기'), findsOneWidget);
+    // 샘플(10/17)은 7일 안 마감이 없어 8~14일 안 가장 가까운 1건이 '다음 마감'이다 (D-050)
+    expect(find.text('다음 마감'), findsOneWidget);
+    expect(find.text('앞으로 2주'), findsOneWidget);
+    expect(find.descendant(of: find.byType(HomeScreen), matching: find.byType(NoticeCard)), findsNothing);
     expect(find.textContaining('합격 가능성'), findsNothing); // 홈 끝 문구는 뺐다 (브리핑·리포트에만)
-    expect(findText(projectTitle), findsNWidgets(2)); // 다가오는 마감 + 나에게 맞는 공고
-    expect(find.text('D-13 · 17:00 마감 · 행사'), findsOneWidget); // 다가오는 마감: 남은 날·시각이 앞
-    expect(findText('행사 · 10월 30일 17:00 마감 · D-13'), findsOneWidget); // 카드 첫 줄: 분류 옆 마감, 7일 넘게 남으면 칩 없이
-    expect(find.text('D-13'), findsNothing);
-    expect(find.text('오늘 확인할 공고'), findsOneWidget); // 소식 종류 수는 세지 않는다
-    expect(find.text('브리핑 자세히 보기'), findsOneWidget);
+    expect(findText(projectTitle), findsOneWidget); // 같은 공고는 홈에서 한 번만
+    expect(findText('D-13 · 17:00 마감 · 행사 · 관심·직무·전공'), findsOneWidget); // 남은 날·시각이 앞, 이유는 줄여 잇는다
+    expect(find.text('새 공고'), findsOneWidget); // 마감 줄에 이미 나온 새 공고는 표시만, 새 공고 구역은 없다
+    expect(find.text('마감이 먼 맞춤 공고'), findsNothing); // 관련 공고가 이 하나뿐이다
+    // 귀띔 말풍선은 달라진 것의 건수만 (D-050)
+    expect(findText('새 공고 1건'), findsOneWidget);
+    expect(find.text('브리핑 다시 보기'), findsNothing);
     expect(find.text('맞춤 공고 7건'), findsNothing); // 홈 숫자를 다시 세는 배지는 없앴다 (D-018)
     expect(find.textContaining('0건'), findsNothing); // 0건인 칸은 숨긴다
-    expect(find.text('맞춤 공고 · 앞으로 2주'), findsOneWidget);
-    // 선착순 샘플은 관련 이유가 없는 공고라 다가오는 마감 안내에서도 세지 않는다
-    expect(find.textContaining('마감일이 정해지지 않은 공고'), findsNothing);
+    expect(find.textContaining('마감일이 정해지지 않은 공고'), findsNothing); // 홈에서는 안내 줄을 뺐다
 
-    await tapVisible(tester, findText(projectTitle).last);
+    await tapVisible(tester, findText(projectTitle));
 
     expect(find.text('지원 전 체크리스트'), findsOneWidget);
     expect(find.text('조건 충족'), findsOneWidget);
@@ -558,6 +583,42 @@ void main() {
     await tester.tap(find.text('학교 공지에서 보기'));
     await tester.pumpAndSettle();
     expect(opened.single.toString(), contains('mjc.ac.kr/bbs/data/view.do'));
+  });
+
+  testWidgets('공고 상세 출처 이름: 숭의 공지는 숭의여대, 출처를 모르면 학교 이름 없이 표시', (tester) async {
+    Future<void> show(String? sourceId) async {
+      final n = notice();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: gwittimTheme(),
+          home: ReportScreen(
+            key: UniqueKey(),
+            repository: OneNoticeRepository(
+              Notice(
+                summary: n.summary,
+                description: null,
+                applicationStart: null,
+                activityPeriod: null,
+                eligibility: n.eligibility,
+                lastVerifiedAt: null,
+                sourceId: sourceId,
+              ),
+            ),
+            noticeId: 'n',
+            openUrl: (_) async => true,
+            today: today,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await show('sewu_www_notice');
+    expect(find.text('숭의여대 공지사항'), findsOneWidget);
+    expect(find.textContaining('명지'), findsNothing);
+    await show(null);
+    expect(find.text('학교 공지'), findsOneWidget);
+    expect(find.textContaining('명지'), findsNothing);
   });
 
   testWidgets('알림톡 공고: 원문 링크 대신 안내 문구, 발송 시각 표시 (D-019)', (tester) async {
@@ -796,7 +857,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('졸업생 진로 추천'), findsNWidgets(2)); // 머리 배지와 카드 표시
+    expect(find.text('졸업생 진로 추천'), findsOneWidget); // 카드 표시만 (머리 숫자 칸에는 넣지 않는다)
     expect(findTextContaining('같은 학과 졸업생이 많이 가는 분야'), findsOneWidget);
     // 아래 고정 버튼에 가리지 않게 끝까지 올린다
     await tester.drag(find.byType(ListView), const Offset(0, -2000));
@@ -821,8 +882,8 @@ void main() {
     expect(findTextContaining('합격 가능성과는 관계없습니다'), findsOneWidget);
     await tester.tap(find.text('확인'));
     await tester.pumpAndSettle();
-    expect(find.text('다가오는 마감'), findsOneWidget);
-    expect(find.text('오늘의 귀띔'), findsOneWidget);
+    expect(find.text('다음 마감'), findsOneWidget);
+    expect(findText('새 공고 1건'), findsOneWidget); // 닫은 뒤에도 말풍선에서 다시 열 수 있다
 
     await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(
@@ -844,7 +905,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('주요 소식'), findsNothing); // 전할 소식이 없으면 브리핑 없음
     expect(findText('프로필을 입력하면 맞춤 추천을 받을 수 있습니다'), findsOneWidget);
-    expect(find.text('최신 공고'), findsOneWidget);
+    expect(find.text('곧 마감되는 공고'), findsOneWidget);
+    expect(findText('앞으로 2주 안에 마감되는 공고가 없습니다.'), findsOneWidget); // 최신 샘플은 12월 마감 하나
     await tester.tap(find.text('프로필 입력'));
     await tester.pumpAndSettle();
     expect(find.text('입력한 정보 없음'), findsOneWidget); // 내 정보 요약 카드
@@ -857,13 +919,13 @@ void main() {
       GwittimApp(repository: repo, openUrl: (_) async => true, today: today, briefingStore: noBriefing),
     );
     await tester.pumpAndSettle();
-    expect(find.text('다가오는 마감'), findsOneWidget);
+    expect(find.text('다음 마감'), findsOneWidget);
 
     repo.offline = true;
-    await tester.fling(find.text('다가오는 마감'), const Offset(0, 400), 1000);
+    await tester.fling(find.text('다음 마감'), const Offset(0, 400), 1000);
     await tester.pumpAndSettle();
     expect(findText('새로 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.'), findsOneWidget);
-    expect(find.text('다가오는 마감'), findsOneWidget); // 보이던 내용은 그대로
+    expect(find.text('다음 마감'), findsOneWidget); // 보이던 내용은 그대로
   });
 
   testWidgets('오류 시 상세 없이 안내와 재시도', (tester) async {

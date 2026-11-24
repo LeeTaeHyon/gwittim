@@ -54,6 +54,10 @@ class FakeAuth implements AuthService {
   Object? deleteFailsWith;
   int deleteCalls = 0;
 
+  /// 계정을 지운 뒤 끝났다고 돌려주기까지 걸리는 시간. Firebase는 로그인 상태를 먼저 바꾸고
+  /// Google 로그아웃을 기다린 뒤에 돌아온다.
+  Duration returnsAfter = Duration.zero;
+
   @override
   Future<bool> deleteAccount(Future<void> Function() deleteData) async {
     deleteCalls++;
@@ -62,6 +66,7 @@ class FakeAuth implements AuthService {
     if (deleteFailsWith != null) throw deleteFailsWith!;
     _signedIn = false;
     _state.add(false);
+    if (returnsAfter > Duration.zero) await Future<void>.delayed(returnsAfter);
     return true;
   }
 }
@@ -233,6 +238,33 @@ void main() {
     expect(await repo.listSaved(), isEmpty);
     expect((await store.majorPicks()).decided, isEmpty);
     expect(find.text('Google 계정으로 시작하기'), findsOneWidget);
+    expect(find.text('탈퇴 완료'), findsOneWidget);
+    expect(findText('프로필과 저장한 공고를 모두 삭제했습니다.\n\n그동안 귀띔을 이용해 주셔서 감사합니다.'), findsOneWidget);
+  });
+
+  testWidgets('탈퇴 완료 팝업: 로그인 화면으로 바뀐 뒤에 끝나도 한 번 뜨고, 다음 로그아웃에는 뜨지 않는다', (tester) async {
+    final repo = await loaded(tester);
+    final auth = await signIn(tester, repo, auth: FakeAuth()..returnsAfter = const Duration(milliseconds: 500));
+    await tapWithdraw(tester);
+    await tester.tap(find.text('탈퇴'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Google 계정으로 시작하기'), findsOneWidget);
+    expect(find.text('탈퇴 완료'), findsNothing); // 아직 끝나지 않았다
+    await settle(tester);
+    expect(find.text('탈퇴 완료'), findsOneWidget);
+    await tester.tap(find.text('확인'));
+    await settle(tester);
+    expect(find.text('탈퇴 완료'), findsNothing);
+
+    // 새로 시작했다가(프로필이 없어 첫 입력 안내가 뜬다) 로그아웃하면 팝업 없이 로그인 화면
+    await tester.tap(find.text('Google 계정으로 시작하기'));
+    await settle(tester);
+    expect(find.byType(ProfileEditScreen), findsOneWidget);
+    await auth.signOut();
+    await settle(tester);
+    expect(find.text('Google 계정으로 시작하기'), findsOneWidget);
+    expect(find.text('탈퇴 완료'), findsNothing);
   });
 
   testWidgets('탈퇴: 계정 다시 확인을 취소하면 아무것도 지우지 않는다', (tester) async {
@@ -504,7 +536,7 @@ void main() {
       (412.0, 915.0, 1.0, true),
       (412.0, 915.0, 1.3, true),
       (360.0, 780.0, 1.3, false),
-      (412.0, 915.0, 1.5, false),
+      (412.0, 915.0, 2.0, true), // 앱 전체 상한 1.3배(maxTextScale)
     ]) {
       testWidgets('$w×$h 글자 $scale배: 버튼과 약관은 늘 보이고${fits ? ', 스크롤 없음' : ''}', (tester) async {
         tester.view.physicalSize = Size(w * 3, h * 3);

@@ -20,7 +20,7 @@
   ],
   "properties": {
     "schema_version": { "$ref": "common.schema.json#/$defs/schema_version" },
-    "source_id": { "$ref": "common.schema.json#/$defs/code", "description": "출처 설정 ID (게시판 단위, 예: mjc_www_notice)." },
+    "source_id": { "$ref": "common.schema.json#/$defs/code", "description": "출처 설정 ID (게시판·사이트 단위, 예: mjc_www_notice, wevity_contest). 값 목록은 backend/sources.py." },
     "source_notice_id": { "type": ["string", "null"], "minLength": 1, "description": "출처가 제공하는 공고 ID. 없으면 null (정규화 URL로 식별)." },
     "source_url": { "type": ["string", "null"], "format": "uri", "description": "원문 URL. 웹 원문이 없는 출처(카카오톡 알림톡, D-019)는 null이고, 이때 source_notice_id가 있어야 한다." },
     "title": { "type": "string", "minLength": 1 },
@@ -31,13 +31,14 @@
     },
     "collected_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" },
     "content_hash": {
-      "description": "sha256:<hex>. title, body_text, published, source_fields, attachments[].file_name의 정규화 JSON으로 계산. collected_at 등 매번 바뀌는 값 제외.",
+      "description": "sha256:<hex>. title, body_text, published, source_fields(poster_url 제외), attachments[].file_name의 정규화 JSON으로 계산. collected_at 등 매번 바뀌는 값 제외.",
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
     "source_fields": {
       "description": "출처가 제공한 원래 필드. 조회수처럼 매번 바뀌는 값은 넣지 않음.",
-      "type": "object"
+      "type": "object",
+      "properties": { "poster_url": { "$ref": "notice.schema.json#/properties/poster_url" } }
     },
     "attachments": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/attachment" } }
   },

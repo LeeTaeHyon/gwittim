@@ -23,6 +23,16 @@ def test_same_version_is_skipped():
     assert publish(notice(), [], sink) is PublishOutcome.SKIPPED
 
 
+def test_same_version_refreshes_check_times_only():
+    sink = InMemorySink()
+    publish(notice(), [], sink)
+    later = dict(notice(), last_collected_at="2026-12-01T00:00:00Z", last_verified_at="2026-12-01T00:00:00Z", summary="바뀌지 않아야 함")
+    assert publish(later, [], sink) is PublishOutcome.SKIPPED
+    public = sink.public["n_synthetic_0001"]
+    assert public["last_verified_at"] == public["last_collected_at"] == "2026-12-01T00:00:00Z"
+    assert public["summary"] == notice()["summary"]
+
+
 def test_review_pending_never_public():
     sink = InMemorySink()
     n = notice()

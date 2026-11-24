@@ -154,6 +154,7 @@ class Notice {
     this.applyUrl,
     this.relatedNotices = const [],
     this.bodyPreview = false,
+    this.posterUrl,
   });
 
   final NoticeSummary summary;
@@ -176,6 +177,7 @@ class Notice {
 
   /// 폰 알림으로만 받은 알림톡이라 본문 뒷부분이 빠졌을 수 있음 (D-040).
   final bool bodyPreview;
+  final String? posterUrl;
 
   factory Notice.fromJson(Map<String, dynamic> m) => Notice(
     summary: NoticeSummary.fromJson(m),
@@ -190,6 +192,7 @@ class Notice {
       for (final r in (m['related_notices'] as List?) ?? const [])
         (noticeId: r['notice_id'] as String, title: r['title'] as String),
     ],
+    posterUrl: m['poster_url'] as String?,
     bodyPreview: m['body_preview'] as bool? ?? false,
   );
 }
@@ -285,6 +288,7 @@ class UserProfile {
     this.enrollmentStatus,
     this.interestIds = const [],
     this.targetRoleIds = const [],
+    this.agentConsent,
   });
 
   final String? universityId;
@@ -296,6 +300,9 @@ class UserProfile {
   final List<String> interestIds;
   final List<String> targetRoleIds;
 
+  /// AI 상세 분석 첫 사용 동의 기록. 없으면 동의하지 않은 것이다.
+  final AgentConsent? agentConsent;
+
   /// 관심사·직무·전공 중 하나라도 있으면 맞춤 추천 대상 (서버 규칙과 같음)
   bool get hasPersonalInput => majorId != null || interestIds.isNotEmpty || targetRoleIds.isNotEmpty;
 
@@ -306,9 +313,24 @@ class UserProfile {
     enrollmentStatus: m['enrollment_status'] as String?,
     interestIds: [for (final i in m['interest_ids'] as List) i as String],
     targetRoleIds: [for (final r in m['target_role_ids'] as List) r as String],
+    agentConsent: m['agent_consent'] == null
+        ? null
+        : AgentConsent.fromJson(m['agent_consent'] as Map<String, dynamic>),
+  );
+
+  /// 동의 기록만 바꾼 사본. [consent]가 null이면 철회다.
+  UserProfile withAgentConsent(AgentConsent? consent) => UserProfile(
+    universityId: universityId,
+    majorId: majorId,
+    grade: grade,
+    enrollmentStatus: enrollmentStatus,
+    interestIds: interestIds,
+    targetRoleIds: targetRoleIds,
+    agentConsent: consent,
   );
 
   /// PUT /v1/profile 본문. updated_at은 서버가 정한다.
+  /// agent_consent는 있을 때만 보낸다. 빠지면 서버는 철회로 본다.
   Map<String, dynamic> toJson() => {
     'university_id': universityId,
     'major_id': majorId,
@@ -316,7 +338,242 @@ class UserProfile {
     'enrollment_status': enrollmentStatus,
     'interest_ids': interestIds,
     'target_role_ids': targetRoleIds,
+    'agent_consent': ?agentConsent?.toJson(),
   };
+}
+
+/// 외부 AI 전송 동의 기록 (user_profile.schema.json agent_consent).
+/// 문구가 바뀌어 [agentConsentVersion]이 오르면 이전 기록은 동의로 보지 않는다.
+class AgentConsent {
+  const AgentConsent({required this.version, required this.agreedAt});
+
+  final String version;
+  final DateTime agreedAt;
+
+  factory AgentConsent.fromJson(Map<String, dynamic> m) =>
+      AgentConsent(version: m['version'] as String, agreedAt: DateTime.parse(m['agreed_at'] as String));
+
+  /// agreed_at은 UTC 'Z' 형식. 서버가 서버 시각으로 덮어쓴다.
+  Map<String, dynamic> toJson() => {'version': version, 'agreed_at': agreedAt.toUtc().toIso8601String()};
+}
+
+/// 지금 동의 문구의 버전 (docs/agent-privacy-spec.md §5.1)
+const agentConsentVersion = '2026-11-22'; // D-044 받는 곳 DeepSeek로 변경, 다시 동의
+
+extension UserProfileConsent on UserProfile? {
+  /// 지금 문구에 동의한 기록이 있는지
+  bool get hasAgentConsent => this?.agentConsent?.version == agentConsentVersion;
+}
+
+/// 상세 분석을 요청할 때만 묻는 선택 값 (analysis_request.schema.json chips). 모두 선택이다.
+class AnalysisChips {
+  const AnalysisChips({this.experience = const [], this.period, this.regions = const []});
+
+  /// 해 본 것 (여러 개). none_yet은 단독
+  final List<String> experience;
+
+  /// 가능한 시기 (하나)
+  final String? period;
+
+  /// 갈 수 있는 지역 (여러 개). any는 단독
+  final List<String> regions;
+
+  bool get isEmpty => experience.isEmpty && period == null && regions.isEmpty;
+
+  /// 비어 있는 질문은 키를 보내지 않는다. 모두 비면 빈 객체('건너뛰고 분석').
+  Map<String, dynamic> toJson() => {
+    if (experience.isNotEmpty) 'experience': experience,
+    'period': ?period,
+    if (regions.isNotEmpty) 'regions': regions,
+  };
+
+  factory AnalysisChips.fromJson(Map<String, dynamic> m) => AnalysisChips(
+    experience: [for (final e in (m['experience'] as List?) ?? const []) e as String],
+    period: m['period'] as String?,
+    regions: [for (final e in (m['regions'] as List?) ?? const []) e as String],
+  );
+}
+
+/// 상세 분석 리포트 네 칸. 서버가 준 글을 그대로 보인다 (analysis_response.schema.json).
+class AnalysisReport {
+  const AnalysisReport({required this.fit, required this.eligibility, required this.todo, required this.skills});
+
+  /// 나와 이 공고 (맞는 점·안 맞는 점·확인할 점)
+  final String fit;
+
+  /// 지원 자격
+  final String eligibility;
+
+  /// 지원 전 할 일
+  final String todo;
+
+  /// 필요한 역량
+  final String skills;
+
+  factory AnalysisReport.fromJson(Map<String, dynamic> m) => AnalysisReport(
+    fit: m['fit'] as String,
+    eligibility: m['eligibility'] as String,
+    todo: m['todo'] as String,
+    skills: m['skills'] as String,
+  );
+}
+
+class AnalysisResponse {
+  const AnalysisResponse({
+    required this.noticeId,
+    required this.report,
+    required this.expiresAt,
+    required this.fromCache,
+  });
+
+  final String noticeId;
+  final AnalysisReport report;
+
+  /// 저장본 삭제 기준 시각
+  final DateTime expiresAt;
+
+  /// true면 저장본이며 AI를 새로 부르지 않은 응답
+  final bool fromCache;
+
+  factory AnalysisResponse.fromJson(Map<String, dynamic> m) => AnalysisResponse(
+    noticeId: m['notice_id'] as String,
+    report: AnalysisReport.fromJson(m['report'] as Map<String, dynamic>),
+    expiresAt: DateTime.parse(m['expires_at'] as String),
+    fromCache: m['from_cache'] as bool,
+  );
+}
+
+/// 외부 공고 찾기 직접 적기 최대 글자 수 (external_search_request.schema.json query)
+const externalQueryMax = 50;
+
+/// 외부 공고 찾기 결과 한 건 (external_search_response.schema.json items)
+class ExternalSearchItem {
+  const ExternalSearchItem({
+    required this.title,
+    required this.url,
+    required this.sourceName,
+    required this.deadline,
+    required this.reason,
+    required this.verified,
+    this.verdict,
+    this.target,
+    this.organizer,
+    this.read = false,
+  });
+
+  final String title;
+  final String url;
+
+  /// 출처 사이트 이름 (주최가 아님)
+  final String sourceName;
+
+  /// 출처 문장에서 확인된 날짜 'YYYY-MM-DD'. 모르면 null (verified가 false면 항상 null)
+  final String? deadline;
+  final String reason;
+
+  /// 검색 출처로 확인했는지. false면 화면에 '출처 확인 안 됨'
+  final bool verified;
+
+  /// 원문 조건으로 귀띔 규칙이 낸 판정 'met' / 'needs_check'. 원문을 못 읽었으면 null (미충족은 서버가 뺌)
+  final String? verdict;
+
+  /// 원문의 응모 대상 문장, 주최·주관 (원문을 읽었을 때만)
+  final String? target;
+  final String? organizer;
+
+  /// DeepSeek가 원문 페이지를 실제로 열었는지
+  final bool read;
+
+  factory ExternalSearchItem.fromJson(Map<String, dynamic> m) => ExternalSearchItem(
+    title: m['title'] as String,
+    url: m['url'] as String,
+    sourceName: m['source_name'] as String,
+    deadline: m['deadline'] as String?,
+    reason: m['reason'] as String,
+    verified: m['verified'] as bool,
+    verdict: m['verdict'] as String?,
+    target: m['target'] as String?,
+    organizer: m['organizer'] as String?,
+    read: m['read'] as bool? ?? false,
+  );
+}
+
+/// 외부 공고 찾기 응답. 서버에 저장하지 않는다. 결과가 없으면 [charged]가 false(크레딧 환불).
+class ExternalSearchResult {
+  const ExternalSearchResult({
+    required this.items,
+    required this.charged,
+    required this.searchedAt,
+    this.excludedNotMet = 0,
+  });
+
+  final List<ExternalSearchItem> items;
+  final bool charged;
+  final DateTime searchedAt;
+
+  /// 원문 조건으로 미충족이라 뺀 결과 수
+  final int excludedNotMet;
+
+  factory ExternalSearchResult.fromJson(Map<String, dynamic> m) => ExternalSearchResult(
+    items: [for (final i in m['items'] as List) ExternalSearchItem.fromJson(i as Map<String, dynamic>)],
+    charged: m['charged'] as bool,
+    searchedAt: DateTime.parse(m['searched_at'] as String),
+    excludedNotMet: m['excluded_not_met'] as int? ?? 0,
+  );
+}
+
+/// 크레딧 사용 내역 한 줄 (credits.schema.json)
+class CreditEntry {
+  const CreditEntry({required this.kind, required this.amount, required this.at, required this.ref});
+
+  /// signup / daily / detail_analysis / external_search / demo(시연용 채우기)
+  final String kind;
+
+  /// 충전은 +, 사용은 −
+  final int amount;
+  final DateTime at;
+
+  /// 사용 내역이 가리키는 id (상세 분석은 공고 id). 충전은 null
+  final String? ref;
+
+  factory CreditEntry.fromJson(Map<String, dynamic> m) => CreditEntry(
+    kind: m['kind'] as String,
+    amount: m['amount'] as int,
+    at: DateTime.parse(m['at'] as String),
+    ref: m['ref'] as String?,
+  );
+}
+
+class Credits {
+  const Credits({required this.balance, required this.nextRefillAt, required this.entries});
+
+  /// 지금 쓸 수 있는 개수 (0~5)
+  final int balance;
+
+  /// 다음 충전 시각. 최대 보유면 null
+  final DateTime? nextRefillAt;
+
+  /// 최근 90일, 최신순
+  final List<CreditEntry> entries;
+
+  static const max = 5;
+
+  /// 이 공고의 상세 분석을 마지막으로 받은 시각. 내역에 없으면 null (90일이 지났거나 저장본만 있는 경우)
+  DateTime? analysisReceivedAt(String noticeId) {
+    DateTime? latest;
+    for (final e in entries) {
+      if (e.kind == 'detail_analysis' && e.ref == noticeId && (latest == null || e.at.isAfter(latest))) {
+        latest = e.at;
+      }
+    }
+    return latest;
+  }
+
+  factory Credits.fromJson(Map<String, dynamic> m) => Credits(
+    balance: m['balance'] as int,
+    nextRefillAt: m['next_refill_at'] == null ? null : DateTime.parse(m['next_refill_at'] as String),
+    entries: [for (final e in m['entries'] as List) CreditEntry.fromJson(e as Map<String, dynamic>)],
+  );
 }
 
 class SavedNotice {
@@ -358,8 +615,11 @@ class SavedEntry {
 }
 
 class DictionaryItem {
-  const DictionaryItem(this.id, this.name);
+  const DictionaryItem(this.id, this.name, {this.universityId});
 
   final String id;
   final String name;
+
+  /// 학과 사전에서 학과가 속한 학교 코드. 다른 사전은 null.
+  final String? universityId;
 }

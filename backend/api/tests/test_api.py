@@ -78,6 +78,23 @@ def test_profile_rejects_user_id_and_unknown_codes(client):
     assert_error(client.put("/v1/profile", headers=ALICE, json={**profile_body(), "grade": 9}), 400, "invalid_argument")
 
 
+def test_profile_unlisted_school_requires_null_major(client):
+    """'목록에 없는 학교'(unlisted)는 저장되고, 학과가 있으면 invalid_argument (D-043)."""
+    unlisted = {**profile_body(), "university_id": "unlisted", "major_id": None}
+    resp = client.put("/v1/profile", headers=ALICE, json=unlisted)
+    assert resp.status_code == 200
+    assert resp.json()["university_id"] == "unlisted" and resp.json()["major_id"] is None
+    assert_error(client.put("/v1/profile", headers=ALICE, json={**unlisted, "major_id": "mjc.computer_engineering"}), 400, "invalid_argument")
+    assert client.get("/v1/profile", headers=ALICE).json()["major_id"] is None  # 거절된 요청은 저장되지 않음
+
+
+def test_unlisted_student_recommendations_exclude_school_notices(client):
+    client.put("/v1/profile", headers=ALICE, json={**profile_body(), "university_id": "unlisted", "major_id": None})
+    ids = [i["notice"]["notice_id"] for i in client.get("/v1/recommendations", headers=ALICE).json()["items"]]
+    assert "n_synthetic_0101" in ids  # 교외(wevity_contest)
+    assert not any(i.startswith("n_synthetic_000") or i.startswith("n_synthetic_kakao") for i in ids)  # 학교 출처
+
+
 def test_profile_limits_interests_and_roles_to_five(client):
     """관심사·직무는 각각 최대 5개 (D-031)."""
     five = ["ai_data", "software", "security", "design", "media_content"]
@@ -111,10 +128,11 @@ def test_recommendations_personalized_after_profile(client):
 def test_recommendations_search_and_category(client):
     """공고 탭 검색·분류 칩 (D-026): 추천 후보 전체에서 거르고, 제외 규칙은 그대로다."""
     ids = lambda r: [i["notice"]["notice_id"] for i in r.json()["items"]]
+    assert client.put("/v1/profile", headers=ALICE, json=profile_body()).status_code == 200  # 학교 공지는 같은 학교 학생에게만 (rank-0.8)
     assert ids(client.get("/v1/recommendations?q=해외연수", headers=ALICE)) == ["n_synthetic_0002"]  # 띄어쓰기 무시
     contest = client.get("/v1/recommendations?category=contest", headers=ALICE)
     assert schema_errors("recommendation_list_response", contest.json()) == []
-    assert sorted(ids(contest)) == ["n_synthetic_0001", "n_synthetic_0003"]  # 0005는 검토 대기라 빠짐
+    assert sorted(ids(contest)) == ["n_synthetic_0001", "n_synthetic_0003", "n_synthetic_0101"]  # 0005는 검토 대기라 빠짐, 0101은 교외 공모전 샘플
     assert ids(client.get("/v1/recommendations?category=contest&q=글쓰기", headers=ALICE)) == ["n_synthetic_0003"]
     assert ids(client.get("/v1/recommendations?q=없는말", headers=ALICE)) == []
     assert_error(client.get("/v1/recommendations?category=nope", headers=ALICE), 400, "invalid_argument")
@@ -278,3 +296,15 @@ def test_ingest_rejects_bad_fields(ingest_client, change):
     client, inbox = ingest_client
     assert_error(client.post("/v1/ingest/kakao", json={**PHONE_NOTICE, **change}, headers=INGEST), 400, "invalid_argument")
     assert inbox.docs == {}
+
+
+def test_poster_only_in_detail(client):
+    notice = fixture("notice/date_only_timezone_unknown.json")
+    nid = notice["notice_id"]
+    assert client.get(f"/v1/notices/{nid}", headers=ALICE).json()["poster_url"] == notice["poster_url"]
+    client.put("/v1/profile", headers=ALICE, json=profile_body())
+    client.put(f"/v1/saved/{nid}", headers=ALICE)
+    for path in ("/v1/recommendations", "/v1/recommendations?q=" + notice["title"], "/v1/saved"):
+        items = client.get(path, headers=ALICE).json()["items"]
+        assert nid in [item["notice"]["notice_id"] for item in items]
+        assert all("poster_url" not in item["notice"] for item in items)
