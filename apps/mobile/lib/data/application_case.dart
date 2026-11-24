@@ -291,8 +291,9 @@ class ApplicationCaseStore extends ChangeNotifier {
     _write(next);
   }
 
-  void _write(Map<String, ApplicationCase> snapshot) {
-    _writes = _writes.then((_) => _storage.save(snapshot)).then<void>(
+  /// 기기 기록을 다 읽은 뒤, 그때의 최신 상태(읽은 기록과 합친 것)를 쓴다. 읽기 전에 쓰면 기기에 있던 기록을 덮는다.
+  void _write(Map<String, ApplicationCase> _) {
+    _writes = _writes.then((_) => load()).then((_) => _storage.save({..._cases})).then<void>(
       (_) {},
       onError: (Object _) {
         // 쓰기 실패: 이번 실행 동안만 기억한다
