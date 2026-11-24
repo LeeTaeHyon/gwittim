@@ -623,25 +623,31 @@ class _CaseCard extends StatelessWidget {
     final rest = [for (final i in view.items) if (i != next) i].take(3);
     final state = view.ended ? null : kase.state;
     final openUrl = state == CaseState.preparing ? next?.url : null;
+    // 카드 안 버튼은 모두 높이 44·글자 15(ui-style 보조 버튼 크기). 중요도는 모양으로만: 채움 → 연한 바탕 → 글자
+    final label = Theme.of(context).textTheme.labelLarge!.copyWith(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0);
+    const size = Size(0, 44);
+    const pad = EdgeInsets.symmetric(horizontal: 18);
+    Widget primary(String text, VoidCallback onPressed) => FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(minimumSize: size, padding: pad, textStyle: label),
+      child: Text(text),
+    );
+    Widget plain(String text, VoidCallback onPressed) => TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(minimumSize: size, padding: const EdgeInsets.symmetric(horizontal: 12), textStyle: label),
+      child: Text(text),
+    );
     final buttons = <Widget>[
       if (state == CaseState.saved) ...[
-        FilledButton(onPressed: onStart, child: const Text('준비 시작')),
-        TextButton(onPressed: onSkip, child: const Text('이번엔 안 함')),
+        primary('준비 시작', onStart),
+        plain('이번엔 안 함', onSkip),
       ],
       if (state == CaseState.preparing) ...[
-        if (openUrl != null)
-          FilledButton(
-            onPressed: () => onOpen(openUrl),
-            child: Text(openUrl == kase.applyUrl ? '신청 사이트 열기' : '원문 열기'),
-          ),
-        if (openUrl != null)
-          OutlinedButton(onPressed: onApplied, child: const Text('신청함'))
-        else
-          FilledButton(onPressed: onApplied, child: const Text('신청함')),
-        TextButton(onPressed: onSkip, child: const Text('이번엔 안 함')),
+        if (openUrl != null) primary(openUrl == kase.applyUrl ? '신청 사이트 열기' : '원문 열기', () => onOpen(openUrl)),
+        if (openUrl != null) SoftButton(label: '신청함', onPressed: onApplied, icon: null) else primary('신청함', onApplied),
+        plain('이번엔 안 함', onSkip),
       ],
-      if (kase.state == CaseState.applied || kase.state == CaseState.skipped)
-        TextButton(onPressed: onUndo, child: const Text('되돌리기')),
+      if (kase.state == CaseState.applied || kase.state == CaseState.skipped) plain('되돌리기', onUndo),
     ];
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 14, 20, 0),

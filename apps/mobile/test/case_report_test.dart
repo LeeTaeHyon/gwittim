@@ -142,6 +142,34 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
   });
 
+  testWidgets('내 지원 카드 버튼은 상태와 상관없이 모두 높이 44', (tester) async {
+    // 눈에 보이는 버튼 바탕(Material) 높이. 누르는 영역은 접근성 기준대로 48까지 넓혀진다
+    double heightOf(String text) => tester
+        .getSize(
+          find.descendant(
+            of: find.ancestor(of: find.text(text), matching: find.bySubtype<ButtonStyleButton>()).first,
+            matching: find.byType(Material),
+          ).first,
+        )
+        .height;
+    final store = await pumpReport(
+      tester,
+      repo: FakeCaseRepository(saved: [savedOf(a)]),
+      cases: {'a': caseOf('a', CaseState.saved)},
+    );
+    expect(heightOf('준비 시작'), 44);
+    expect(heightOf('이번엔 안 함'), 44);
+    await tester.tap(find.text('준비 시작'));
+    await tester.pumpAndSettle();
+    // 준비 중: 원문 열기(채움)·신청함(연한 바탕)·이번엔 안 함(글자)
+    for (final t in ['원문 열기', '신청함', '이번엔 안 함']) {
+      expect(heightOf(t), 44, reason: t);
+    }
+    await store.markSkipped('a');
+    await tester.pumpAndSettle();
+    expect(heightOf('되돌리기'), 44);
+  });
+
   testWidgets('끝난 지원 건(마감 지남)은 버튼이 없음', (tester) async {
     final passed = summaryOf('a', deadline: dateOnly('2026-11-20'));
     await pumpReport(tester, repo: FakeCaseRepository(saved: [savedOf(passed)]), cases: {'a': caseOf('a', CaseState.preparing)});
