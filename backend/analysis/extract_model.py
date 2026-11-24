@@ -28,7 +28,7 @@ from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line, points_near
 from .llm import redact
-from .rules import EXCLUDES, RuleBasedAnalyzer, tidy_unresolved
+from .rules import EXCLUDES, OTHER_STATUS, RuleBasedAnalyzer, tidy_unresolved
 
 MODEL_SUBDIR = Path("models/extract-v1")  # 배치 --data-dir 아래 (기본 data/local/models/extract-v1)
 MODEL_NOTE = "모델 추출"  # unresolved_condition.note: 규칙이 아니라 이 모델이 고른 줄
@@ -76,6 +76,8 @@ class ExtractModelAnalyzer:
 
     def analyze(self, raw: dict, source: SourceConfig) -> dict:
         fields = self.base.analyze(raw, source)
+        if fields["category"] == "admin_notice":
+            return fields  # 업체·교직원 대상 행정 공지: 규칙이 일부러 비운 마감·조건을 모델이 되살리지 않는다 (rule-0.9)
         lines = model_lines(raw)
         try:
             probs = self.predictor([redact(l) for l in lines])  # 학습 데이터처럼 연락처를 지우고 넣는다
@@ -133,6 +135,8 @@ class ExtractModelAnalyzer:
                 continue
             for name in sorted(t):
                 if name in _ENROLLMENT:
+                    if OTHER_STATUS.search(line):  # 졸업 예정·복학·편입 줄은 재학 상태로 판정 못 함, 규칙이 직접 확인으로 보냄 (D-046)
+                        continue
                     add("enrollment_status", _ENROLLMENT[name], line)
                 elif name.startswith("grade_"):
                     add("grade", int(name[-1]), line)
@@ -147,6 +151,8 @@ class ExtractModelAnalyzer:
                 values = [v for v in _ENROLLMENT_ORDER if v in values]
             elif field == "grade":
                 values = sorted(values)
+                if values == [1, 2, 3, 4]:  # 학년 전체 나열은 제한이 아니다 (규칙의 '학년 전체 나열 무시'와 같음)
+                    continue
             one = len(values) == 1
             elig["conditions"].append({
                 "field": field,

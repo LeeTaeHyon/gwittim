@@ -173,6 +173,49 @@ def test_model_notice_passes_validation():
     assert notice["analysis_version"] == a.version
 
 
+def test_graduating_line_is_not_enrollment_condition_from_model():
+    # D-046: '졸업 예정자' 줄은 규칙이 직접 확인으로 보낸다. 모델이 졸업생 꼬리표를 붙여도 재학 상태 조건이 되지 않는다
+    body = "신청 자격: 기졸업자 또는 졸업예정자\n"
+    a = analyzer({"졸업예정자": {"enr_graduated": 0.95}})
+    f = a.analyze(raw(body), MJC)
+    elig = f["eligibility"]
+    assert not any(c["field"] == "enrollment_status" for c in elig["conditions"])
+    assert any("졸업예정자" in u["evidence"] for u in elig["unresolved_conditions"])  # 규칙의 직접 확인 조건은 남는다
+    assert elig["extraction_complete"] is False
+
+
+def test_admin_notice_skips_model_entirely():
+    # 업체 계약 공고: 규칙이 마감·조건을 비운다. 모델이 꼬리표를 붙여도 되살리지 않고, 모델 집계에도 넣지 않는다
+    body = "공고 기간: 2026.11.20.(금) ~ 2026.11.27.(금)\n대상: 재학생\n참가 자격: 사업자등록증 보유 업체\n"
+    a = analyzer({"공고 기간": {"deadline": 0.99}, "대상": {"enr_enrolled": 0.95}, "참가 자격": {"qual": 0.95}})
+    f = a.analyze(raw(body, title="[입찰공고] 전산 정보보안 운영 인력 용역"), MJC)
+    assert f["category"] == "admin_notice"
+    assert f["application_deadline"] is None and f["application_start"] is None
+    elig = f["eligibility"]
+    assert elig["conditions"] == [] and elig["unresolved_conditions"] == []
+    assert a.model_analyzed == 0 and a.predictor.seen == []
+
+
+def test_all_grades_from_model_is_not_a_grade_condition():
+    # 모델이 1~4학년을 모두 모으면 제한이 아니다(규칙의 '학년 전체 나열 무시'와 같음). 일부 학년이면 그대로 조건
+    body = "1~4학년 누구나 참여 가능\n"
+    f = analyzer({"누구나": {f"grade_{g}": 0.9 for g in (1, 2, 3, 4)}}).analyze(raw(body), MJC)
+    assert not any(c["field"] == "grade" for c in f["eligibility"]["conditions"])
+    f = analyzer({"참여 학년": {"grade_2": 0.9, "grade_3": 0.9}}).analyze(raw("참여 학년 안내\n"), MJC)
+    (c,) = [c for c in f["eligibility"]["conditions"] if c["field"] == "grade"]
+    assert c["operator"] == "in" and c["value"] == [2, 3]
+
+
+def test_school_tag_only_counts_for_matching_source_school():
+    body = "명지 소속 대상 프로그램\n"
+    rules = {"소속": {"uni_mjc": 0.95}}
+    f = analyzer(rules).analyze(raw(body), MJC)
+    assert [c["value"] for c in f["eligibility"]["conditions"] if c["field"] == "university_id"] == ["mjc"]
+    sewu = source_config("sewu_www_notice")
+    f = analyzer(rules).analyze(raw(body), sewu)
+    assert not any(c["field"] == "university_id" for c in f["eligibility"]["conditions"])
+
+
 def test_model_lines_match_training_split():
     assert model_lines({"title": "  제목 ", "body_text": "첫 줄\n\n  둘째 줄  \n"}) == ["제목", "첫 줄", "둘째 줄"]
 
