@@ -24,6 +24,7 @@ SIGNUP = "signup"
 DAILY = "daily"
 DETAIL_ANALYSIS = "detail_analysis"
 EXTERNAL_SEARCH = "external_search"
+DEMO = "demo"  # 시연용 채우기 (서버 설정으로만 켬)
 
 # 차감 종류별 비용
 COSTS = {DETAIL_ANALYSIS: 1, EXTERNAL_SEARCH: 2}
@@ -156,6 +157,16 @@ def current_state(state: CreditState, now: datetime) -> CreditState:
     크레딧 페이지 조회, next_refill_at, reserve, settle 모두 이것을 거친다(명세 §10.3 '읽거나 쓸 때 계산').
     """
     return prune_history(release_stale_holds(apply_refill(state, now), now), now)
+
+
+def demo_refill(state: CreditState, now: datetime) -> CreditState:
+    """시연용: 잔액을 최대 보유(5)까지 채운다. 이미 5 이상이면 그대로. 내역에 'demo'로 남긴다."""
+    now = to_kst(now)
+    state = current_state(state, now)
+    gap = MAX_CREDITS - state.balance
+    if gap <= 0:
+        return state
+    return replace(state, balance=MAX_CREDITS, entries=(*state.entries, LedgerEntry(DEMO, gap, now)))
 
 
 def reserve(state: CreditState, kind: str, request_id: str, now: datetime) -> ReserveResult:

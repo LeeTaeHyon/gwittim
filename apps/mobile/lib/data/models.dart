@@ -523,7 +523,7 @@ class ExternalSearchResult {
 class CreditEntry {
   const CreditEntry({required this.kind, required this.amount, required this.at, required this.ref});
 
-  /// signup / daily / detail_analysis / external_search
+  /// signup / daily / detail_analysis / external_search / demo(시연용 채우기)
   final String kind;
 
   /// 충전은 +, 사용은 −

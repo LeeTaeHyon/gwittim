@@ -27,9 +27,10 @@ NoticeSummary summaryOf(
   lifecycleStatus: lifecycle,
 );
 
-Notice noticeOf(NoticeSummary s, {DateInfo? start, String? applyUrl}) => Notice(
+Notice noticeOf(NoticeSummary s, {DateInfo? start, String? applyUrl, String? sourceId, String? description}) => Notice(
   summary: s,
-  description: null,
+  sourceId: sourceId,
+  description: description,
   applicationStart: start,
   activityPeriod: null,
   eligibility: const Eligibility(
@@ -160,4 +161,7 @@ class FakeCaseRepository implements NoticeRepository {
 
   @override
   Future<Credits> getCredits() async => const Credits(balance: 3, nextRefillAt: null, entries: []);
+
+  @override
+  Future<Credits> demoRefillCredits() async => const Credits(balance: 5, nextRefillAt: null, entries: []);
 }

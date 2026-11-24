@@ -107,7 +107,7 @@ void main() {
     await tester.tap(title.hitTestable());
     await tester.pumpAndSettle();
     expect(find.byType(ReportScreen), findsOneWidget);
-    expect(find.text('신청함'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, '신청함'), findsOneWidget);
     noOverflow('리포트 내 지원 카드');
     await scrollToEnd(tester);
     noOverflow('리포트 끝까지');

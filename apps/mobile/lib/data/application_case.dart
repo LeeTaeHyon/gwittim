@@ -642,6 +642,9 @@ class CaseTrackingRepository implements NoticeRepository, WrappingRepository {
 
   @override
   Future<Credits> getCredits() => _inner.getCredits();
+
+  @override
+  Future<Credits> demoRefillCredits() => _inner.demoRefillCredits();
 }
 
 /// 화면이 지원 건 저장소를 찾는 곳. 저장소가 바뀌면 [of]로 찾은 화면이 다시 그린다.

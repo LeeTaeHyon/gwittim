@@ -203,7 +203,7 @@ notice_id, report, expires_at, from_cache.
 
 balance(0~5), next_refill_at(다음 충전 시각, 최대 보유면 `null`), entries(kind, amount, at, ref).
 
-- kind는 signup(+5) / daily(+1) / detail_analysis(−1) / external_search(−2)이고 amount는 충전이 +, 사용이 −다. ref는 사용 내역이 가리키는 id(상세 분석은 공고 id)이며 충전 내역은 `null`이다.
+- kind는 signup(+5) / daily(+1) / detail_analysis(−1) / external_search(−2) / demo(+1~+5, 시연용 채우기)이고 amount는 충전이 +, 사용이 −다. ref는 사용 내역이 가리키는 id(상세 분석은 공고 id)이며 충전 내역은 `null`이다.
 - 내역은 최근 90일, 최신순이다. 실패해서 차감하지 않은 요청은 넣지 않는다.
 - 잔액은 서버만 쓰고 앱은 읽기만 한다(`docs/agent-privacy-spec.md` §10).
 
@@ -273,7 +273,7 @@ balance(0~5), next_refill_at(다음 충전 시각, 최대 보유면 `null`), ent
 
 인증 실패·권한 없음·입력 오류·미존재·일시 장애를 구분한다. 오류 응답은 `{error: {code, message}}`이고 code는 unauthenticated / permission_denied / invalid_argument / not_found / unavailable이고, 상세 분석 경로에서는 insufficient_credits / request_in_progress / consent_required도 쓴다. 목록 응답은 items, next_cursor(불투명 문자열 또는 null), generated_at을 가지며 limit은 최대 50이다. 앱에 스택 추적·비밀키를 반환하지 않는다. 추천 페이지 이동 중 중복·누락을 줄이도록 초기에는 소량 결과를 한 번에 받아 표시해도 된다.
 
-상세 분석·크레딧의 HTTP 경로(확정, D-039): `POST /v1/analysis`(request_detail_analysis), `GET /v1/analysis/{notice_id}`(get_detail_analysis), `GET /v1/credits`(get_credits). 동의 기록은 `PUT /v1/profile`의 agent_consent로 보낸다. 오류 HTTP 상태는 insufficient_credits 402, request_in_progress 409, consent_required 403이다.
+상세 분석·크레딧의 HTTP 경로(확정, D-039): `POST /v1/analysis`(request_detail_analysis), `GET /v1/analysis/{notice_id}`(get_detail_analysis), `GET /v1/credits`(get_credits). 시연용 `POST /v1/credits/demo-refill`은 잔액을 5까지 채우고 크레딧 페이지와 같은 모양을 돌려준다. 서버 설정 `GWITTIM_DEMO_CREDITS=1`일 때만 열리고 아니면 404(not_found). 켜도 월 비용 상한은 그대로 막는다. 동의 기록은 `PUT /v1/profile`의 agent_consent로 보낸다. 오류 HTTP 상태는 insufficient_credits 402, request_in_progress 409, consent_required 403이다.
 
 외부 공고 찾기(D-047): `POST /v1/external-search`(request_external_search, 계약 `external_search_request`·`external_search_response`). DeepSeek 웹 검색 결과 최대 5개(검색 출처로 확인된 것 먼저, 확인 못 한 것은 '출처 확인 안 됨' 표시), 결과 페이지는 DeepSeek가 다시 열어 응모 대상을 읽고 귀띔 판정 규칙으로 충족·확인 필요를 붙이며 미충족은 뺀다. 크레딧 2개, 결과가 없으면 환불. 결과와 학생이 적은 한 줄은 저장하지 않는다(docs/agent-privacy-spec.md §12.1).
 

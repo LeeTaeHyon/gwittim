@@ -43,13 +43,14 @@
               "signup",
               "daily",
               "detail_analysis",
-              "external_search"
+              "external_search",
+              "demo"
             ],
-            "description": "signup 가입 선물, daily 매일 충전, detail_analysis 상세 분석, external_search 외부 공고 찾기"
+            "description": "signup 가입 선물, daily 매일 충전, detail_analysis 상세 분석, external_search 외부 공고 찾기, demo 시연용 채우기(서버 설정으로 켰을 때만)"
           },
           "amount": {
             "type": "integer",
-            "description": "충전은 +, 사용은 −. signup +5, daily +1, detail_analysis −1, external_search −2."
+            "description": "충전은 +, 사용은 −. signup +5, daily +1, detail_analysis −1, external_search −2, demo +1~+5(5까지 채운 만큼)."
           },
           "at": {
             "$ref": "common.schema.json#/$defs/utc_timestamp"
@@ -63,6 +64,31 @@
           }
         },
         "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "demo"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "amount": {
+                  "minimum": 1,
+                  "maximum": 5
+                },
+                "ref": {
+                  "type": "null"
+                }
+              }
+            }
+          },
           {
             "if": {
               "properties": {

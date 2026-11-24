@@ -107,6 +107,9 @@ class SavedRepository implements NoticeRepository {
 
   @override
   Future<Credits> getCredits() => throw const RepositoryException(RepositoryErrorKind.unavailable);
+
+  @override
+  Future<Credits> demoRefillCredits() => throw const RepositoryException(RepositoryErrorKind.unavailable);
 }
 
 void main() {

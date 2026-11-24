@@ -10,12 +10,18 @@ import 'format.dart';
 import 'skeleton.dart';
 import 'theme.dart';
 
+/// 시연용 빌드(`--dart-define=GWITTIM_DEMO=true`)에서만 크레딧 페이지에 '시연용 크레딧 채우기'를 보인다.
+const demoBuild = bool.fromEnvironment('GWITTIM_DEMO');
+
 /// 크레딧 페이지 (docs/agent-privacy-spec.md §10.2): 보유, 다음 충전, 사용 규칙, 사용 내역(최근 90일).
-/// 앱은 읽기만 한다. 광고·유료 충전 버튼은 두지 않는다 (D-039).
+/// 앱은 읽기만 한다. 광고·유료 충전 버튼은 두지 않는다 (D-039). 시연용 빌드만 채우기 버튼이 있다.
 class CreditsScreen extends StatefulWidget {
-  const CreditsScreen({super.key, required this.repository});
+  const CreditsScreen({super.key, required this.repository, this.showDemoRefill = demoBuild});
 
   final NoticeRepository repository;
+
+  /// 시연용 채우기 버튼. 서버도 시연 설정을 켜야 동작한다.
+  final bool showDemoRefill;
 
   @override
   State<CreditsScreen> createState() => _CreditsScreenState();
@@ -80,6 +86,35 @@ class _CreditsScreenState extends State<CreditsScreen> {
     }
   }
 
+  bool _refilling = false;
+
+  /// 시연용: 서버에 5까지 채워 달라고 하고 페이지를 다시 읽는다.
+  Future<void> _demoRefill() async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _refilling = true);
+    String message;
+    try {
+      await widget.repository.demoRefillCredits();
+      message = '크레딧을 ${Credits.max}개로 채웠습니다.';
+      if (mounted) {
+        setState(() {
+          _future = _load();
+        });
+      }
+    } on RepositoryException catch (e) {
+      message = e.kind == RepositoryErrorKind.notFound
+          ? '이 서버는 시연용 채우기를 켜지 않았습니다.'
+          : errorMessage(e);
+    } catch (e) {
+      message = errorMessage(e);
+    }
+    if (!mounted) return;
+    setState(() => _refilling = false);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(keepAll(message))));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -108,6 +143,18 @@ class _CreditsScreenState extends State<CreditsScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: _Balance(credits: credits),
         ),
+        if (widget.showDemoRefill)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SoftButton(
+                label: _refilling ? '채우는 중' : '시연용 크레딧 채우기',
+                icon: Icons.add_rounded,
+                onPressed: _refilling ? () {} : _demoRefill,
+              ),
+            ),
+          ),
         Container(
           margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -307,6 +354,7 @@ class _EntryRow extends StatelessWidget {
       'daily' => '매일 충전',
       'detail_analysis' => '상세 분석',
       'external_search' => '외부 공고 찾기',
+      'demo' => '시연용 채우기',
       _ => '크레딧 변동',
     };
     final titleStyle = TextStyle(fontSize: 15, height: 1.45, fontWeight: FontWeight.w600, color: c.ink);
