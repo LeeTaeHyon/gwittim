@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/application_case.dart';
 import '../data/cached_repository.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
@@ -148,14 +149,23 @@ class HomeScreenState extends State<HomeScreen> {
 
   static bool _hasInterests(HomeData data) => data.profile?.interestIds.isNotEmpty ?? false;
 
-  Briefing _briefing(HomeData data) => buildBriefing(
-    data.list,
-    data.saved,
-    _today,
-    hasInterests: _hasInterests(data),
-    picks: data.picks,
-    majorId: data.profile?.majorId,
-  );
+  /// 지원 건 기록(D-052). 그리기 밖에서 읽을 때는 다시 그리기를 걸지 않는다.
+  Map<String, ApplicationCase>? _caseMap(ApplicationCaseStore? store) =>
+      store == null ? null : {for (final k in store.all) k.noticeId: k};
+
+  Briefing _briefing(HomeData data) {
+    final store = ApplicationCaseScope.read(context);
+    return buildBriefing(
+      data.list,
+      data.saved,
+      _today,
+      hasInterests: _hasInterests(data),
+      picks: data.picks,
+      majorId: data.profile?.majorId,
+      cases: _caseMap(store),
+      emphasizedEarlier: store == null ? null : (id) => store.emphasizedEarlier(id, _today),
+    );
+  }
 
   /// 학과 통계 추천에 '관심 있어요/없어요'를 답한다 (D-021). 그만 보이게 됐으면 true.
   Future<bool> _answerMajorPick(RecommendationEntry e, bool interested) async {
@@ -210,6 +220,13 @@ class HomeScreenState extends State<HomeScreen> {
 
   /// [arrival]: 하루 첫 접속 때 자동으로 여는 경우만 '귀띔 도착' 장면을 보인다. 홈 말풍선에서 여는 경우는 장면 없음.
   Future<void> _openBriefing(Briefing briefing, {bool arrival = false}) async {
+    // 브리핑 카드에 들어간 지원 건은 오늘 강조한 것으로 기록한다(하루 1번, D-052)
+    final store = ApplicationCaseScope.read(context);
+    final shownCases = [
+      for (final s in [...briefing.savedSoon, ...briefing.startToday])
+        if (store?[s.notice.noticeId] != null) s.notice.noticeId,
+    ];
+    if (store != null && shownCases.isNotEmpty) store.markEmphasized(shownCases, _today);
     if (!arrival) {
       try {
         await widget.briefingStore.markShown(_today); // 말풍선으로 연 것도 연 것으로 센다
@@ -271,7 +288,21 @@ class HomeScreenState extends State<HomeScreen> {
     final c = context.gw;
     final caption = captionStyle(context);
     final list = data.list;
-    final home = buildHomeSections(list, data.saved, _today, picks: data.picks, majorId: data.profile?.majorId);
+    final store = ApplicationCaseScope.maybeOf(context);
+    final home = buildHomeSections(
+      list,
+      data.saved,
+      _today,
+      picks: data.picks,
+      majorId: data.profile?.majorId,
+      cases: _caseMap(store),
+      emphasizedEarlier: store == null ? null : (id) => store.emphasizedEarlier(id, _today),
+    );
+    // 말풍선 건수에 들어간 지원 건은 오늘 강조한 것으로 기록한다(하루 1번)
+    final counted = home.nudge?.caseIds ?? const <String>{};
+    if (store != null && counted.any((id) => !store.emphasizedOn(id, _today))) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => store.markEmphasized(counted, _today));
+    }
     final weekRows = list.personalized ? homeWeekRows : homeLatestRows;
 
     Widget line(HomeRow r, {required bool dated}) => _HomeLine(
@@ -468,6 +499,7 @@ class _Nudge extends StatelessWidget {
     final c = context.gw;
     final parts = [
       if (nudge.dueToday > 0) (name: '오늘 마감', count: nudge.dueToday, color: c.heroUrgent),
+      if (nudge.startToday > 0) (name: '신청 시작', count: nudge.startToday, color: c.loginInk),
       if (nudge.changed > 0) (name: '마감 변경', count: nudge.changed, color: c.loginInk),
       if (nudge.fresh > 0) (name: '새 공고', count: nudge.fresh, color: c.loginInk),
     ];
@@ -548,7 +580,10 @@ class _HomeLine extends StatelessWidget {
     final marks = [
       if (dated) ...[
         if (row.majorPick) const MajorPickLabel(),
-        if (row.saved != null) const Pill('저장한 공고', tone: PillTone.neutral),
+        if (row.view?.stateLabel case final label?)
+          Pill(label, tone: row.view!.ended ? PillTone.neutral : PillTone.chip)
+        else if (row.saved != null)
+          const Pill('저장한 공고', tone: PillTone.neutral),
         if (row.fresh) const Pill('새 공고', tone: PillTone.neutral),
       ],
     ];
@@ -660,6 +695,15 @@ class _HomeLine extends StatelessWidget {
         ),
       ];
     }
+    // 지원 건이면 추천 이유 대신 다음 할 일 (D-052)
+    if (row.view?.next case final next?) {
+      return [
+        TextSpan(
+          text: _then(next.text),
+          style: TextStyle(fontWeight: FontWeight.w500, color: c.accent),
+        ),
+      ];
+    }
     final reason = _reason;
     return [
       if (reason.isNotEmpty)
@@ -677,7 +721,10 @@ class _HomeLine extends StatelessWidget {
     final left = daysLeft(n, today)!;
     return [
       TextSpan(
-        text: keepTogether(left == 0 ? '오늘 마감' : 'D-$left') + (deadline.hasTime ? _then('${deadline.time} 마감') : ''),
+        // 지원 건이면 남은 날은 모든 화면과 같은 문구 (D-052)
+        text: row.view != null
+            ? keepAll(row.view!.remaining)
+            : keepTogether(left == 0 ? '오늘 마감' : 'D-$left') + (deadline.hasTime ? _then('${deadline.time} 마감') : ''),
         style: TextStyle(fontWeight: FontWeight.w600, color: left <= urgentDays ? c.urgent : c.sub),
       ),
       TextSpan(text: _then(category)),
@@ -691,6 +738,15 @@ class _HomeLine extends StatelessWidget {
     final deadline = n.applicationDeadline;
     final left = daysLeft(n, today);
     final soon = left != null && left <= urgentDays;
+    if (row.view != null) {
+      return [
+        TextSpan(
+          text: keepAll(row.view!.remaining),
+          style: TextStyle(fontWeight: FontWeight.w600, color: soon ? c.urgent : c.sub),
+        ),
+        ..._last(c),
+      ];
+    }
     return [
       if (deadline != null) ...[
         TextSpan(

@@ -934,9 +934,13 @@ class AnalysisReportScreen extends StatelessWidget {
     this.receivedAt,
     this.skippedExperience = false,
     this.eligibilityStatus,
+    this.caseLine,
   });
 
   final AnalysisResponse response;
+
+  /// 저장한 공고(지원 건)면 '내 지원 · 상태 · 다음 할 일 · 남은 날' 한 줄. 리포트 카드와 같은 문구(D-052)
+  final String? caseLine;
 
   /// 서버가 계산한 지원 자격 판정(met / not_met / needs_check). 추천 목록에서 들어온 공고만 있다.
   /// not_met일 때만 '지원 자격' 칸을 맨 위로 올린다. 리포트 글(LLM 문장)을 보고 순서를 정하지 않는다.
@@ -978,6 +982,16 @@ class AnalysisReportScreen extends StatelessWidget {
               style: captionStyle(context),
             ),
           ),
+          if (caseLine != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(color: c.summary, borderRadius: BorderRadius.circular(16)),
+              child: Text(
+                keepAll(caseLine!),
+                style: TextStyle(fontSize: 14, height: 1.5, fontWeight: FontWeight.w600, color: c.body),
+              ),
+            ),
           if (skippedExperience)
             Container(
               margin: const EdgeInsets.only(bottom: 12),

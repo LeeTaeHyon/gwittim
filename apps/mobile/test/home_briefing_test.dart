@@ -750,8 +750,9 @@ void main() {
           ],
         ),
       );
-      expect(find.text('저장한 공고'), findsOneWidget);
-      expect(plain(tester, metaOf('저장 바뀜')), 'D-2 · 공모전·경진대회 · 마감 3일 연장');
+      // 저장한 공고는 지원 건(D-052): '저장한 공고' 표시 대신 상태 칩, 남은 날은 모든 화면과 같은 문구
+      expect(find.widgetWithText(Pill, '저장'), findsOneWidget);
+      expect(plain(tester, metaOf('저장 바뀜')), 'D-2 · 10월 19일 마감 · 공모전·경진대회 · 마감 3일 연장');
       expect(plain(tester, metaOf('관련')), 'D-3 · 공모전·경진대회 · 관심 분야');
       // 추천 정보가 없는 저장 공고에는 상태 원이 없다(관련 공고 줄에만 하나)
       expect(find.descendant(of: find.byType(HomeScreen), matching: find.byType(EligibilityDot)), findsOneWidget);
@@ -770,7 +771,7 @@ void main() {
       );
       expect(find.text('마감이 먼 맞춤 공고'), findsOneWidget);
       expect(findText('먼 변경'), findsOneWidget);
-      expect(plain(tester, metaOf('먼 변경')), '11월 30일 마감 · D-44 · 마감 10일 연장');
+      expect(plain(tester, metaOf('먼 변경')), 'D-44 · 11월 30일 마감 · 마감 10일 연장'); // 지원 건 남은 날 문구(D-052)
       final change = <TextSpan>[];
       tester.widget<Text>(metaOf('먼 변경')).textSpan!.visitChildren((s) {
         if (s is TextSpan && (s.text ?? '').replaceAll('⁠', '').contains('연장')) change.add(s);

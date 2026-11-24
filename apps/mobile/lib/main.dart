@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'auth/auth_gate.dart';
 import 'auth/auth_service.dart';
 import 'data/api_repository.dart';
+import 'data/application_case.dart';
 import 'data/cached_repository.dart';
 import 'data/repository.dart';
 import 'ui/app_info.dart';
@@ -140,6 +141,7 @@ class GwittimApp extends StatefulWidget {
     this.onDeleteAccount,
     this.briefingStore,
     this.themeController,
+    this.caseStore,
   });
 
   final NoticeRepository repository;
@@ -158,6 +160,9 @@ class GwittimApp extends StatefulWidget {
   /// 화면(테마) 설정. 없으면 시스템 설정을 따르고 이번 실행에만 기억한다.
   final ThemeController? themeController;
 
+  /// 지원 건 기록(D-052). 기본은 기기 저장소. 테스트는 기억만 하는 저장소를 넣는다.
+  final ApplicationCaseStore? caseStore;
+
   @override
   State<GwittimApp> createState() => _GwittimAppState();
 }
@@ -165,27 +170,49 @@ class GwittimApp extends StatefulWidget {
 class _GwittimAppState extends State<GwittimApp> {
   ThemeController? _ownTheme;
   late final BriefingStore _briefingStore = widget.briefingStore ?? PrefsBriefingStore();
+  ApplicationCaseStore? _ownCases;
+  late final ApplicationCaseStore _cases = widget.caseStore ?? (_ownCases = ApplicationCaseStore());
+
+  /// 저장·저장 취소·추천 목록·프로필 변경을 지원 건 기록에 한 곳에서 반영한다(care-loop-impl-spec §2).
+  late final NoticeRepository _repository = CaseTrackingRepository(widget.repository, _cases);
 
   ThemeController get _theme => widget.themeController ?? (_ownTheme ??= ThemeController());
 
   @override
+  void initState() {
+    super.initState();
+    _cases.load();
+  }
+
+  @override
   void dispose() {
     _ownTheme?.dispose();
+    _ownCases?.dispose();
     super.dispose();
+  }
+
+  /// 로그아웃하면 이 기기의 지원 건 기록을 지운다(같은 기기의 다른 계정이 보지 않게).
+  Future<void> _signOut() async {
+    await _cases.clearAll();
+    await widget.onSignOut!();
   }
 
   @override
   Widget build(BuildContext context) {
-    return GwMaterialApp(
-      themeController: _theme,
-      home: HomeShell(
-        repository: widget.repository,
-        openUrl: widget.openUrl,
-        today: widget.today,
-        onSignOut: widget.onSignOut,
-        onDeleteAccount: widget.onDeleteAccount,
-        briefingStore: _briefingStore,
+    // 리포트 등 새로 여는 화면도 지원 건을 찾도록 앱 전체(MaterialApp) 위에 둔다
+    return ApplicationCaseScope(
+      notifier: _cases,
+      child: GwMaterialApp(
         themeController: _theme,
+        home: HomeShell(
+          repository: _repository,
+          openUrl: widget.openUrl,
+          today: widget.today,
+          onSignOut: widget.onSignOut == null ? null : _signOut,
+          onDeleteAccount: widget.onDeleteAccount,
+          briefingStore: _briefingStore,
+          themeController: _theme,
+        ),
       ),
     );
   }
@@ -331,8 +358,10 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   /// 탈퇴하면 기기에 남은 학과 통계 추천 답(D-021)도 지운다.
   Future<bool> _deleteAccount() async {
     final store = widget.briefingStore;
+    final cases = ApplicationCaseScope.read(context);
     final done = await widget.onDeleteAccount!();
     if (done) {
+      await cases?.clearAll(); // 지원 건 기록(D-052)도 지운다. 기기 저장소를 못 써도 멈추지 않는다
       try {
         await store.saveMajorPicks(const MajorPickState());
       } catch (_) {
