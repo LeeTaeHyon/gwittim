@@ -177,7 +177,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
               ),
               const SizedBox(height: 8),
               for (final rule in [
-                GuestScope.of(context) ? '게스트는 처음 2개, 매일 충전 없음' : '매일 1개 충전, 최대 5개',
+                GuestScope.of(context) ? '게스트는 처음 3개, 매일 충전 없음' : '매일 1개 충전, 최대 5개',
                 '상세 분석 1개',
                 '외부 공고 찾기 2개',
                 '받은 분석 다시 보기 무료',

@@ -633,17 +633,17 @@ def test_demo_refill_fills_to_max_and_logs_demo_entry(client, monkeypatch):
 
 # ---------- 게스트(익명 계정, D-054) ----------
 
-def test_guest_starts_with_two_and_gets_no_daily_refill(client, clock):
+def test_guest_starts_with_three_and_gets_no_daily_refill(client, clock):
     out = client.get("/v1/credits", headers=GUEST).json()
     assert schema_errors("credits", out) == []
     assert out == {
-        "balance": 2,
+        "balance": 3,
         "next_refill_at": None,
-        "entries": [{"kind": "signup", "amount": 2, "at": "2026-10-17T03:05:00Z", "ref": None}],
+        "entries": [{"kind": "signup", "amount": 3, "at": "2026-10-17T03:05:00Z", "ref": None}],
     }
     clock.moment += timedelta(days=3)
     later = client.get("/v1/credits", headers=GUEST).json()
-    assert later["balance"] == 2
+    assert later["balance"] == 3
     assert later["next_refill_at"] is None
     assert [e["kind"] for e in later["entries"]] == ["signup"]
 
@@ -661,14 +661,15 @@ def test_guest_analysis_charges_one_without_refill(client, clock, provider):
     consent(client, GUEST)
     assert analyze(client, headers=GUEST).status_code == 200
     out = client.get("/v1/credits", headers=GUEST).json()
-    assert out["balance"] == 1
+    assert out["balance"] == 2
     assert out["next_refill_at"] is None  # 최대 보유가 아니어도 게스트는 충전 없음
     assert [e["kind"] for e in out["entries"]] == ["detail_analysis", "signup"]
     clock.moment += timedelta(days=1)
-    assert balance(client, GUEST) == 1
+    assert balance(client, GUEST) == 2
     assert analyze(client, "r2", chips={"experience": ["java"]}, headers=GUEST).status_code == 200
-    assert_error(analyze(client, "r3", chips={"experience": ["c"]}, headers=GUEST), 402, "insufficient_credits")
-    assert provider.calls == 2
+    assert analyze(client, "r3", chips={"experience": ["c"]}, headers=GUEST).status_code == 200
+    assert_error(analyze(client, "r4", chips={"experience": ["go"]}, headers=GUEST), 402, "insufficient_credits")
+    assert provider.calls == 3
 
 
 def test_guest_analysis_failure_refunds(client, deps):
@@ -676,7 +677,7 @@ def test_guest_analysis_failure_refunds(client, deps):
     deps.llm = FailingProvider()
     assert_error(analyze(client, headers=GUEST), 503, "unavailable")
     out = client.get("/v1/credits", headers=GUEST).json()
-    assert out["balance"] == 2
+    assert out["balance"] == 3
     assert [e["kind"] for e in out["entries"]] == ["signup"]
 
 
@@ -698,7 +699,7 @@ def test_guest_demo_refill_fills_to_max(client, monkeypatch):
     out = client.post("/v1/credits/demo-refill", headers=GUEST).json()
     assert out["balance"] == 5
     assert out["next_refill_at"] is None
-    assert out["entries"][0] == {"kind": "demo", "amount": 3, "at": "2026-10-17T03:05:00Z", "ref": None}
+    assert out["entries"][0] == {"kind": "demo", "amount": 2, "at": "2026-10-17T03:05:00Z", "ref": None}
 
 
 def test_firebase_verifier_reads_anonymous_provider(monkeypatch):

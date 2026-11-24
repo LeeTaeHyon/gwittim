@@ -273,28 +273,34 @@ def test_prune_keeps_recent_daily_entries():
 
 # ---------- 게스트 (D-054) ----------
 
-def test_guest_signup_gift_is_two():
+def test_guest_signup_gift_is_three():
     s = signup(T0, guest=True)
-    assert s.balance == 2
-    assert s.entries == (LedgerEntry(SIGNUP, 2, T0),)
+    assert s.balance == 3
+    assert s.entries == (LedgerEntry(SIGNUP, 3, T0),)
 
 
 def test_guest_gets_no_refill_and_no_next_refill():
     s = signup(T0, guest=True)
     later = T0 + timedelta(days=5)
-    assert current_state(s, later, guest=True).balance == 2
+    assert current_state(s, later, guest=True).balance == 3
     assert next_refill_at(s, later, guest=True) is None
     r = reserve(s, DETAIL_ANALYSIS, "r1", later, guest=True)
-    assert r.status == "held" and r.state.balance == 1
+    assert r.status == "held" and r.state.balance == 2
     c = settle(r.state, "r1", True, later, guest=True)
-    assert c.status == "charged" and c.state.balance == 1
+    assert c.status == "charged" and c.state.balance == 2
     assert [e.kind for e in c.state.entries] == [SIGNUP, DETAIL_ANALYSIS]
 
 
-def test_guest_refund_and_demo_refill():
+def test_guest_can_try_both_features_once():
     s = signup(T0, guest=True)
-    r = reserve(s, EXTERNAL_SEARCH, "e1", T0, guest=True)
-    assert r.state.balance == 0
-    assert settle(r.state, "e1", False, T0, guest=True).state.balance == 2
-    assert reserve(r.state, DETAIL_ANALYSIS, "x", T0, guest=True).status == "insufficient"
-    assert demo_refill(s, T0 + timedelta(days=2), guest=True).balance == 5
+    a = reserve(s, DETAIL_ANALYSIS, "a1", T0, guest=True)
+    a = settle(a.state, "a1", True, T0, guest=True)
+    e = reserve(a.state, EXTERNAL_SEARCH, "e1", T0, guest=True)
+    assert e.status == "held" and e.state.balance == 0
+    assert settle(e.state, "e1", False, T0, guest=True).state.balance == 2  # 실패는 환불
+    done = settle(e.state, "e1", True, T0, guest=True)
+    assert reserve(done.state, DETAIL_ANALYSIS, "x", T0 + timedelta(days=1), guest=True).status == "insufficient"
+
+
+def test_guest_demo_refill():
+    assert demo_refill(signup(T0, guest=True), T0 + timedelta(days=2), guest=True).balance == 5

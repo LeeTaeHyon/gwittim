@@ -19,8 +19,8 @@ KST = timezone(timedelta(hours=9), "KST")
 MAX_CREDITS = 5
 SIGNUP_GIFT = 5
 DAILY_CHARGE = 1
-# 게스트(Firebase 익명 계정, D-054): 처음 2개, 매일 충전 없음. 게스트 여부는 저장하지 않고 요청마다 토큰에서 읽어 넘긴다.
-GUEST_SIGNUP_GIFT = 2
+# 게스트(Firebase 익명 계정, D-054): 처음 3개(상세 분석 1 + 외부 공고 찾기 2를 한 번씩), 매일 충전 없음. 게스트 여부는 저장하지 않고 요청마다 토큰에서 읽어 넘긴다.
+GUEST_SIGNUP_GIFT = 3
 
 SIGNUP = "signup"
 DAILY = "daily"

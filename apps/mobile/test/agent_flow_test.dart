@@ -354,7 +354,7 @@ void main() {
       expect(findText('1 / 5'), findsOneWidget);
       expect(findText(guestNoRefillText), findsOneWidget);
       expect(findTextContaining('다음 충전'), findsNothing);
-      expect(findText('게스트는 처음 2개, 매일 충전 없음'), findsOneWidget);
+      expect(findText('게스트는 처음 3개, 매일 충전 없음'), findsOneWidget);
       expect(findText('매일 1개 충전, 최대 5개'), findsNothing);
     });
 

@@ -50,7 +50,7 @@
           },
           "amount": {
             "type": "integer",
-            "description": "충전은 +, 사용은 −. signup +5(게스트 +2, D-054), daily +1, detail_analysis −1, external_search −2, demo +1~+5(5까지 채운 만큼)."
+            "description": "충전은 +, 사용은 −. signup +5(게스트 +3, D-054), daily +1, detail_analysis −1, external_search −2, demo +1~+5(5까지 채운 만큼)."
           },
           "at": {
             "$ref": "common.schema.json#/$defs/utc_timestamp"
@@ -106,7 +106,7 @@
               "properties": {
                 "amount": {
                   "enum": [
-                    2,
+                    3,
                     5
                   ]
                 }

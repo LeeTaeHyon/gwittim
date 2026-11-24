@@ -325,7 +325,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
                 GoogleSignInButton(label: 'Google 계정으로 시작하기', onPressed: _busy ? null : _signIn),
                 const SizedBox(height: 2),
-                // 게스트(익명 계정, D-054): 크레딧 2개, 30일 뒤 삭제
+                // 게스트(익명 계정, D-054): 크레딧 3개, 30일 뒤 삭제
                 TextButton(
                   onPressed: _busy ? null : _signInAsGuest,
                   style: TextButton.styleFrom(

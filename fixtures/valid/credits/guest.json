@@ -1,5 +1,5 @@
 {
-  "balance": 1,
+  "balance": 2,
   "next_refill_at": null,
   "entries": [
     {
@@ -10,7 +10,7 @@
     },
     {
       "kind": "signup",
-      "amount": 2,
+      "amount": 3,
       "at": "2026-11-25T01:00:00Z",
       "ref": null
     }
