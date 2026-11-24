@@ -199,11 +199,12 @@ class _GwittimAppState extends State<GwittimApp> {
 
   @override
   Widget build(BuildContext context) {
-    return GwMaterialApp(
-      themeController: _theme,
-      home: ApplicationCaseScope(
-        notifier: _cases,
-        child: HomeShell(
+    // 리포트 등 새로 여는 화면도 지원 건을 찾도록 앱 전체(MaterialApp) 위에 둔다
+    return ApplicationCaseScope(
+      notifier: _cases,
+      child: GwMaterialApp(
+        themeController: _theme,
+        home: HomeShell(
           repository: _repository,
           openUrl: widget.openUrl,
           today: widget.today,

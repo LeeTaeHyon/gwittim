@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../data/application_case.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 import 'agent_data.dart';
 import 'agent_flow.dart';
 import 'briefing_data.dart';
+import 'case_view.dart';
 import 'common.dart';
 import 'components.dart';
 import 'credits_screen.dart';
@@ -184,6 +186,11 @@ class _ReportScreenState extends State<ReportScreen> {
   late Future<Notice?> _future = widget.repository.getNotice(widget.noticeId);
   SavedEntry? _savedEntry;
   bool? _saved;
+
+  /// 이 리포트를 연 때 지원 건에 적혀 있던 '본 마감'. 마감 변경 배너는 이 값과 지금 마감이 다를 때만 보인다.
+  /// 카드를 처음 그릴 때 한 번만 읽고, 그 뒤 지금 마감으로 기록한다(다음부터 저장함·홈 변경 표시가 사라짐).
+  String? _seenAtOpen;
+  bool _seenRecorded = false;
   UserProfile? _profile;
   Map<String, Map<String, String>> _names = const {};
   Map<String, String> _categories = const {};
@@ -253,6 +260,7 @@ class _ReportScreenState extends State<ReportScreen> {
           (_) => AnalysisReportScreen(
             response: response,
             title: notice.summary.title,
+            caseLine: _caseLine(notice.summary),
             receivedAt: _credits?.analysisReceivedAt(widget.noticeId),
             skippedExperience: skippedExperience,
             // 추천 목록에서 들어온 공고만 서버 판정이 있다. 없으면 리포트는 기본 순서
@@ -383,11 +391,44 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
+  /// 상세 분석 머리에 보일 한 줄. 저장한 공고(지원 건)만.
+  String? _caseLine(NoticeSummary n) {
+    final kase = ApplicationCaseScope.read(context)?[widget.noticeId];
+    if (kase == null) return null;
+    final v = caseView(n, kase, now: widget.today ?? DateTime.now());
+    return ['내 지원', v.stateLabel!, if (v.next != null) v.next!.text, v.remaining].join(' · ');
+  }
+
+  void _recordSeen(ApplicationCaseStore cases, ApplicationCase kase, NoticeSummary n) {
+    if (_seenRecorded) return;
+    _seenRecorded = true;
+    _seenAtOpen = kase.seenDeadline;
+    WidgetsBinding.instance.addPostFrameCallback((_) => cases.markDeadlineSeen(n.noticeId, n.applicationDeadline));
+  }
+
+  Future<void> _caseAction(Future<bool> Function(String) action, {String? done}) async {
+    final cases = ApplicationCaseScope.read(context);
+    if (cases == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await action(widget.noticeId);
+    if (!ok || done == null) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(done),
+        action: SnackBarAction(label: '되돌리기', onPressed: () => cases.undo(widget.noticeId)),
+      ),
+    );
+  }
+
   Widget _body(Notice notice) {
     final n = notice.summary;
     final today = widget.today ?? DateTime.now();
     final rec = widget.recommendation;
-    final changed = _savedEntry != null && _savedEntry!.deadlineChanged ? _savedEntry : null;
+    final cases = ApplicationCaseScope.maybeOf(context);
+    final kase = cases?[widget.noticeId];
+    if (cases != null && kase != null) _recordSeen(cases, kase, n);
+    final seenChange = kase != null && _seenAtOpen == deadlineKey(n.applicationDeadline);
+    final changed = _savedEntry != null && _savedEntry!.deadlineChanged && !seenChange ? _savedEntry : null;
     final c = context.gw;
     return Column(
       children: [
@@ -440,6 +481,16 @@ class _ReportScreenState extends State<ReportScreen> {
                   ],
                 ),
               ),
+              if (cases != null && kase != null)
+                _CaseCard(
+                  view: caseView(n, kase, now: today),
+                  kase: kase,
+                  onStart: () => _caseAction(cases.startPreparing),
+                  onApplied: () => _caseAction(cases.markApplied, done: '신청함으로 표시했습니다.'),
+                  onSkip: () => _caseAction(cases.markSkipped, done: '이번엔 안 함으로 표시했습니다.'),
+                  onUndo: () => _caseAction(cases.undo),
+                  onOpen: _open,
+                ),
               if (notice.description != null) _SummaryBubble(text: notice.description!),
               // D-006: 원문 확인이 24시간을 넘으면 요약 바로 아래에 알린다. 원문은 아래 '학교 공지에서 보기'로 연다.
               // 알림톡은 보낸 뒤 바뀌지 않으므로 원문 재확인 안내를 하지 않는다 (D-019)
@@ -538,6 +589,93 @@ class _ReportScreenState extends State<ReportScreen> {
     if (left == null) return const Pill('모집 중');
     final label = '모집 중 · ${left == 0 ? '오늘 마감' : 'D-$left'}';
     return Pill(label, tone: left <= urgentDays ? PillTone.urgent : PillTone.chip);
+  }
+}
+
+/// '내 지원' 카드 (care-loop-impl-spec §4). 저장한 공고에만 보인다.
+class _CaseCard extends StatelessWidget {
+  const _CaseCard({
+    required this.view,
+    required this.kase,
+    required this.onStart,
+    required this.onApplied,
+    required this.onSkip,
+    required this.onUndo,
+    required this.onOpen,
+  });
+
+  final CaseView view;
+  final ApplicationCase kase;
+  final VoidCallback onStart;
+  final VoidCallback onApplied;
+  final VoidCallback onSkip;
+  final VoidCallback onUndo;
+  final void Function(String url) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final next = view.next;
+    final rest = [for (final i in view.items) if (i != next) i].take(3);
+    final state = view.ended ? null : kase.state;
+    final openUrl = state == CaseState.preparing ? next?.url : null;
+    final buttons = <Widget>[
+      if (state == CaseState.saved) ...[
+        FilledButton(onPressed: onStart, child: const Text('준비 시작')),
+        TextButton(onPressed: onSkip, child: const Text('이번엔 안 함')),
+      ],
+      if (state == CaseState.preparing) ...[
+        if (openUrl != null)
+          FilledButton(
+            onPressed: () => onOpen(openUrl),
+            child: Text(openUrl == kase.applyUrl ? '신청 사이트 열기' : '원문 열기'),
+          ),
+        if (openUrl != null)
+          OutlinedButton(onPressed: onApplied, child: const Text('신청함'))
+        else
+          FilledButton(onPressed: onApplied, child: const Text('신청함')),
+        TextButton(onPressed: onSkip, child: const Text('이번엔 안 함')),
+      ],
+      if (kase.state == CaseState.applied || kase.state == CaseState.skipped)
+        TextButton(onPressed: onUndo, child: const Text('되돌리기')),
+    ];
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      decoration: BoxDecoration(color: c.summary, borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('내 지원', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.sub)),
+              const SizedBox(width: 8),
+              Pill(view.stateLabel!, tone: view.ended ? PillTone.neutral : PillTone.chip),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(keepAll(view.remaining), style: TextStyle(fontSize: 13, color: c.sub), maxLines: 2),
+              ),
+            ],
+          ),
+          if (next != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              keepAll(next.text),
+              style: TextStyle(fontSize: 16, height: 1.45, fontWeight: FontWeight.w600, color: c.body),
+            ),
+          ],
+          for (final i in rest)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(keepAll(i.text), style: TextStyle(fontSize: 13, height: 1.5, color: c.muted)),
+            ),
+          if (buttons.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(spacing: 8, runSpacing: 8, children: buttons),
+          ],
+        ],
+      ),
+    );
   }
 }
 
