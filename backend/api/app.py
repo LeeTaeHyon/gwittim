@@ -13,6 +13,7 @@
   GET    /v1/analysis/{notice_id}  get_detail_analysis: 받은 분석 다시 보기 (차감 없음)
   POST   /v1/external-search       request_external_search: 외부 공고 찾기 (웹 검색, 동의·크레딧 2개, 결과 없으면 환불, D-047)
   GET    /v1/credits               get_credits: 잔액·다음 충전·사용 내역
+  POST   /v1/credits/demo-refill   시연용: 잔액을 5까지 채움. 서버 설정 GWITTIM_DEMO_CREDITS=1일 때만, 아니면 404
   POST   /v1/ingest/kakao          팀장 폰 수집기의 학교 채널 알림톡 올리기 (D-036). 수집 토큰(X-Ingest-Token)으로만.
                                    토큰이 설정되지 않은 서버에서는 없는 경로처럼 404
 """
@@ -33,7 +34,7 @@ from backend.contracts import schema_errors
 from backend.dictionaries import codes, unknown_profile_codes, unlisted_with_major
 from backend.recommendation import recommend
 
-from .deps import Deps
+from .deps import Caller, Deps, delete_user_data
 
 log = logging.getLogger("gwittim.api")
 
@@ -104,13 +105,16 @@ def create_app(deps: Deps) -> FastAPI:
         log.exception("unexpected error")  # 서버 로그에만 남기고 응답에는 상세를 넣지 않는다
         return _error("unavailable")
 
-    def current_uid(authorization: str | None = Header(default=None)) -> str:
+    def current_caller(authorization: str | None = Header(default=None)) -> Caller:
         if not authorization or not authorization.startswith("Bearer "):
             raise ApiError("unauthenticated")
-        uid = deps.verifier.verify(authorization.removeprefix("Bearer ").strip())
-        if not uid:
+        caller = deps.verifier.verify_caller(authorization.removeprefix("Bearer ").strip())
+        if caller is None or not caller.uid:
             raise ApiError("unauthenticated")
-        return uid
+        return caller
+
+    def current_uid(caller: Caller = Depends(current_caller)) -> str:
+        return caller.uid
 
     @app.get("/v1/profile")
     def get_profile(uid: str = Depends(current_uid)):
@@ -142,10 +146,7 @@ def create_app(deps: Deps) -> FastAPI:
 
     @app.delete("/v1/profile", status_code=204)
     def delete_account_data(uid: str = Depends(current_uid)):
-        deps.saved.delete_all(uid)
-        deps.reports.delete_all(uid)
-        deps.credits.delete(uid)
-        deps.profiles.delete(uid)
+        delete_user_data(uid, saved=deps.saved, reports=deps.reports, credits=deps.credits, profiles=deps.profiles)
         return Response(status_code=204)
 
     @app.get("/v1/recommendations")
@@ -208,20 +209,26 @@ def create_app(deps: Deps) -> FastAPI:
         return Response(status_code=204)
 
     @app.post("/v1/analysis")
-    def request_detail_analysis(body: dict, uid: str = Depends(current_uid)):
-        return agent.request_analysis(uid, body, deps)
+    def request_detail_analysis(body: dict, caller: Caller = Depends(current_caller)):
+        return agent.request_analysis(caller.uid, body, deps, guest=caller.guest)
 
     @app.get("/v1/analysis/{notice_id}")
     def get_detail_analysis(notice_id: str, uid: str = Depends(current_uid)):
         return agent.get_analysis(uid, notice_id, deps)
 
     @app.post("/v1/external-search")
-    def request_external_search(body: dict, uid: str = Depends(current_uid)):
-        return external.request_external_search(uid, body, deps)
+    def request_external_search(body: dict, caller: Caller = Depends(current_caller)):
+        return external.request_external_search(caller.uid, body, deps, guest=caller.guest)
 
     @app.get("/v1/credits")
-    def get_credits(uid: str = Depends(current_uid)):
-        return agent.get_credits(uid, deps)
+    def get_credits(caller: Caller = Depends(current_caller)):
+        return agent.get_credits(caller.uid, deps, guest=caller.guest)
+
+    @app.post("/v1/credits/demo-refill")
+    def demo_refill_credits(caller: Caller = Depends(current_caller)):
+        if not agent.demo_credits_enabled():
+            raise ApiError("not_found")
+        return agent.demo_refill_credits(caller.uid, deps, guest=caller.guest)
 
     @app.post("/v1/ingest/kakao")
     def ingest_kakao(body: dict, x_ingest_token: str | None = Header(default=None)):

@@ -8,6 +8,7 @@ import 'components.dart';
 /// 라이트·다크 값은 D-010 표를 따르고, 표에 없는 보조 값은 목업 v2(다크 줄)의 값을 쓴다.
 @immutable
 class GwColors extends ThemeExtension<GwColors> {
+  Color get posterBackdrop => const Color(0xFF000000);
   const GwColors({
     required this.bg,
     required this.card,

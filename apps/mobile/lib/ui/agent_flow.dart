@@ -9,6 +9,7 @@ import 'common.dart';
 import 'components.dart';
 import 'credits_screen.dart';
 import 'format.dart';
+import 'guest_scope.dart';
 import 'skeleton.dart';
 import 'theme.dart';
 
@@ -711,7 +712,7 @@ class _AgentWaitScreenState extends State<AgentWaitScreen> {
       case RepositoryErrorKind.insufficientCredits:
         return MessageView(
           title: '크레딧 부족',
-          detail: '크레딧이 없습니다. 내일 0시에 1개가 충전됩니다.',
+          detail: GuestScope.of(context) ? '크레딧이 없습니다. $guestNoRefillText' : '크레딧이 없습니다. 내일 0시에 1개가 충전됩니다.',
           action: (
             label: '크레딧 보기',
             onPressed: () =>
@@ -896,9 +897,13 @@ class AnalysisReportScreen extends StatelessWidget {
     this.receivedAt,
     this.skippedExperience = false,
     this.eligibilityStatus,
+    this.caseLine,
   });
 
   final AnalysisResponse response;
+
+  /// 저장한 공고(지원 건)면 '내 지원 · 상태 · 다음 할 일 · 남은 날' 한 줄. 리포트 카드와 같은 문구(D-052)
+  final String? caseLine;
 
   /// 서버가 계산한 지원 자격 판정(met / not_met / needs_check). 추천 목록에서 들어온 공고만 있다.
   /// not_met일 때만 '지원 자격' 칸을 맨 위로 올린다. 리포트 글(LLM 문장)을 보고 순서를 정하지 않는다.
@@ -927,7 +932,7 @@ class AnalysisReportScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
               child: Text(
-                keepAll(title!),
+                keepTitle(title!),
                 style: TextStyle(fontSize: 17, height: 1.45, fontWeight: FontWeight.w600, color: c.ink),
               ),
             ),
@@ -940,6 +945,16 @@ class AnalysisReportScreen extends StatelessWidget {
               style: captionStyle(context),
             ),
           ),
+          if (caseLine != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(color: c.summary, borderRadius: BorderRadius.circular(16)),
+              child: Text(
+                keepAll(caseLine!),
+                style: TextStyle(fontSize: 14, height: 1.5, fontWeight: FontWeight.w600, color: c.body),
+              ),
+            ),
           if (skippedExperience)
             Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -1217,7 +1232,11 @@ class AnalysisAction extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text(keepAll('크레딧 없음 · 내일 0시 1개 충전'), textAlign: TextAlign.center, style: captionStyle(context)),
+          Text(
+            keepAll(GuestScope.of(context) ? '크레딧 없음 · 게스트는 충전 없음' : '크레딧 없음 · 내일 0시 1개 충전'),
+            textAlign: TextAlign.center,
+            style: captionStyle(context),
+          ),
           Center(
             child: _LinkButton(label: '크레딧 보기', onPressed: onOpenCredits),
           ),

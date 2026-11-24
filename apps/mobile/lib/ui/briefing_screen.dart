@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../data/application_case.dart';
 import '../data/models.dart';
 import 'briefing_data.dart';
+import 'case_view.dart';
 import 'briefing_stats.dart';
 import 'components.dart';
 import 'format.dart';
@@ -74,6 +76,12 @@ class _BriefingScreenState extends State<BriefingScreen> {
           entries: briefing.savedSoon,
           today: today,
           onOpen: () => _open(context, briefing.savedSoon.first.notice, null),
+        ),
+      if (briefing.startToday.isNotEmpty)
+        _StartBubble(
+          entries: briefing.startToday,
+          today: today,
+          onOpen: () => _open(context, briefing.startToday.first.notice, null),
         ),
       if (briefing.urgent case final u?)
         _UrgentBubble(entry: u, today: today, onOpen: () => _open(context, u.notice, u.recommendation)),
@@ -222,7 +230,7 @@ class _UrgentBubble extends StatelessWidget {
         children: [
           Text('마감 임박', style: _kicker(c).copyWith(color: c.urgent)),
           const SizedBox(height: 6),
-          Text(keepAll(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(keepTitle(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
           Text(
             '${due.month}월 ${due.day}일 마감 · ${left == 0 ? '오늘' : 'D-$left'}',
             style: _title(c).copyWith(color: c.urgent),
@@ -360,7 +368,7 @@ class _MajorPickBubbleState extends State<_MajorPickBubble> {
         children: [
           const MajorPickLabel(),
           const SizedBox(height: 10),
-          Text(keepAll(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(keepTitle(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
           Text(
             '${due.month}월 ${due.day}일 마감 · ${left == 0 ? '오늘' : 'D-$left'}',
             style: _title(c).copyWith(color: c.urgent),
@@ -587,6 +595,9 @@ class _SavedSoonBubble extends StatelessWidget {
     final n = entries.first.notice;
     final left = daysLeft(n, today)!;
     final deadline = n.applicationDeadline!;
+    // 지원 건이면 남은 날은 모든 화면과 같은 문구 (D-052)
+    final cases = ApplicationCaseScope.maybeOf(context);
+    final view = cases == null ? null : caseView(n, cases[n.noticeId], now: today);
     return GwCard(
       bubble: true,
       padding: const EdgeInsets.all(22),
@@ -595,16 +606,89 @@ class _SavedSoonBubble extends StatelessWidget {
         children: [
           Text('저장한 공고', style: _kicker(c)),
           const SizedBox(height: 6),
-          Text(keepAll(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
-          Text(left == 0 ? '오늘 신청 마감' : '신청 마감 D-$left', style: _title(c).copyWith(color: c.urgent)),
-          const SizedBox(height: 6),
-          Text(
-            '${deadline.day.month}월 ${deadline.day.day}일${deadline.hasTime ? ' ${deadline.time}' : ''} 마감',
-            style: TextStyle(fontSize: 14, color: c.sub),
-          ),
+          Text(keepTitle(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          if (view != null) ...[
+            Text(keepAll(view.remaining), style: _title(c).copyWith(color: c.urgent)),
+            // 오늘 신청을 시작하는 건은 신청 시작 카드 대신 여기에 한 줄 (D-052)
+            if (startsToday(entries.first, cases?[n.noticeId], today)) ...[
+              const SizedBox(height: 6),
+              Text(
+                _startTodayText(cases?[n.noticeId]),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.accent),
+              ),
+            ],
+            if (view.next case final next?) ...[
+              const SizedBox(height: 6),
+              Text(keepAll('${view.stateLabel} · ${next.text}'), style: TextStyle(fontSize: 14, color: c.sub)),
+            ],
+          ] else ...[
+            Text(left == 0 ? '오늘 신청 마감' : '신청 마감 D-$left', style: _title(c).copyWith(color: c.urgent)),
+            const SizedBox(height: 6),
+            Text(
+              '${deadline.day.month}월 ${deadline.day.day}일${deadline.hasTime ? ' ${deadline.time}' : ''} 마감',
+              style: TextStyle(fontSize: 14, color: c.sub),
+            ),
+          ],
           if (entries.length > 1) ...[
             const SizedBox(height: 4),
-            Text('저장한 공고 ${entries.length - 1}건도 이틀 안에 마감', style: captionStyle(context)),
+            Text(
+              keepAll(
+                '저장한 공고 ${entries.length - 1}건도 이틀 안에 마감'
+                '${switch (_alsoStarting(entries.skip(1), cases, today)) {
+                  0 => '',
+                  final k => '(그중 $k건 오늘 신청 시작)',
+                }}',
+              ),
+              style: captionStyle(context),
+            ),
+          ],
+          const SizedBox(height: 16),
+          SoftButton(label: '공고 보기', onPressed: onOpen),
+        ],
+      ),
+    );
+  }
+}
+
+/// '오늘 09:00 신청 시작'(시각이 없으면 '오늘 신청 시작'). 저장한 공고 카드와 신청 시작 카드가 같은 문구를 쓴다.
+String _startTodayText(ApplicationCase? kase) {
+  final start = kase?.applicationStart;
+  return start != null && start.hasTime ? '오늘 ${start.time} 신청 시작' : '오늘 신청 시작';
+}
+
+/// [entries] 중 오늘 신청을 시작하는 지원 건 수.
+int _alsoStarting(Iterable<SavedEntry> entries, ApplicationCaseStore? cases, DateTime today) =>
+    cases == null ? 0 : entries.where((e) => startsToday(e, cases[e.notice.noticeId], today)).length;
+
+/// 신청 시작 소식 (D-052): 저장한 공고 중 오늘 신청이 시작되는 것.
+class _StartBubble extends StatelessWidget {
+  const _StartBubble({required this.entries, required this.today, required this.onOpen});
+
+  final List<SavedEntry> entries;
+  final DateTime today;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final n = entries.first.notice;
+    final kase = ApplicationCaseScope.maybeOf(context)?[n.noticeId];
+    final view = caseView(n, kase, now: today);
+    return GwCard(
+      bubble: true,
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('신청 시작', style: _kicker(c)),
+          const SizedBox(height: 6),
+          Text(keepTitle(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
+          Text(_startTodayText(kase), style: _title(c).copyWith(color: c.accent)),
+          const SizedBox(height: 6),
+          Text(keepAll(view.remaining), style: TextStyle(fontSize: 14, color: c.sub)),
+          if (entries.length > 1) ...[
+            const SizedBox(height: 4),
+            Text('저장한 공고 ${entries.length - 1}건도 오늘 신청 시작', style: captionStyle(context)),
           ],
           const SizedBox(height: 16),
           SoftButton(label: '공고 보기', onPressed: onOpen),
@@ -716,7 +800,7 @@ class _ChangedBubble extends StatelessWidget {
         children: [
           Text('저장한 공고', style: _kicker(c)),
           const SizedBox(height: 6),
-          Text(keepAll('${entry.notice.title}\n${deadlineChangeText(entry)}'), style: _title(c)),
+          Text(keepTitle('${entry.notice.title}\n${deadlineChangeText(entry)}'), style: _title(c)),
           const SizedBox(height: 16),
           Wrap(
             spacing: 8,

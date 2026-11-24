@@ -1,0 +1,418 @@
+# A안(D-055) 변경. 기준 코드: main 9553495(#104 병합 직후)
+# 1부: v1 커밋 ba17b40(fix/extract-rule-deadline) — 자체 모델은 마감을 건드리지 않음
+diff --git a/backend/analysis/extract_model.py b/backend/analysis/extract_model.py
+index 5139d7d..e39f2b3 100644
+--- a/backend/analysis/extract_model.py
++++ b/backend/analysis/extract_model.py
+@@ -5,8 +5,8 @@
+ 그래서 이 분석기가 내는 근거는 항상 원문 한 줄 그대로다(지어낸 문구가 나올 수 없다).
+ 
+ 합치는 방식 (시험 공고 94건 비교, docs/extract-model.md):
+-- 신청 마감: 모델만. 모델이 마감 줄을 고르지 않으면 마감 없음(미상)으로 둔다. 규칙으로 메우면 맞는 것만큼
+-  틀린 마감도 늘었다. 틀린 마감은 열린 공고를 닫힌 것으로 보이게 하므로 미상보다 나쁘다.
++- 신청 마감·시작·활동 기간: 모델이 정하지 않음(규칙·Gemma, D-055). 이 분석기는 이 필드를 읽지도 쓰지도 않는다.
++  모델 점수가 문턱 근처인 명시 마감이 사라지는 일이 있었다(docs/extract-model-deadline-loss-report.md).
+ - 재학 상태·학년·학교: 규칙이 찾은 필드는 그대로, 규칙이 못 찾은 필드만 모델로 채운다.
+ - 기타 자격·우대 조건(미해석 조건): 규칙 결과에 모델이 고른 줄을 더한다. 놓친 조건이 판정을 뒤집는 쪽이 더 나쁘다.
+ - 누구나(제한 없음): 모델 점수가 낮아 쓰지 않는다. 규칙 판단을 그대로 둔다.
+@@ -20,13 +20,11 @@ from __future__ import annotations
+ import json
+ import re
+ import sys
+-from datetime import date
+ from pathlib import Path
+ from typing import Callable
+ 
+ from backend.sources import SourceConfig
+ 
+-from .dates import date_info, parse_line, points_near
+ from .llm import redact
+ from .rules import EXCLUDES, OTHER_STATUS, UNIVERSITY, RuleBasedAnalyzer, _dictionary, tidy_unresolved
+ 
+@@ -58,9 +56,6 @@ def _names_school(line: str, university_id: str) -> bool:
+ 
+ 
+ class ExtractModelAnalyzer:
+-    # 마감은 이 분석기가 정한다. 알림톡 분석기가 빈 마감을 날짜 규칙으로 다시 메우지 않게 알린다 (kakao.py)
+-    decides_deadline = True
+-
+     def __init__(
+         self,
+         predictor: Predictor,
+@@ -97,36 +92,10 @@ class ExtractModelAnalyzer:
+             return {**fields, "_analysis_version": self.base.version}
+ 
+         tags = [{n for n, p in zip(self.labels, row) if p >= self.thresholds[n]} for row in probs]
+-        self._deadline(fields, raw, source, lines, probs)
+         self._conditions(fields["eligibility"], source, lines, tags)
+         self._others(fields["eligibility"], raw, lines, tags)
+         return fields
+ 
+-    # ---------- 마감 ----------
+-
+-    def _deadline(self, fields: dict, raw: dict, source: SourceConfig, lines: list[str], probs: list[list[float]]) -> None:
+-        """마감 확률이 가장 높은 줄 하나. 문턱을 넘지 않으면 마감 없음. 그 줄의 날짜는 기존 파서가 읽는다."""
+-        j = self.labels.index("deadline")
+-        best = max(range(len(lines)), key=lambda i: probs[i][j])
+-        fields["application_start"] = fields["application_deadline"] = None
+-        if probs[best][j] < self.thresholds["deadline"]:
+-            return
+-        line = lines[best]
+-        start, end = parse_line(line)
+-        if raw.get("published") and (raw["source_id"] == "mjc_kakao" or start is None):
+-            # 연도 없는 날짜('11월 15일(일) 23:59까지')는 게시·발송일 기준으로 읽는다 (D-019, kakao.fill_dates와 같은 규칙).
+-            # 알림톡은 늘, 게시판은 연도 있는 날짜를 못 읽었을 때만. 범위면 끝 날짜
+-            points = points_near(line, date.fromisoformat(raw["published"]["date"]))
+-            if points:
+-                # 한 줄의 여러 날짜가 범위인지 따로 열거한 일정인지 모르므로 시작일은 정하지 않는다 (fill_dates와 같게)
+-                start, end = None, max(points, key=lambda p: p.day)
+-        point = end or start
+-        if point is None:
+-            return  # 모델이 고른 줄에서 날짜를 읽지 못하면 미상
+-        fields["application_deadline"] = date_info(point, line, source.timezone)
+-        if end and start and start.day <= end.day:
+-            fields["application_start"] = date_info(start, line, source.timezone)
+-
+     # ---------- 재학 상태·학년·학교 ----------
+ 
+     def _conditions(self, elig: dict, source: SourceConfig, lines: list[str], tags: list[set[str]]) -> None:
+diff --git a/backend/analysis/kakao.py b/backend/analysis/kakao.py
+index 18e5408..232dae9 100644
+--- a/backend/analysis/kakao.py
++++ b/backend/analysis/kakao.py
+@@ -36,8 +36,7 @@ class KakaoAnalyzer:
+         fields = self.base.analyze(raw, source)
+         base_version = fields.pop("_analysis_version", self.base.version)
+         if raw.get("published"):
+-            # 자체 모델 분석기(D-042)가 마감을 정했으면 마감 칸은 미상이어도 날짜 규칙으로 다시 메우지 않는다
+-            fill_dates(fields, raw, source.timezone, deadline=not _decides_deadline(self.base))
++            fill_dates(fields, raw, source.timezone)
+         c = classify(raw["title"], raw["body_text"], self.gemma)
+         self.decided_by[c.source] += 1
+         fields["category"] = c.category
+@@ -56,20 +55,8 @@ class KakaoAnalyzer:
+         return fields
+ 
+ 
+-def _decides_deadline(analyzer) -> bool:
+-    """분석기(또는 그 아래 base 분석기)가 마감을 스스로 정하는지 (자체 모델 분석기, D-042)."""
+-    while analyzer is not None:
+-        if getattr(analyzer, "decides_deadline", False):
+-            return True
+-        analyzer = getattr(analyzer, "base", None)
+-    return False
+-
+-
+-def fill_dates(fields: dict, raw: dict, timezone: str | None, deadline: bool = True) -> None:
+-    """기존 분석기가 비워 둔 신청 마감·활동 기간을 발송일 기준 날짜로 채운다. 근거는 원문 줄 그대로.
+-
+-    deadline=False면 활동 기간만 채운다.
+-    """
++def fill_dates(fields: dict, raw: dict, timezone: str | None) -> None:
++    """기존 분석기가 비워 둔 신청 마감·활동 기간을 발송일 기준 날짜로 채운다. 근거는 원문 줄 그대로."""
+     anchor = date.fromisoformat(raw["published"]["date"])
+     deadlines, events = [], []
+     for line in [raw["title"], *raw["body_text"].splitlines()]:
+@@ -80,7 +67,7 @@ def fill_dates(fields: dict, raw: dict, timezone: str | None, deadline: bool = T
+             deadlines.append((max(points, key=lambda p: p.day), line))  # 범위면 끝 날짜
+         else:
+             events += [(p, line) for p in points]
+-    if deadline and fields["application_deadline"] is None and deadlines:
++    if fields["application_deadline"] is None and deadlines:
+         point, line = max(deadlines, key=lambda d: d[0].day)
+         fields["application_deadline"] = date_info(point, line, timezone)
+     if fields["activity_period"] is None and events:
+diff --git a/backend/analysis/llm.py b/backend/analysis/llm.py
+index d3fd6b4..e2c7f4d 100644
+--- a/backend/analysis/llm.py
++++ b/backend/analysis/llm.py
+@@ -86,9 +86,9 @@ class OllamaAnalyzer:
+         self.host = host.rstrip("/")
+         self.timeout = timeout
+         self.base = base or RuleBasedAnalyzer()
+-        # extract=False: 마감·조건 보강은 base(자체 모델 분석기, D-042)에 맡기고 요약만 쓴다
++        # extract=False: 조건·직접 확인 조건 보강은 base(자체 모델 분석기, D-042)에 맡긴다. 요약과 마감 보충(D-055)은 그대로 한다
+         self.extract = extract
+-        self.version = f"{self.base.version}+ollama:{model}" + ("" if extract else "-summary")
++        self.version = f"{self.base.version}+ollama:{model}" + ("" if extract else "-nocond")
+         self.rejected: list[str] = []  # 마지막 분석에서 버린 LLM 출력과 사유 (평가·디버깅용)
+         self.llm_analyzed = 0  # LLM 응답을 받은 공고 수
+         self.llm_failed = 0  # LLM 호출 실패로 규칙 분석만 쓴 공고 수
+@@ -153,8 +153,8 @@ class OllamaAnalyzer:
+             return {**fields, "_analysis_version": fields.pop("_analysis_version", self.base.version)}
+ 
+         source_text = _normalize(title + " " + raw["body_text"])
+-        if fields["category"] == "admin_notice" or not self.extract:
+-            # 업체·교직원 대상 행정 공지(학생 지원 자격·마감을 LLM에게서도 받지 않음)이거나 자체 모델이 추출을 맡으면(D-042) 요약만 쓴다
++        if fields["category"] == "admin_notice":
++            # 업체·교직원 대상 행정 공지: 학생 지원 자격·마감을 LLM에게서도 받지 않고 요약만 쓴다
+             year = int(raw["published"]["date"][:4]) if raw.get("published") else None
+             fields["summary"] = self._checked_summary(out.get("summary"), source_text, year, [title, *raw["body_text"].splitlines()])
+             return fields
+@@ -178,7 +178,16 @@ class OllamaAnalyzer:
+                 else:
+                     self.rejected.append(f"날짜 해석 불가: {evidence[:40]}")
+ 
+-        # 조건: 규칙이 없는 필드만, 근거·값 검증 통과분만
++        if self.extract:  # 자체 모델과 함께 쓰면(extract=False) 조건은 모델이 맡는다 (D-042)
++            self._fill_conditions(fields, out, grounded, raw["body_text"].splitlines())
++
++        year = int(raw["published"]["date"][:4]) if raw.get("published") else None
++        lines = [title, *raw["body_text"].splitlines()]
++        fields["summary"] = self._checked_summary(out.get("summary"), source_text, year, lines)
++        return fields
++
++    def _fill_conditions(self, fields: dict, out: dict, grounded, raw_lines: list[str]) -> None:
++        """조건·직접 확인 조건 보충. 규칙이 없는 필드만, 근거·값 검증 통과분만."""
+         elig = fields["eligibility"]
+         have = {c["field"] for c in elig["conditions"]}
+         for c in out.get("conditions") or []:
+@@ -203,7 +212,7 @@ class OllamaAnalyzer:
+         if elig["conditions"]:
+             elig["explicitly_unrestricted"], elig["unrestricted_evidence"] = False, None
+ 
+-        extra, lines = [], raw["body_text"].splitlines()
++        extra, lines = [], raw_lines
+         for t in out.get("unresolved") or []:
+             if not grounded(t):
+                 continue
+@@ -217,11 +226,6 @@ class OllamaAnalyzer:
+             elig["extraction_complete"] = False  # LLM은 완전성을 올리지 않고 내리기만 한다
+             elig["explicitly_unrestricted"], elig["unrestricted_evidence"] = False, None  # 제한 없음도 내리기만
+ 
+-        year = int(raw["published"]["date"][:4]) if raw.get("published") else None
+-        lines = [title, *raw["body_text"].splitlines()]
+-        fields["summary"] = self._checked_summary(out.get("summary"), source_text, year, lines)
+-        return fields
+-
+     @staticmethod
+     def _valid_value(field: str, operator: str, value) -> bool:
+         values = value if operator == "in" else [value]
+diff --git a/backend/analysis/tests/test_extract_model.py b/backend/analysis/tests/test_extract_model.py
+index fa4c276..45964eb 100644
+--- a/backend/analysis/tests/test_extract_model.py
++++ b/backend/analysis/tests/test_extract_model.py
+@@ -66,29 +66,39 @@ BODY = (
+ )
+ 
+ 
+-def test_deadline_comes_from_model_line_with_range_start():
+-    a = analyzer({"신청기간": {"deadline": 0.99}})
+-    f = a.analyze(raw(BODY), MJC)
++@pytest.mark.parametrize("score", [0.99, 0.5, 0.0])
++def test_model_never_touches_rule_deadline(score):
++    # 모델 마감 점수가 문턱 위든 아래든 규칙이 찾은 마감·시작이 그대로 남는다 (D-055)
++    r = raw(BODY)
++    base = ExtractModelAnalyzer(FakePredictor({}), LABELS, THRESHOLDS, "x").base.analyze(r, MJC)
++    a = analyzer({"신청기간": {"deadline": score}, "문의": {"deadline": 0.99}})
++    f = a.analyze(r, MJC)
++    assert f["application_deadline"] == base["application_deadline"]
+     assert f["application_deadline"]["date"] == "2026-11-13"
+-    assert f["application_start"]["date"] == "2026-11-02"
+-    assert f["application_deadline"]["evidence"] == "신청기간: 2026.11.02.(월) ~ 2026.11.13.(금)"
++    assert f["application_start"] == base["application_start"] and f["application_start"]["date"] == "2026-11-02"
++    assert f["activity_period"] == base["activity_period"]
+     assert a.version == f"{ANALYSIS_VERSION}+extract-test" and "_analysis_version" not in f
+ 
+ 
+-def test_no_model_deadline_means_unknown_even_if_rules_found_one():
+-    # 규칙은 '마감' 줄을 마감으로 읽지만, 모델이 문턱을 넘는 줄을 고르지 않으면 미상으로 둔다
+-    body = "접수 마감 2026.11.20.(금)\n대상: 재학생\n"
+-    rule_only = ExtractModelAnalyzer(FakePredictor({}), LABELS, THRESHOLDS, "x").base.analyze(raw(body), MJC)
+-    assert rule_only["application_deadline"]["date"] == "2026-11-20"
+-    f = analyzer({"접수 마감": {"deadline": 0.6}}).analyze(raw(body), MJC)
++def test_model_does_not_make_deadline_rules_did_not_find():
++    f = analyzer({"공개": {"deadline": 0.99}}).analyze(raw("프로그램 안내 공개\n대상: 재학생\n"), MJC)
+     assert f["application_deadline"] is None and f["application_start"] is None
+ 
+ 
+-def test_model_sees_redacted_lines_but_evidence_is_original():
+-    a = analyzer({"문의처": {"deadline": 0.95}})
+-    f = a.analyze(raw(BODY + "마감: 문의처 02-300-1234 2026.11.30.(월)까지\n"), MJC)
++def test_3239_regression_deadline_kept_below_threshold():
++    # mjc_www_job:BD0000003239: 모델 마감 점수 0.9481 < 0.95 였지만 규칙의 12/7 17:00이 남아야 한다
++    thresholds = THRESHOLDS | {"deadline": 0.95}
++    a = ExtractModelAnalyzer(FakePredictor({"접수기간": {"deadline": 0.9481}}), LABELS, thresholds, "extract-test")
++    f = a.analyze(raw("기간제근로자 채용 공고\n접수기간 2026. 11. 23. 13:00 ~ 12. 7. 17:00\n"), MJC)
++    d = f["application_deadline"]
++    assert (d["date"], d["time"]) == ("2026-12-07", "17:00")
++    assert f["application_start"]["date"] == "2026-11-23"
++
++
++def test_model_sees_redacted_lines():
++    a = analyzer({})
++    a.analyze(raw(BODY + "마감: 문의처 02-300-1234 2026.11.30.(월)까지\n"), MJC)
+     assert all("02-300-1234" not in l for l in a.predictor.seen[0])
+-    assert "02-300-1234" in f["application_deadline"]["evidence"]  # 근거는 원문 그대로라 검증을 통과한다
+     assert a.predictor.seen[0][0] == "[합성 샘플] 교내 프로그램 모집"  # 첫 줄은 제목 (학습 때와 같게)
+ 
+ 
+@@ -145,23 +155,14 @@ def test_predictor_failure_falls_back_to_rules():
+     assert f["application_deadline"]["date"] == "2026-11-13"  # 규칙 결과 그대로
+ 
+ 
+-def test_board_yearless_deadline_read_near_published_date():
+-    # 게시판 공고도 모델이 고른 줄에 연도가 없으면 게시일(fixture: 2026-10-15) 기준으로 읽는다
+-    body = "양식을 작성해 11월 15일(일) 23:59까지 보내 주셔야 접수됩니다\n"
+-    f = analyzer({"23:59까지": {"deadline": 0.99}}).analyze(raw(body), MJC)
+-    assert f["application_deadline"]["date"] == "2026-11-15"
+-    assert f["application_deadline"]["time"] == "23:59"
+-
+-
+-def test_kakao_yearless_deadline_and_no_rule_refill():
++def test_kakao_fill_dates_runs_with_extract_model_base():
++    # 규칙이 마감을 못 찾으면 자체 모델 분석기가 base여도 알림톡 날짜 규칙이 발송일 기준으로 채운다 (D-055)
+     r = raw("특강 신청: 11월 9일(월)까지\n특강 일시: 11월 16일(월) 15시\n", title="[합성 샘플] 특강 안내", source="kakao_no_url.json")
+-    f = KakaoAnalyzer(analyzer({"특강 신청": {"deadline": 0.99}})).analyze(r, KAKAO)
+-    assert f["application_deadline"]["date"] == "2026-11-09"
+-    assert f["activity_period"]["start"]["date"] == "2026-11-16"  # 활동 기간은 그대로 날짜 규칙이 채운다
+-    # 모델이 마감 줄을 고르지 않으면 알림톡 날짜 규칙도 마감을 메우지 않는다
+-    f = KakaoAnalyzer(analyzer({})).analyze(r, KAKAO)
+-    assert f["application_deadline"] is None
+-    assert KakaoAnalyzer().analyze(r, KAKAO)["application_deadline"]["date"] == "2026-11-09"  # 모델 없으면 예전대로
++    for rules in ({"특강 신청": {"deadline": 0.99}}, {}):  # 모델 점수와 상관없음
++        f = KakaoAnalyzer(analyzer(rules)).analyze(r, KAKAO)
++        assert f["application_deadline"]["date"] == "2026-11-09"
++        assert f["activity_period"]["start"]["date"] == "2026-11-16"
++    assert KakaoAnalyzer().analyze(r, KAKAO)["application_deadline"] == f["application_deadline"]  # 모델 없을 때와 같음
+ 
+ 
+ def test_model_notice_passes_validation():
+diff --git a/backend/analysis/tests/test_llm.py b/backend/analysis/tests/test_llm.py
+index d8b3b54..aae9cad 100644
+--- a/backend/analysis/tests/test_llm.py
++++ b/backend/analysis/tests/test_llm.py
+@@ -100,8 +100,8 @@ def test_grounded_llm_output_is_merged(ollama):
+     assert "_analysis_version" not in fields and a.version == "rule-0.11+ollama:test-model"
+ 
+ 
+-def test_summary_only_mode_keeps_base_extraction(ollama):
+-    # 자체 모델 분석기가 추출을 맡으면(D-042) Gemma는 요약만 낸다. 마감·조건·미해석 조건 답은 쓰지 않는다
++def test_with_extract_model_gemma_gives_summary_and_deadline_but_not_conditions(ollama):
++    # 자체 모델 분석기와 함께 쓰면(D-042) Gemma의 조건·미해석 조건 답은 쓰지 않는다. 요약과 마감 보충은 그대로(D-055)
+     ollama.reply = {
+         "summary": "컴퓨터공학과 학생 대상 취업 특강이며 11월 5일 17시까지 접수한다.",
+         "deadline": {"evidence": "접수는 2026.11.05.(목) 17:00까지 이메일로 제출"},
+@@ -114,7 +114,36 @@ def test_summary_only_mode_keeps_base_extraction(ollama):
+     fields = a.analyze(raw(body=body), MJC)
+     assert fields["summary"].startswith("컴퓨터공학과")
+     assert {k: v for k, v in fields.items() if k != "summary"} == {k: v for k, v in expected.items() if k != "summary"}
+-    assert a.version == "rule-0.11+ollama:test-model-summary"
++    assert a.version == "rule-0.11+ollama:test-model-nocond"
++
++
++def test_with_extract_model_gemma_still_fills_missing_deadline_from_grounded_evidence(ollama):
++    body = "특강 안내\n늦어도 2026년 11월 9일 17시 30분 전까지 신청 바랍니다"  # 규칙 키워드 없음
++    line = "늦어도 2026년 11월 9일 17시 30분 전까지 신청 바랍니다"
++    ollama.reply = {
++        "summary": None,
++        "deadline": {"evidence": line},
++        "conditions": [{"field": "grade", "operator": "eq", "value": 2, "evidence": "특강 안내"}],
++        "unresolved": [line],
++    }
++    a = OllamaAnalyzer("test-model", host=ollama.url, timeout=5, extract=False)
++    fields = a.analyze(raw(body=body), MJC)
++    d = fields["application_deadline"]
++    assert (d["date"], d["time"]) == ("2026-11-09", "17:30")
++    assert not any(c["field"] == "grade" for c in fields["eligibility"]["conditions"])
++    assert fields["eligibility"]["unresolved_conditions"] == []
++    # 근거 없는 마감 답은 여전히 버린다
++    ollama.reply = {"summary": None, "deadline": {"evidence": "2026.12.31.까지 신청"}, "conditions": [], "unresolved": []}
++    assert a.analyze(raw(body="특강 안내\n대상: 재학생"), MJC)["application_deadline"] is None
++
++
++def test_admin_notice_gets_summary_only_even_with_extract(ollama):
++    ollama.reply = {"summary": None, "deadline": {"evidence": "공고 기간: 2026.11.20.(금) ~ 2026.11.27.(금)"}, "conditions": [], "unresolved": []}
++    body = "공고 기간: 2026.11.20.(금) ~ 2026.11.27.(금)\n참가 자격: 사업자등록증 보유 업체\n"
++    r = raw(body=body)
++    r["title"] = "[입찰공고] 전산 정보보안 운영 인력 용역"
++    f = analyzer(ollama).analyze(r, MJC)
++    assert f["category"] == "admin_notice" and f["application_deadline"] is None
+ 
+ 
+ def test_hallucinations_are_rejected(ollama):
+# 2부: v2(미커밋, 1부 위에 적용) — Gemma 직접 확인 조건 보충 다시 켬, 버전 꼬리 -nostruct
+diff --git a/backend/analysis/llm.py b/backend/analysis/llm.py
+index e2c7f4d..862778e 100644
+--- a/backend/analysis/llm.py
++++ b/backend/analysis/llm.py
+@@ -86,9 +86,10 @@ class OllamaAnalyzer:
+         self.host = host.rstrip("/")
+         self.timeout = timeout
+         self.base = base or RuleBasedAnalyzer()
+-        # extract=False: 조건·직접 확인 조건 보강은 base(자체 모델 분석기, D-042)에 맡긴다. 요약과 마감 보충(D-055)은 그대로 한다
++        # extract=False: 구조 조건(재학·학년·학교) 보강은 base(자체 모델 분석기, D-042)에 맡긴다.
++        # 요약, 마감 보충(D-055), 직접 확인 조건 보충은 그대로 한다 (모델이 놓친 병역·어학 수치 같은 기준을 잃지 않게)
+         self.extract = extract
+-        self.version = f"{self.base.version}+ollama:{model}" + ("" if extract else "-nocond")
++        self.version = f"{self.base.version}+ollama:{model}" + ("" if extract else "-nostruct")
+         self.rejected: list[str] = []  # 마지막 분석에서 버린 LLM 출력과 사유 (평가·디버깅용)
+         self.llm_analyzed = 0  # LLM 응답을 받은 공고 수
+         self.llm_failed = 0  # LLM 호출 실패로 규칙 분석만 쓴 공고 수
+@@ -178,16 +179,17 @@ class OllamaAnalyzer:
+                 else:
+                     self.rejected.append(f"날짜 해석 불가: {evidence[:40]}")
+ 
+-        if self.extract:  # 자체 모델과 함께 쓰면(extract=False) 조건은 모델이 맡는다 (D-042)
+-            self._fill_conditions(fields, out, grounded, raw["body_text"].splitlines())
++        if self.extract:  # 자체 모델과 함께 쓰면(extract=False) 구조 조건은 모델이 맡는다 (D-042)
++            self._fill_structured(fields, out, grounded)
++        self._fill_unresolved(fields, out, grounded, raw["body_text"].splitlines())
+ 
+         year = int(raw["published"]["date"][:4]) if raw.get("published") else None
+         lines = [title, *raw["body_text"].splitlines()]
+         fields["summary"] = self._checked_summary(out.get("summary"), source_text, year, lines)
+         return fields
+ 
+-    def _fill_conditions(self, fields: dict, out: dict, grounded, raw_lines: list[str]) -> None:
+-        """조건·직접 확인 조건 보충. 규칙이 없는 필드만, 근거·값 검증 통과분만."""
++    def _fill_structured(self, fields: dict, out: dict, grounded) -> None:
++        """구조 조건 보충. 규칙이 없는 필드만, 근거·값 검증 통과분만."""
+         elig = fields["eligibility"]
+         have = {c["field"] for c in elig["conditions"]}
+         for c in out.get("conditions") or []:
+@@ -212,6 +214,9 @@ class OllamaAnalyzer:
+         if elig["conditions"]:
+             elig["explicitly_unrestricted"], elig["unrestricted_evidence"] = False, None
+ 
++    def _fill_unresolved(self, fields: dict, out: dict, grounded, raw_lines: list[str]) -> None:
++        """직접 확인 조건 보충. 근거가 원문에 있고 이미 있는 조건과 겹치지 않는 신청자 조건만 더한다."""
++        elig = fields["eligibility"]
+         extra, lines = [], raw_lines
+         for t in out.get("unresolved") or []:
+             if not grounded(t):
+diff --git a/backend/analysis/tests/test_llm.py b/backend/analysis/tests/test_llm.py
+index aae9cad..4f428ff 100644
+--- a/backend/analysis/tests/test_llm.py
++++ b/backend/analysis/tests/test_llm.py
+@@ -100,21 +100,24 @@ def test_grounded_llm_output_is_merged(ollama):
+     assert "_analysis_version" not in fields and a.version == "rule-0.11+ollama:test-model"
+ 
+ 
+-def test_with_extract_model_gemma_gives_summary_and_deadline_but_not_conditions(ollama):
+-    # 자체 모델 분석기와 함께 쓰면(D-042) Gemma의 조건·미해석 조건 답은 쓰지 않는다. 요약과 마감 보충은 그대로(D-055)
++def test_with_extract_model_gemma_gives_summary_deadline_and_unresolved_but_not_structured(ollama):
++    # 자체 모델 분석기와 함께 쓰면(D-042) Gemma의 구조 조건 답은 쓰지 않는다. 요약·마감 보충(D-055)·직접 확인 조건 보충은 그대로
+     ollama.reply = {
+         "summary": "컴퓨터공학과 학생 대상 취업 특강이며 11월 5일 17시까지 접수한다.",
+         "deadline": {"evidence": "접수는 2026.11.05.(목) 17:00까지 이메일로 제출"},
+         "conditions": [{"field": "grade", "operator": "eq", "value": 2, "evidence": "대상: 컴퓨터공학과 학생"}],
+-        "unresolved": ["토익 700점 이상 우대"],
++        "unresolved": ["남성의 경우 병역의무 불이행 사실이 없는 자"],
+     }
+-    body = "특강 안내\n대상: 컴퓨터공학과 학생\n접수는 2026.11.05.(목) 17:00까지 이메일로 제출"
++    body = "특강 안내\n대상: 컴퓨터공학과 학생\n남성의 경우 병역의무 불이행 사실이 없는 자\n접수는 2026.11.05.(목) 17:00까지 이메일로 제출"
+     a = OllamaAnalyzer("test-model", host=ollama.url, timeout=5, extract=False)
+     expected = a.base.analyze(raw(body=body), MJC)
+     fields = a.analyze(raw(body=body), MJC)
+     assert fields["summary"].startswith("컴퓨터공학과")
+-    assert {k: v for k, v in fields.items() if k != "summary"} == {k: v for k, v in expected.items() if k != "summary"}
+-    assert a.version == "rule-0.11+ollama:test-model-nocond"
++    assert fields["eligibility"]["conditions"] == expected["eligibility"]["conditions"]  # 구조 조건은 Gemma 답(grade=2) 안 씀
++    # 규칙이 못 잡는 병역 조건을 Gemma가 원문 근거로 내면 직접 확인 조건으로 더한다
++    assert not expected["eligibility"]["unresolved_conditions"]
++    assert [u["evidence"] for u in fields["eligibility"]["unresolved_conditions"]] == ["남성의 경우 병역의무 불이행 사실이 없는 자"]
++    assert a.version == "rule-0.11+ollama:test-model-nostruct"
+ 
+ 
+ def test_with_extract_model_gemma_still_fills_missing_deadline_from_grounded_evidence(ollama):

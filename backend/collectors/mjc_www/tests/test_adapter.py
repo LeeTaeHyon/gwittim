@@ -203,3 +203,33 @@ def _pop(outcomes):
     if isinstance(item, Exception):
         raise item
     return item
+
+
+def test_poster_is_first_editor_image_inside_body():
+    path = "/crosseditor/binary/images/"
+    urls = ["/fileDown.do?attach_idx=2", path + "large.bmp", path + "bad%xx.png", "https://other.invalid" + path + "a.png",
+            "http://www.mjc.ac.kr" + path + "a.jpg", path + "first.JpEg", path + "second.png"]
+    images = "".join(f'<img src="{u}">' for u in urls)
+    html = f'<img src="{path}outside.png"><div id="divMemo"><!-- <img src="{path}old.png"> -->{images}</div>'
+    fetch, _ = fake_fetch({"list.do": LIST, "view.do": html})
+    raws, errors = collect(BOARD, fetch=fetch, max_items=1, delay=0)
+    assert not errors
+    assert raws[0]["source_fields"]["poster_url"] == "https://www.mjc.ac.kr" + path + "first.JpEg"
+    assert parse_detail(VIEW).poster_url is None
+
+
+def test_backfill_changes_only_poster_and_preserves_failed_fetch():
+    from backend.collectors.mjc_www.backfill_posters import refresh
+
+    urls = ["/crosseditor/binary/images/one.png", None]
+    html = [VIEW.replace("poster.jpg", urls[0]), VIEW]
+    notice = {"source_id": BOARD.source_id, "publication_status": "published", "summary": "keep",
+              "changed_fields": ["title"], "notice_version": 4}
+    rows = {f"{BOARD.source_id}:BD{i}": dict(notice, poster_url="old") for i in range(3)}
+    def fetch(url):
+        return html[int(url[-1])]  # 마지막 공고는 수집 실패
+    assert refresh(rows, fetch=fetch, delay=0) == {"checked": 3, "updated": 2, "failed": 1}
+    first, second, third = rows.values()
+    assert first == dict(notice, poster_url="https://www.mjc.ac.kr" + urls[0])
+    assert second == notice
+    assert third == dict(notice, poster_url="old")

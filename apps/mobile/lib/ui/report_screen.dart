@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../data/application_case.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 import 'agent_data.dart';
 import 'agent_flow.dart';
 import 'briefing_data.dart';
+import 'case_view.dart';
 import 'common.dart';
 import 'components.dart';
 import 'credits_screen.dart';
 import 'format.dart';
 import 'icons.dart';
+import 'notice_poster.dart';
 import 'skeleton.dart';
 import 'theme.dart';
 
@@ -24,6 +27,16 @@ const _sourceNames = {
   'wevity_contest': '위비티', // D-038 교외 공모전
   'contestkorea_contest': '콘테스트코리아',
 };
+
+/// 학교 게시판·알림톡에서 온 공고인가. 교외 공모전(위비티 등)이나 모르는 출처면 false.
+/// 출처가 비어 있는 옛 공고는 지금까지처럼 학교 공지로 본다.
+bool isSchoolSource(String? sourceId) =>
+    sourceId == null || sourceId.startsWith('mjc_') || sourceId.startsWith('sewu_');
+
+/// 원문을 가리키는 말. 학교 출처면 '학교 공지', 아니면 '공고 원문'. [object]면 목적격 조사까지.
+String originName(String? sourceId, {bool object = false}) => isSchoolSource(sourceId)
+    ? (object ? '학교 공지를' : '학교 공지')
+    : (object ? '공고 원문을' : '공고 원문');
 
 /// 체크리스트 한 줄의 상태
 enum CheckState { met, notMet, check, info }
@@ -89,6 +102,7 @@ List<CheckRow> checklistRows(
   String? Function(String field) profileValue,
 ) {
   final elig = notice.eligibility;
+  final origin = originName(notice.sourceId);
   final rows = <CheckRow>[];
   final results = recommendation?.conditionResults ?? const <ConditionResult>[];
   if (results.isNotEmpty) {
@@ -122,8 +136,8 @@ List<CheckRow> checklistRows(
         '직접 확인',
         evidence: u,
         note: _privateCondition.hasMatch(u)
-            ? '귀띔은 성적을 받지 않습니다. 이 조건은 학교 공지에서 직접 확인해 주세요.'
-            : '자동으로 비교하지 못했습니다. 학교 공지에서 확인해 주세요.',
+            ? '귀띔은 성적을 받지 않습니다. 이 조건은 $origin에서 직접 확인해 주세요.'
+            : '자동으로 비교하지 못했습니다. $origin에서 확인해 주세요.',
       ),
     );
   }
@@ -135,7 +149,11 @@ List<CheckRow> checklistRows(
     rows.add(
       elig.explicitlyUnrestricted
           ? CheckRow(CheckState.met, '누구나 지원 가능', evidence: elig.unrestrictedEvidence)
-          : const CheckRow(CheckState.info, '공고에서 지원 조건을 찾지 못했습니다', note: '조건이 없다는 뜻은 아닙니다. 학교 공지를 확인해 주세요.'),
+          : CheckRow(
+              CheckState.info,
+              '공고에서 지원 조건을 찾지 못했습니다',
+              note: '조건이 없다는 뜻은 아닙니다. ${originName(notice.sourceId, object: true)} 확인해 주세요.',
+            ),
     );
   }
   return groupCheckRows(rows);
@@ -184,6 +202,11 @@ class _ReportScreenState extends State<ReportScreen> {
   late Future<Notice?> _future = widget.repository.getNotice(widget.noticeId);
   SavedEntry? _savedEntry;
   bool? _saved;
+
+  /// 이 리포트를 연 때 지원 건에 적혀 있던 '본 마감'. 마감 변경 배너는 이 값과 지금 마감이 다를 때만 보인다.
+  /// 카드를 처음 그릴 때 한 번만 읽고, 그 뒤 지금 마감으로 기록한다(다음부터 저장함·홈 변경 표시가 사라짐).
+  String? _seenAtOpen;
+  bool _seenRecorded = false;
   UserProfile? _profile;
   Map<String, Map<String, String>> _names = const {};
   Map<String, String> _categories = const {};
@@ -253,6 +276,7 @@ class _ReportScreenState extends State<ReportScreen> {
           (_) => AnalysisReportScreen(
             response: response,
             title: notice.summary.title,
+            caseLine: _caseLine(notice.summary),
             receivedAt: _credits?.analysisReceivedAt(widget.noticeId),
             skippedExperience: skippedExperience,
             // 추천 목록에서 들어온 공고만 서버 판정이 있다. 없으면 리포트는 기본 순서
@@ -383,11 +407,48 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
+  /// 상세 분석 머리에 보일 한 줄. 저장한 공고(지원 건)만.
+  String? _caseLine(NoticeSummary n) {
+    final kase = ApplicationCaseScope.read(context)?[widget.noticeId];
+    if (kase == null) return null;
+    final v = caseView(n, kase, now: widget.today ?? DateTime.now());
+    return ['내 지원', v.stateLabel!, if (v.next != null) v.next!.text, v.remaining].join(' · ');
+  }
+
+  void _recordSeen(ApplicationCaseStore cases, ApplicationCase kase, NoticeSummary n) {
+    if (_seenRecorded) return;
+    _seenRecorded = true;
+    _seenAtOpen = kase.seenDeadline;
+    WidgetsBinding.instance.addPostFrameCallback((_) => cases.markDeadlineSeen(n.noticeId, n.applicationDeadline));
+  }
+
+  Future<void> _caseAction(Future<bool> Function(String) action, {String? done}) async {
+    final cases = ApplicationCaseScope.read(context);
+    if (cases == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await action(widget.noticeId);
+    if (!ok || done == null) return;
+    // 되돌리기 버튼이 있어도 저절로 닫히게(persist: false), 앞 알림은 바로 닫고 새 알림을 띄운다
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(done),
+          persist: false,
+          action: SnackBarAction(label: '되돌리기', onPressed: () => cases.undo(widget.noticeId)),
+        ),
+      );
+  }
+
   Widget _body(Notice notice) {
     final n = notice.summary;
     final today = widget.today ?? DateTime.now();
     final rec = widget.recommendation;
-    final changed = _savedEntry != null && _savedEntry!.deadlineChanged ? _savedEntry : null;
+    final cases = ApplicationCaseScope.maybeOf(context);
+    final kase = cases?[widget.noticeId];
+    if (cases != null && kase != null) _recordSeen(cases, kase, n);
+    final seenChange = kase != null && _seenAtOpen == deadlineKey(n.applicationDeadline);
+    final changed = _savedEntry != null && _savedEntry!.deadlineChanged && !seenChange ? _savedEntry : null;
     final c = context.gw;
     return Column(
       children: [
@@ -410,7 +471,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      keepAll(n.title),
+                      keepTitle(n.title),
                       style: TextStyle(fontSize: 24, height: 1.42, fontWeight: FontWeight.w700, color: c.ink),
                     ),
                     const SizedBox(height: 8),
@@ -440,12 +501,23 @@ class _ReportScreenState extends State<ReportScreen> {
                   ],
                 ),
               ),
-              if (notice.description != null) _SummaryBubble(text: notice.description!),
-              // D-006: 원문 확인이 24시간을 넘으면 요약 바로 아래에 알린다. 원문은 아래 '학교 공지에서 보기'로 연다.
+              if (cases != null && kase != null)
+                _CaseCard(
+                  view: caseView(n, kase, now: today),
+                  kase: kase,
+                  onStart: () => _caseAction(cases.startPreparing),
+                  onApplied: () => _caseAction(cases.markApplied, done: '신청함으로 표시했습니다.'),
+                  onSkip: () => _caseAction(cases.markSkipped, done: '이번엔 안 함으로 표시했습니다.'),
+                  onUndo: () => _caseAction(cases.undo),
+                  onOpen: _open,
+                ),
+              if (notice.description != null) _SummaryBubble(text: notice.description!, sourceId: notice.sourceId),
+              // D-006: 원문 확인이 24시간을 넘으면 요약 바로 아래에 알린다. 원문은 아래 '학교 공지에서 보기'(교외 공고는 '원문에서 보기')로 연다.
               // 알림톡은 보낸 뒤 바뀌지 않으므로 원문 재확인 안내를 하지 않는다 (D-019)
               if (n.sourceUrl != null)
                 if (staleNotice(notice.lastVerifiedAt, DateTime.now().toUtc()) case final stale?) _StaleBox(text: stale),
               if (changed != null) _ChangeBanner(entry: changed),
+              if (notice.posterUrl case final url?) NoticePoster(key: ValueKey(url), url: url),
               _Checklist(
                 rows: checklistRows(notice, rec, _profileValue),
                 status: rec?.eligibilityStatus,
@@ -503,7 +575,7 @@ class _ReportScreenState extends State<ReportScreen> {
                         onPressed: () => _open(url),
                         iconAlignment: IconAlignment.end,
                         icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                        label: Text(rec?.eligibilityStatus == 'needs_check' ? '학교 공지에서 확인하기' : '학교 공지에서 보기'),
+                        label: Text('${isSchoolSource(notice.sourceId) ? '학교 공지' : '원문'}에서 ${rec?.eligibilityStatus == 'needs_check' ? '확인하기' : '보기'}'),
                       ),
                       // D-025: 알림톡 본문에 적힌 학교 사이트(스마트케어 등). 사이트는 수집하지 않고 열기만 한다
                       null when notice.applyUrl != null => FilledButton.icon(
@@ -541,10 +613,191 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 }
 
+/// '내 지원' 카드 (care-loop-impl-spec §4). 저장한 공고에만 보인다.
+class _CaseCard extends StatelessWidget {
+  const _CaseCard({
+    required this.view,
+    required this.kase,
+    required this.onStart,
+    required this.onApplied,
+    required this.onSkip,
+    required this.onUndo,
+    required this.onOpen,
+  });
+
+  final CaseView view;
+  final ApplicationCase kase;
+  final VoidCallback onStart;
+  final VoidCallback onApplied;
+  final VoidCallback onSkip;
+  final VoidCallback onUndo;
+  final void Function(String url) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final next = view.next;
+    final state = view.ended ? null : kase.state;
+    final openUrl = state == CaseState.preparing ? next?.url : null;
+    // 카드 안 버튼은 모두 높이 44·글자 15(ui-style 보조 버튼 크기). 중요도는 모양으로만: 채움 → 연한 바탕 → 글자
+    final label = Theme.of(context).textTheme.labelLarge!.copyWith(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0);
+    const size = Size(0, 44);
+    const pad = EdgeInsets.symmetric(horizontal: 18);
+    Widget primary(String text, VoidCallback onPressed) => FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(minimumSize: size, padding: pad, textStyle: label),
+      child: Text(text),
+    );
+    Widget plain(String text, VoidCallback onPressed) => TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(minimumSize: size, padding: const EdgeInsets.symmetric(horizontal: 12), textStyle: label),
+      child: Text(text),
+    );
+    final buttons = <Widget>[
+      if (state == CaseState.saved) ...[
+        primary('준비 시작', onStart),
+        plain('이번엔 안 함', onSkip),
+      ],
+      if (state == CaseState.preparing) ...[
+        if (openUrl != null) primary(openUrl == kase.applyUrl ? '신청 사이트 열기' : '원문 열기', () => onOpen(openUrl)),
+        if (openUrl != null) SoftButton(label: '신청함', onPressed: onApplied, icon: null) else primary('신청함', onApplied),
+        plain('이번엔 안 함', onSkip),
+      ],
+      if (kase.state == CaseState.applied || kase.state == CaseState.skipped) plain('되돌리기', onUndo),
+    ];
+    // 요약 카드(연두)와 구분되게 흰 바탕 + 얇은 테두리
+    final decoration = BoxDecoration(
+      color: c.card,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: c.line),
+    );
+    final head = Text('내 지원', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.sub));
+    final remaining = Text(keepAll(view.remaining), style: TextStyle(fontSize: 13, color: c.sub));
+
+    // 끝난 건(신청함·안 함·마감 지남·모집 끝남·삭제됨): 한 줄로 낮게. 되돌릴 수 있으면 오른쪽에 되돌리기
+    final step = _steps.indexOf(kase.state);
+    if (view.ended || step < 0) {
+      return Container(
+        margin: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+        constraints: const BoxConstraints(minHeight: 60),
+        decoration: decoration,
+        child: Row(
+          children: [
+            Expanded(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [head, Pill(view.stateLabel!, tone: PillTone.neutral), remaining],
+              ),
+            ),
+            ...buttons,
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: decoration,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              head,
+              const SizedBox(width: 12),
+              Expanded(child: Align(alignment: Alignment.centerRight, child: remaining)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _CaseSteps(current: step),
+          if (next != null) ...[
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Icon(Icons.arrow_forward_rounded, size: 18, color: c.accent),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    keepAll(next.text),
+                    style: TextStyle(fontSize: 16, height: 1.45, fontWeight: FontWeight.w600, color: c.ink),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (buttons.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(spacing: 8, runSpacing: 8, children: buttons),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 진행 단계: 저장 → 준비 중 → 신청함
+const _steps = [CaseState.saved, CaseState.preparing, CaseState.applied];
+
+/// 지금 단계까지 막대를 채우고 지금 단계 이름만 진하게. 이름은 모든 화면의 상태 이름과 같다.
+class _CaseSteps extends StatelessWidget {
+  const _CaseSteps({required this.current});
+
+  final int current;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return Semantics(
+      label: '진행 ${current + 1}/${_steps.length}단계, ${stateLabels[_steps[current]]}',
+      excludeSemantics: true,
+      child: Row(
+        children: [
+          for (final (i, s) in _steps.indexed) ...[
+            if (i > 0) const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: i <= current ? c.point : c.chip,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    stateLabels[s]!,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: i == current ? FontWeight.w700 : FontWeight.w500,
+                      color: i == current ? c.ink : c.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _SummaryBubble extends StatelessWidget {
-  const _SummaryBubble({required this.text});
+  const _SummaryBubble({required this.text, required this.sourceId});
 
   final String text;
+  final String? sourceId;
 
   @override
   Widget build(BuildContext context) {
@@ -585,7 +838,7 @@ class _SummaryBubble extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(color: c.card.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(10)),
-              child: Text('학교 공지를 바탕으로 정리', style: TextStyle(fontSize: 12, color: c.muted)),
+              child: Text('${originName(sourceId, object: true)} 바탕으로 정리', style: TextStyle(fontSize: 12, color: c.muted)),
             ),
           ),
         ],
@@ -978,7 +1231,7 @@ class _Related extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(keepAll(r.title), style: TextStyle(fontSize: 15, height: 1.45, color: c.body)),
+                    child: Text(keepTitle(r.title), style: TextStyle(fontSize: 15, height: 1.45, color: c.body)),
                   ),
                   Icon(Icons.chevron_right_rounded, color: c.muted),
                 ],
@@ -1041,7 +1294,7 @@ class _Schedule extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Text(
-                keepAll(n.deadlineNote ?? '마감일이 공고에 나와 있지 않습니다. 학교 공지를 확인해 주세요.'),
+                keepAll(n.deadlineNote ?? '마감일이 공고에 나와 있지 않습니다. ${originName(notice.sourceId, object: true)} 확인해 주세요.'),
                 style: TextStyle(fontSize: 14, color: c.sub),
               ),
             ),

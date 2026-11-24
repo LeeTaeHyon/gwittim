@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from backend.contracts import schema_errors
 from backend.recommendation import evaluate
 
-from .credits import DETAIL_ANALYSIS, current_state, next_refill_at, reserve, settle, signup
+from .credits import DETAIL_ANALYSIS, current_state, demo_refill, next_refill_at, reserve, settle, signup
 from .llm import generate_report
 from .payload import build_payload
 from .prompt import HARNESS_VERSION, build_messages, ground_report, scrub_codes, split_long_lines
@@ -74,7 +74,7 @@ def _live(doc: dict | None, now: datetime) -> dict | None:
     return doc if doc is not None and not is_expired(doc["expires_at"], now) else None
 
 
-def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
+def request_analysis(uid: str, body: dict, deps: Deps, guest: bool = False) -> dict:
     if not isinstance(body, dict) or schema_errors("analysis_request", body):
         raise AgentError("invalid_argument")
     profile = deps.profiles.get(uid)
@@ -96,7 +96,7 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
         raise AgentError("unavailable")
 
     def do_reserve(state):
-        result = reserve(state or signup(now), DETAIL_ANALYSIS, request_id, now)
+        result = reserve(state or signup(now, guest), DETAIL_ANALYSIS, request_id, now, guest)
         return result.state, result.status
 
     status = deps.credits.update(uid, do_reserve)
@@ -111,7 +111,7 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
 
     def finish(succeeded: bool):
         def fn(state):
-            result = settle(state or signup(now), request_id, succeeded, now, ref=notice_id)
+            result = settle(state or signup(now, guest), request_id, succeeded, now, ref=notice_id, guest=guest)
             return result.state, result.status
 
         return deps.credits.update(uid, fn)
@@ -168,22 +168,45 @@ def get_analysis(uid: str, notice_id: str, deps: Deps) -> dict:
     return _response(doc, True)
 
 
-def get_credits(uid: str, deps: Deps) -> dict:
+def _credit_view(current, now: datetime, guest: bool = False) -> dict:
+    refill = next_refill_at(current, now, guest)
+    return {
+        "balance": current.balance,
+        "next_refill_at": utc_z(refill) if refill else None,
+        # 같은 시각이면 나중에 쌓인 것이 먼저 오도록 뒤집고 정렬한다
+        "entries": [
+            {"kind": e.kind, "amount": e.amount, "at": utc_z(e.at), "ref": e.ref}
+            for e in sorted(reversed(current.entries), key=lambda e: e.at, reverse=True)
+        ],
+    }
+
+
+def get_credits(uid: str, deps: Deps, guest: bool = False) -> dict:
     now = deps.clock.now()
 
     def fn(state):
-        current = current_state(state or signup(now), now)
-        refill = next_refill_at(current, now)
-        view = {
-            "balance": current.balance,
-            "next_refill_at": utc_z(refill) if refill else None,
-            # 같은 시각이면 나중에 쌓인 것이 먼저 오도록 뒤집고 정렬한다
-            "entries": [
-                {"kind": e.kind, "amount": e.amount, "at": utc_z(e.at), "ref": e.ref}
-                for e in sorted(reversed(current.entries), key=lambda e: e.at, reverse=True)
-            ],
-        }
-        return current, view
+        current = current_state(state or signup(now, guest), now, guest)
+        return current, _credit_view(current, now, guest)
+
+    return deps.credits.update(uid, fn)
+
+
+DEMO_ENV = "GWITTIM_DEMO_CREDITS"
+
+
+def demo_credits_enabled() -> bool:
+    """시연 기간에만 서버 설정 GWITTIM_DEMO_CREDITS=1로 켠다. 꺼져 있으면 채우기 경로가 없는 것처럼 404.
+    켜 두어도 월 비용 상한(GWITTIM_LLM_MONTHLY_CAP_KRW)은 그대로 막는다."""
+    return os.environ.get(DEMO_ENV, "").strip() == "1"
+
+
+def demo_refill_credits(uid: str, deps: Deps, guest: bool = False) -> dict:
+    """시연용: 잔액을 5까지 채우고 크레딧 페이지와 같은 모양으로 돌려준다."""
+    now = deps.clock.now()
+
+    def fn(state):
+        current = demo_refill(state or signup(now, guest), now, guest)
+        return current, _credit_view(current, now, guest)
 
     return deps.credits.update(uid, fn)
 

@@ -7,6 +7,7 @@ import 'common.dart';
 import 'components.dart';
 import 'credits_screen.dart';
 import 'format.dart';
+import 'guest_scope.dart';
 import 'legal.dart';
 import 'logo.dart';
 import 'skeleton.dart';
@@ -183,6 +184,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   bool _withdrawing = false;
 
+  /// 게스트 끝내기 (D-054): 확인 창 → 서버 정보 → 익명 계정 삭제. 다시 확인 단계는 없고 끝나면 로그인 화면으로 바뀐다.
+  Future<void> _endGuest() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final delete = widget.onDeleteAccount;
+    if (delete == null || _withdrawing || await _confirmEndGuest() != true || !mounted) return;
+    setState(() => _withdrawing = true);
+    try {
+      await delete();
+    } catch (_) {
+      // 상세 오류는 화면에 보여주지 않는다 (SPEC §10)
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(keepAll('게스트를 끝내지 못했습니다. 잠시 후 다시 시도해 주세요.'))));
+    } finally {
+      if (mounted) setState(() => _withdrawing = false);
+    }
+  }
+
+  Future<bool?> _confirmEndGuest() {
+    final c = context.gw;
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: c.card,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          '게스트를 끝내시겠습니까?',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.ink),
+        ),
+        content: Text(keepAll('저장한 공고와 내 정보가 삭제됩니다.'), style: TextStyle(fontSize: 15, height: 1.5, color: c.body)),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: c.urgent),
+            child: const Text('끝내기'),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// 확인 창 → 계정 다시 확인 → 서버 데이터·계정 삭제 (D-024). 끝나면 로그인 화면으로 바뀐다.
   Future<void> _withdraw() async {
     final messenger = ScaffoldMessenger.of(context);
@@ -325,7 +369,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(keepAll('시스템 설정을 선택하면 기기 화면 모드를 따릅니다.'), style: caption),
-                if (widget.onSignOut case final signOut?) ...[
+                if (widget.onSignOut != null && GuestScope.of(context)) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    child: Divider(height: 1, color: c.line),
+                  ),
+                  const _FieldLabel('계정'),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(color: c.cardSoft, borderRadius: BorderRadius.circular(18)),
+                    child: Row(
+                      children: [
+                        Icon(Icons.account_circle_rounded, size: 32, color: c.muted),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            '게스트로 이용 중',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _RoundButton(label: '게스트 끝내기', background: c.urgentSoft, foreground: c.urgent, onPressed: _endGuest),
+                ] else if (widget.onSignOut case final signOut?) ...[
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 20),
                     child: Divider(height: 1, color: c.line),

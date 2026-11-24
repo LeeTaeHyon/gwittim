@@ -106,7 +106,7 @@ void main() {
       repo.gate.complete();
       await tester.pumpAndSettle();
       expect(find.byType(HomeSkeleton), findsNothing);
-      expect(find.text('다가오는 마감'), findsOneWidget);
+      expect(find.text('다음 마감'), findsOneWidget);
     });
 
     testWidgets('애니메이션 줄이기 설정이면 깜빡이지 않는다', (tester) async {
@@ -163,7 +163,7 @@ void main() {
 
     testWidgets('하루 첫 브리핑은 아래에서 올라온다', (tester) async {
       await pumpApp(tester);
-      await tester.tap(find.text('브리핑 다시 보기'));
+      await tester.tap(findText('새 공고 1건')); // 홈 귀띔 말풍선
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       expect(tester.getTopLeft(find.byType(BriefingScreen)).dy, greaterThan(0));

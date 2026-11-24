@@ -66,7 +66,7 @@ gcloud run services update gwittim-api --project=gwittim-dev --region=asia-north
 gcloud run services update-traffic gwittim-api --project=gwittim-dev --region=asia-northeast3 --to-revisions=<이전 리비전>=100
 ```
 
-- 지금 되돌릴 곳: `gwittim-api-00013-fft`(2026-11-23 00014 배포 기준). Artifact Registry는 최근 이미지 2개만 남기므로 그보다 오래된 리비전은 되돌릴 수 없다
+- 지금 되돌릴 곳(2026-11-24 00016 배포 기준): 설정만 되돌리면 `gwittim-api-00015-9zv`(같은 코드, 시연용 채우기 꺼짐·상한 3만 원), 코드까지 되돌리면 `gwittim-api-00014-shg`. Artifact Registry는 최근 이미지 2개만 남기므로 그보다 오래된 리비전은 되돌릴 수 없다
 
 ## 6. APK 빌드 (Claude가 함, 배포는 팀장이 공유)
 
@@ -80,6 +80,7 @@ gcloud run services update-traffic gwittim-api --project=gwittim-dev --region=as
    ```
    - `android/app/google-services.json`이 있어야 함(git 제외, 작업 폴더에는 메인 폴더에서 복사)
    - 서명은 이 PC의 디버그 키(Firebase에 SHA-1 등록됨). 다른 PC에서 빌드하면 Google 로그인이 안 됨
+   - 시연용 빌드: `--dart-define=GWITTIM_DEMO=true`를 더하면 크레딧 페이지에 '시연용 크레딧 채우기'가 생긴다. 서버도 `GWITTIM_DEMO_CREDITS=1`이어야 동작(아니면 '이 서버는 시연용 채우기를 켜지 않았습니다.'). 서버 설정은 시연 기간에만 켜고 끝나면 끈다. 켜 두어도 월 비용 상한은 그대로
 3. 결과 `build/app/outputs/flutter-apk/app-release.apk` → `data/local/apk/gwittim-<main 커밋 7자리>.apk`로 복사, SHA-256 기록
 4. 설치 확인: `adb install -r --user 0 <apk>` → §4의 2~6번을 실기기에서
 5. 서버보다 앱이 먼저 나가면 새 화면이 옛 서버와 안 맞는다. **서버 배포 → APK 빌드** 순서
@@ -88,10 +89,11 @@ gcloud run services update-traffic gwittim-api --project=gwittim-dev --region=as
 
 - 수집기·분석 코드가 바뀐 PR을 병합하면 `Gwittim-batch`를 main으로 맞춘다(`git fetch` → `git checkout --detach origin/main` → `uv sync --frozen`)
 - 다음 배치의 완료 알림과 `data/local/batch.log`로 확인
+- 게스트 30일 정리(D-054, 예약 없음): 팀장 PC에서 `gcloud auth application-default login` 뒤 `uv run python -m tools.cleanup_guests`(건조 실행, 대상 수만) → 확인 후 `--apply`. 출력은 건수·실패 수만
 
 ## 8. 비용 확인
 
-- DeepSeek: 선불 잔액(플랫폼 화면), 서버 월 상한 3만 원(`GWITTIM_LLM_MONTHLY_CAP_KRW`)
+- DeepSeek: 선불 잔액(플랫폼 화면), 서버 월 상한 1,400원(약 1달러, `GWITTIM_LLM_MONTHLY_CAP_KRW`, 2026-11-24 잔액 2달러라 3만 원에서 낮춤)
 - GCP: 예산 알림 월 1,000원(알림일 뿐 상한 아님). Cloud Build·Artifact Registry 사용량은 배포 횟수만큼 늘어남
 
 ## 9. 배포 기록
@@ -106,3 +108,5 @@ gcloud run services update-traffic gwittim-api --project=gwittim-dev --region=as
 | 2026-11-23 | gwittim-api-00012-kls | d02e544 | 외부 공고 찾기 서버 `POST /v1/external-search`(DeepSeek 웹 검색·출처 검증, '출처 확인 안 됨' 표시, 크레딧 2개, #145, D-047)와 앱 화면(#146). 배포 전 pytest 611·계약 검사·flutter analyze/test 295 통과. APK `0.10.3+6`(`data/local/apk/gwittim-0.10.3-d02e544.apk`, SHA-256 `b35f9dca…14f7`, 서명 같음) | 토큰 없이 recommendations·credits·profile·analysis·external-search 401, 새 리비전 ERROR 0, 환경변수·시크릿 유지. 실기기 설치·외부 공고 찾기 실사용 미확인(폰 미연결) |
 | 2026-11-23 | gwittim-api-00013-fft | 302d582 | 외부 공고 찾기 원문 읽고 자격 판정(2단계 호출 deepseek_read_url → evaluate, 미충족 제외), 고르는 칩 글자 폭, 외부 찾기 분류 9개(#147). 배포 전 pytest 620·계약 검사·flutter analyze/test 296 통과. APK `0.10.4+7`(`data/local/apk/gwittim-0.10.4-302d582.apk`, SHA-256 `51bee833…9c6f`, 서명 같음) | 토큰 없이 recommendations·credits·analysis·external-search 401, 새 리비전 ERROR 0, 환경변수·시크릿 유지 |
 | 2026-11-23 | gwittim-api-00014-shg | 423faf0 | 외부 공고 찾기 지침 `external-2026-11-23.5`: 지금 접수 중인 공고 위주, 후보 8개까지(#148). #149(교외 중복 묶기)는 배치 코드라 서버 동작 변화 없음. 앱 변경 없음(APK 0.10.4 그대로). 배포 전 pytest 623·계약 검사 통과 | 토큰 없이 recommendations·credits·analysis·external-search 401, 새 리비전 ERROR 0, 환경변수·시크릿 유지 |
+| 2026-11-24 | gwittim-api-00015-9zv | 290d3a1 | 신청 완료까지 챙기기(#157, 앱만), 리포트 내 지원 카드 진행 단계·교외 공고 '원문' 문구·시연용 크레딧 채우기 `POST /v1/credits/demo-refill`(#159, 계약 credits 내역 `demo` 추가). 배포 전 pytest 626·계약 검사·flutter analyze/test 446 통과. `gcloud run deploy --source`는 빌드 성공 뒤 `NOT_FOUND`로 끊겨 빌드 이미지(digest `1e2b6495…7f1`)를 `--image`로 배포. 앱 `0.10.5+8`(`data/local/apk/gwittim-0.10.5-3310e44.apk`, SHA-256 `5773bd47…189f`, 서명 같음, 폰 설치·실행 확인) | 토큰 없이 recommendations·credits·demo-refill·analysis·external-search 401, 시작 로그 정상, ERROR 0. 환경변수·시크릿 유지 |
+| 2026-11-24 | gwittim-api-00016-5sp | 290d3a1 | 설정만: `GWITTIM_DEMO_CREDITS=1`(시연용 채우기 켬), `GWITTIM_LLM_MONTHLY_CAP_KRW=1400`(3만 원에서 낮춤, 배포 전 11월 누적 9.06원 확인). 시연용 APK `0.10.6+9`(`--dart-define=GWITTIM_DEMO=true`, `data/local/apk/gwittim-0.10.6-demo-290d3a1.apk`, SHA-256 `5df13ab6…39ef`, 서명 같음) | 설정 값 확인. 폰(0.10.6)에서 채우기 0→5, 상세 분석 1건 성공(5→4, DeepSeek 2.48초·0.77원, 11월 누적 9.83원). 시연이 끝나면 `GWITTIM_DEMO_CREDITS=0` |

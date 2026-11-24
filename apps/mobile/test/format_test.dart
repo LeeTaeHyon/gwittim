@@ -87,6 +87,53 @@ void main() {
       expect(keepAll('공고에서 찾은 조건을 내 프로필과 비교했습니다.').split(' ').last, '프$wj로$wj필$wj과$nbsp비$wj교$wj했$wj습$wj니$wj다$wj.');
     });
 
+    test('안내 문장(keepAll)은 끝 묶음이 길어도 묶는다', () {
+      expect(keepAll('합격 가능성과는 관계없습니다.'), '합$wj격 가$wj능$wj성$wj과$wj는$nbsp관$wj계$wj없$wj습$wj니$wj다$wj.');
+      expect(keepAll('제1회 서울국제AI광고영상제 (SIADAFF)').contains(nbsp), isTrue);
+    });
+
+    test('공고 제목(keepTitle): 끝 묶음이 12자를 넘으면 묶지 않는다', () {
+      const title = '제1회 서울국제AI광고영상제 (SIADAFF)'; // 끝 두 어절 21자
+      expect(keepTitle(title).contains(nbsp), isFalse);
+      expect(plain(keepTitle(title)), title);
+      // 경계: 12자는 묶고 13자는 묶지 않는다
+      expect(keepTitle('공고 가나다라마 바사아자차카'), '공$wj고 가$wj나$wj다$wj라$wj마$nbsp바$wj사$wj아$wj자$wj차$wj카');
+      expect(keepTitle('공고 가나다라마 바사아자차카타').contains(nbsp), isFalse);
+      // 끝 문장 통째 묶기도 12자까지: '원문에서 확인해 주세요.'(13자)는 끝 두 어절만
+      expect(keepTitle('조건이 있습니다. 원문에서 확인해 주세요.'), '조$wj건$wj이 있$wj습$wj니$wj다$wj. 원$wj문$wj에$wj서 확$wj인$wj해$nbsp주$wj세$wj요$wj.');
+      expect(keepTitle('조건이 있습니다. 확인해 주세요 꼭.'), '조$wj건$wj이 있$wj습$wj니$wj다$wj. 확$wj인$wj해$nbsp주$wj세$wj요$nbsp꼭$wj.');
+    });
+
+    test('공고 제목(keepTitle): 짧은 끝은 keepAll과 같고, 어절 하나·빈 글·여러 줄 글도 같다', () {
+      for (final s in ['솔데스크 SAP 온라인 교육 영상 홍보 공모전', '서울국제AI광고영상제(SIADAFF)', '', '첫 줄입니다\n둘째 줄']) {
+        expect(keepTitle(s), keepAll(s), reason: s);
+      }
+      expect(
+        keepTitle('짧은 줄\n제1회 서울국제AI광고영상제 (SIADAFF)').split('\n'),
+        [keepAll('짧은 줄'), isNot(contains(nbsp))],
+      );
+    });
+
+    testWidgets('제목 글자(15·1.3배)에서 긴 끝 묶음이 어절 중간에서 갈리지 않는다', (tester) async {
+      // 테스트 글꼴은 모든 글자가 1em이라, 어절(최대 11자)은 들어가고 끝 묶음(21자)은 넘치는 폭에서 본다.
+      const title = '제1회 서울국제AI광고영상제 (SIADAFF)';
+      final text = keepTitle(title);
+      for (final width in [240.0, 260.0, 300.0, 380.0]) {
+        final painter = TextPainter(
+          text: TextSpan(text: text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          textDirection: TextDirection.ltr,
+          textScaler: const TextScaler.linear(1.3),
+        )..layout(maxWidth: width);
+        final lines = painter.computeLineMetrics();
+        expect(lines.length, greaterThan(1), reason: '$width');
+        for (final line in lines.skip(1)) {
+          final start = painter.getPositionForOffset(Offset(0, line.baseline - line.ascent + 1)).offset;
+          expect(text[start - 1], ' ', reason: '$width: ${plain(text.substring(start))}');
+        }
+        painter.dispose();
+      }
+    });
+
     testWidgets('좁은 폭에서 어절 중간에서 줄이 바뀌지 않는다', (tester) async {
       const s = '자동으로 비교하지 못한 조건이 있습니다. 원문에서 확인해 주세요.';
       for (final width in [200.0, 260.0, 340.0, 420.0]) {

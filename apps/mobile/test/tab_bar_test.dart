@@ -191,7 +191,8 @@ void main() {
     }
 
     await toEnd(HomeScreen);
-    expect(tester.getBottomLeft(find.byType(NoticeCard).last).dy, lessThanOrEqualTo(barTop));
+    final homeLast = find.descendant(of: find.byType(HomeScreen), matching: find.byType(GwCard)).last;
+    expect(tester.getBottomLeft(homeLast).dy, lessThanOrEqualTo(barTop));
 
     await tester.tap(find.text('공고'));
     await tester.pumpAndSettle();

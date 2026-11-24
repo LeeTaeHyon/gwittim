@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
+from urllib.parse import quote, urljoin, urlsplit
 
 _VIEW = re.compile(r"fn_view\('(?P<mst>BM\d+)'\s*,\s*'(?P<data>BD\d+)'")
 _DOWN = re.compile(r"fn_egov_downFile\('BM\d+'\s*,\s*'BD\d+'\s*,\s*'(?P<file>BF\d+)'\)")
@@ -36,6 +37,7 @@ class Detail:
     posted_date: str | None
     attachments: list[str] = field(default_factory=list)
     body_text: str = ""
+    poster_url: str | None = None
     body_image_count: int = 0
     body_image_text_count: int = 0  # alt가 ALT_READ_CHARS 이상인 이미지 수
 
@@ -80,11 +82,30 @@ class ListParser(HTMLParser):
             self._cell.append(data)
 
 
+def poster_url(src: str, page_url: str) -> str | None:
+    try:
+        url = urljoin(page_url, src.strip())
+        parsed = urlsplit(url)
+    except ValueError:
+        return None
+    if (parsed.scheme == "https" and parsed.netloc.lower() in {"mjcms.mjc.ac.kr", "www.mjc.ac.kr"}
+            and "/crosseditor/binary/images/" in parsed.path
+            and parsed.path.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp"))):
+        normalized = parsed._replace(netloc=parsed.netloc.lower()).geturl()
+        if re.search(r"%(?![0-9A-Fa-f]{2})", normalized):
+            return None
+        return quote(normalized, safe=":/?#[]@!$&'()*+,;=%")
+    return None
+
+
 class DetailParser(HTMLParser):
     """view.do: div.board_view의 제목·작성자·날짜·첨부와 div#divMemo 본문."""
 
-    def __init__(self) -> None:
+    def __init__(self, page_url: str) -> None:
         super().__init__(convert_charrefs=True)
+        self.page_url = page_url
+        self.poster: str | None = None
+        self.has_body = False
         self.title_parts: list[str] = []
         self.fields: dict[str, str] = {}
         self.attachments: list[str] = []
@@ -113,11 +134,14 @@ class DetailParser(HTMLParser):
                 self.body_parts.append("\t")
             elif tag == "img":
                 self.images += 1
+                if self.poster is None:
+                    self.poster = poster_url(a.get("src") or "", self.page_url)
                 alt = _clean(a.get("alt") or "")
                 if len(alt) >= ALT_MIN_CHARS:
                     self.alts.append(alt)
             return
         if tag == "div" and a.get("id") == "divMemo":
+            self.has_body = True
             self._memo_depth = 1
         elif tag == "h2" and "tit" in (a.get("class") or "").split():
             self._in_title = True
@@ -195,9 +219,11 @@ def alt_lines(alt: str) -> list[str]:
     return lines
 
 
-def parse_detail(html: str) -> Detail:
-    p = DetailParser()
+def parse_detail(html: str, page_url: str = "") -> Detail:
+    p = DetailParser(page_url)
     p.feed(html)
+    if page_url and not p.has_body:
+        raise ValueError("공고 본문을 찾을 수 없음")
     lines = [_clean(line) for line in "".join(p.body_parts).splitlines()]
     for alt in p.alts:
         lines += [ALT_HEADER, *alt_lines(alt)]
@@ -210,6 +236,7 @@ def parse_detail(html: str) -> Detail:
         posted_date=date if date and _DATE.match(date) else None,
         attachments=p.attachments,
         body_text=body,
+        poster_url=p.poster,
         body_image_count=p.images,
         body_image_text_count=sum(len(alt) >= ALT_READ_CHARS for alt in p.alts),
     )

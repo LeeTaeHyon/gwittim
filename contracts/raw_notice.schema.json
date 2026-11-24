@@ -31,13 +31,14 @@
     },
     "collected_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" },
     "content_hash": {
-      "description": "sha256:<hex>. title, body_text, published, source_fields, attachments[].file_name의 정규화 JSON으로 계산. collected_at 등 매번 바뀌는 값 제외.",
+      "description": "sha256:<hex>. title, body_text, published, source_fields(poster_url 제외), attachments[].file_name의 정규화 JSON으로 계산. collected_at 등 매번 바뀌는 값 제외.",
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
     "source_fields": {
       "description": "출처가 제공한 원래 필드. 조회수처럼 매번 바뀌는 값은 넣지 않음.",
-      "type": "object"
+      "type": "object",
+      "properties": { "poster_url": { "$ref": "notice.schema.json#/properties/poster_url" } }
     },
     "attachments": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/attachment" } }
   },
