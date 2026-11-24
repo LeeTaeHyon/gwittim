@@ -53,8 +53,10 @@ class _AuthGateState extends State<AuthGate> {
   bool _deleted = false;
 
   Future<bool> _deleteAccount(NoticeRepository repository) async {
+    // 게스트 끝내기(D-054)는 '탈퇴 완료' 팝업을 띄우지 않는다. 계정을 지우면 isGuest가 바뀌므로 먼저 읽어 둔다.
+    final guest = widget.auth.isGuest;
     final done = await widget.auth.deleteAccount(repository.deleteAccountData);
-    if (done && mounted) setState(() => _deleted = true);
+    if (done && !guest && mounted) setState(() => _deleted = true);
     return done;
   }
 
@@ -86,6 +88,7 @@ class _AuthGateState extends State<AuthGate> {
             openUrl: widget.openUrl,
             onSignOut: widget.auth.signOut,
             onDeleteAccount: () => _deleteAccount(repository),
+            guest: widget.auth.isGuest,
             briefingStore: widget.briefingStore,
             themeController: _theme,
           );
@@ -133,7 +136,7 @@ class _SignInScreenState extends State<SignInScreen> {
   final _scroll = ScrollController();
   final _demoKey = GlobalKey();
 
-  /// 화면에 다 들어가지 않을 때 줄이는 단계: 0 그대로, 1 여백을 줄임, 2 소개 장면도 줄임(최대 0.75배).
+  /// 화면에 다 들어가지 않을 때 줄이는 단계: 0 그대로, 1 여백을 줄임, 2 소개 장면도 줄임(최대 0.65배).
   /// 그래도 넘치는 아주 작은 화면·큰 글자에서만 스크롤한다.
   int _fit = 0;
   double _demoScale = 1;
@@ -205,9 +208,23 @@ class _SignInScreenState extends State<SignInScreen> {
       setState(() {
         _fit = 2;
         _demoHeight = natural;
-        _demoScale = ((natural - over) / natural).clamp(0.75, 1.0);
+        _demoScale = ((natural - over) / natural).clamp(0.65, 1.0);
       });
     });
+  }
+
+  /// 로그인 없이 둘러보기 (D-054). 실패하면 Google 로그인 실패와 같은 방식으로 안내한다.
+  Future<void> _signInAsGuest() async {
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await widget.auth.signInAsGuest();
+    } catch (_) {
+      // 상세 오류는 화면에 보여주지 않는다 (SPEC §10)
+      messenger.showSnackBar(SnackBar(content: Text(keepAll('로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.'))));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _signIn() async {
@@ -269,9 +286,9 @@ class _SignInScreenState extends State<SignInScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                SizedBox(height: _fit == 0 ? 60 : 20),
+                                SizedBox(height: _fit == 0 ? 60 : 12),
                                 const Align(alignment: Alignment.centerLeft, child: GwLogo(height: 56)),
-                                const SizedBox(height: 28),
+                                SizedBox(height: _fit == 0 ? 28 : 16),
                                 Semantics(
                                   header: true,
                                   child: Text(
@@ -287,17 +304,17 @@ class _SignInScreenState extends State<SignInScreen> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 14),
+                                SizedBox(height: _fit == 0 ? 14 : 8),
                                 Text(
                                   // 추천은 관련도 순이라 '마감 순'이라고 쓰지 않는다.
                                   keepAll('학교 공지 중 나에게 맞는 공고를 골라 지원 조건·마감과 함께 정리합니다.'),
                                   style: TextStyle(fontSize: 16, height: 1.6, color: c.loginSub),
                                 ),
-                                SizedBox(height: _fit == 0 ? 36 : 20),
+                                SizedBox(height: _fit == 0 ? 36 : 16),
                                 // 앱이 하는 일을 보여 주는 장면: 소식 말풍선 → 지원 전 체크리스트 → 관심 분야로 바뀌는 추천 순서
                                 demo,
                                 const Spacer(),
-                                SizedBox(height: _fit == 0 ? 36 : 20),
+                                SizedBox(height: _fit == 0 ? 36 : 12),
                               ],
                             ),
                           ),
@@ -307,7 +324,24 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                 ),
                 GoogleSignInButton(label: 'Google 계정으로 시작하기', onPressed: _busy ? null : _signIn),
-                const SizedBox(height: 16),
+                const SizedBox(height: 2),
+                // 게스트(익명 계정, D-054): 크레딧 2개, 30일 뒤 삭제
+                TextButton(
+                  onPressed: _busy ? null : _signInAsGuest,
+                  style: TextButton.styleFrom(
+                    foregroundColor: c.loginInk,
+                    minimumSize: const Size.fromHeight(40),
+                    padding: EdgeInsets.zero,
+                    textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  child: const Text('로그인 없이 둘러보기'),
+                ),
+                Text(
+                  '게스트 정보는 30일 뒤 삭제됩니다.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12.5, height: 1.3, color: c.loginSub),
+                ),
+                const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

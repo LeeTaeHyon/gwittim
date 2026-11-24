@@ -289,7 +289,7 @@ def build_search_messages(profile: dict, body: dict, today: date) -> tuple[str, 
     return EXTERNAL_PROMPT, json.dumps(material, ensure_ascii=False, indent=1)
 
 
-def request_external_search(uid: str, body: dict, deps: Deps) -> dict:
+def request_external_search(uid: str, body: dict, deps: Deps, guest: bool = False) -> dict:
     from .service import AgentError, _add_spend, monthly_cap_krw, utc_z  # 순환 import 피함
 
     if not isinstance(body, dict) or schema_errors("external_search_request", body):
@@ -306,7 +306,7 @@ def request_external_search(uid: str, body: dict, deps: Deps) -> dict:
     request_id = body["request_id"]
 
     def do_reserve(state):
-        result = reserve(state or signup(now), EXTERNAL_SEARCH, request_id, now)
+        result = reserve(state or signup(now, guest), EXTERNAL_SEARCH, request_id, now, guest)
         return result.state, result.status
 
     status = deps.credits.update(uid, do_reserve)
@@ -319,7 +319,7 @@ def request_external_search(uid: str, body: dict, deps: Deps) -> dict:
 
     def finish(succeeded: bool):
         def fn(state):
-            result = settle(state or signup(now), request_id, succeeded, now, ref="external_search")
+            result = settle(state or signup(now, guest), request_id, succeeded, now, ref="external_search", guest=guest)
             return result.state, result.status
 
         return deps.credits.update(uid, fn)

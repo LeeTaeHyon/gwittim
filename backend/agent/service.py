@@ -74,7 +74,7 @@ def _live(doc: dict | None, now: datetime) -> dict | None:
     return doc if doc is not None and not is_expired(doc["expires_at"], now) else None
 
 
-def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
+def request_analysis(uid: str, body: dict, deps: Deps, guest: bool = False) -> dict:
     if not isinstance(body, dict) or schema_errors("analysis_request", body):
         raise AgentError("invalid_argument")
     profile = deps.profiles.get(uid)
@@ -96,7 +96,7 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
         raise AgentError("unavailable")
 
     def do_reserve(state):
-        result = reserve(state or signup(now), DETAIL_ANALYSIS, request_id, now)
+        result = reserve(state or signup(now, guest), DETAIL_ANALYSIS, request_id, now, guest)
         return result.state, result.status
 
     status = deps.credits.update(uid, do_reserve)
@@ -111,7 +111,7 @@ def request_analysis(uid: str, body: dict, deps: Deps) -> dict:
 
     def finish(succeeded: bool):
         def fn(state):
-            result = settle(state or signup(now), request_id, succeeded, now, ref=notice_id)
+            result = settle(state or signup(now, guest), request_id, succeeded, now, ref=notice_id, guest=guest)
             return result.state, result.status
 
         return deps.credits.update(uid, fn)
@@ -168,8 +168,8 @@ def get_analysis(uid: str, notice_id: str, deps: Deps) -> dict:
     return _response(doc, True)
 
 
-def _credit_view(current, now: datetime) -> dict:
-    refill = next_refill_at(current, now)
+def _credit_view(current, now: datetime, guest: bool = False) -> dict:
+    refill = next_refill_at(current, now, guest)
     return {
         "balance": current.balance,
         "next_refill_at": utc_z(refill) if refill else None,
@@ -181,12 +181,12 @@ def _credit_view(current, now: datetime) -> dict:
     }
 
 
-def get_credits(uid: str, deps: Deps) -> dict:
+def get_credits(uid: str, deps: Deps, guest: bool = False) -> dict:
     now = deps.clock.now()
 
     def fn(state):
-        current = current_state(state or signup(now), now)
-        return current, _credit_view(current, now)
+        current = current_state(state or signup(now, guest), now, guest)
+        return current, _credit_view(current, now, guest)
 
     return deps.credits.update(uid, fn)
 
@@ -200,13 +200,13 @@ def demo_credits_enabled() -> bool:
     return os.environ.get(DEMO_ENV, "").strip() == "1"
 
 
-def demo_refill_credits(uid: str, deps: Deps) -> dict:
+def demo_refill_credits(uid: str, deps: Deps, guest: bool = False) -> dict:
     """시연용: 잔액을 5까지 채우고 크레딧 페이지와 같은 모양으로 돌려준다."""
     now = deps.clock.now()
 
     def fn(state):
-        current = demo_refill(state or signup(now), now)
-        return current, _credit_view(current, now)
+        current = demo_refill(state or signup(now, guest), now, guest)
+        return current, _credit_view(current, now, guest)
 
     return deps.credits.update(uid, fn)
 

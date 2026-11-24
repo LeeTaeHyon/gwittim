@@ -89,6 +89,7 @@ gcloud run services update-traffic gwittim-api --project=gwittim-dev --region=as
 
 - 수집기·분석 코드가 바뀐 PR을 병합하면 `Gwittim-batch`를 main으로 맞춘다(`git fetch` → `git checkout --detach origin/main` → `uv sync --frozen`)
 - 다음 배치의 완료 알림과 `data/local/batch.log`로 확인
+- 게스트 30일 정리(D-054, 예약 없음): 팀장 PC에서 `gcloud auth application-default login` 뒤 `uv run python -m tools.cleanup_guests`(건조 실행, 대상 수만) → 확인 후 `--apply`. 출력은 건수·실패 수만
 
 ## 8. 비용 확인
 

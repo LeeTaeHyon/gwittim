@@ -2,6 +2,7 @@
 
 uv run uvicorn backend.api.local:app --port 8000
 curl -H "Authorization: Bearer dev-token" localhost:8000/v1/recommendations
+게스트(익명 계정, D-054)로 시험하려면 토큰 guest-token을 쓴다(크레딧 2개·매일 충전 없음).
 """
 import json
 from pathlib import Path
@@ -14,7 +15,7 @@ _notices = {n["notice_id"]: n for n in (json.loads(p.read_text(encoding="utf-8")
 
 app = create_app(
     Deps(
-        verifier=FakeTokenVerifier({"dev-token": "dev-user"}),
+        verifier=FakeTokenVerifier({"dev-token": "dev-user"}, guest_tokens={"guest-token": "guest-user"}),
         notices=InMemoryNotices(_notices),
         profiles=InMemoryProfiles(),
         saved=InMemorySaved(),

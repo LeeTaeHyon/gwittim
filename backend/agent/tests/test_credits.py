@@ -7,8 +7,10 @@ from backend.agent.credits import (
     KST,
     SIGNUP,
     HOLD_TIMEOUT,
+    LedgerEntry,
     apply_refill,
     current_state,
+    demo_refill,
     next_refill_at,
     reserve,
     settle,
@@ -267,3 +269,32 @@ def test_prune_keeps_recent_daily_entries():
     s = current_state(s, T0 + timedelta(days=100))
     # 충전 5번(5일째에 가득) 내역도 90일이 지나 지워지고, 잔액은 그대로
     assert s.balance == 5 and s.entries == ()
+
+
+# ---------- 게스트 (D-054) ----------
+
+def test_guest_signup_gift_is_two():
+    s = signup(T0, guest=True)
+    assert s.balance == 2
+    assert s.entries == (LedgerEntry(SIGNUP, 2, T0),)
+
+
+def test_guest_gets_no_refill_and_no_next_refill():
+    s = signup(T0, guest=True)
+    later = T0 + timedelta(days=5)
+    assert current_state(s, later, guest=True).balance == 2
+    assert next_refill_at(s, later, guest=True) is None
+    r = reserve(s, DETAIL_ANALYSIS, "r1", later, guest=True)
+    assert r.status == "held" and r.state.balance == 1
+    c = settle(r.state, "r1", True, later, guest=True)
+    assert c.status == "charged" and c.state.balance == 1
+    assert [e.kind for e in c.state.entries] == [SIGNUP, DETAIL_ANALYSIS]
+
+
+def test_guest_refund_and_demo_refill():
+    s = signup(T0, guest=True)
+    r = reserve(s, EXTERNAL_SEARCH, "e1", T0, guest=True)
+    assert r.state.balance == 0
+    assert settle(r.state, "e1", False, T0, guest=True).state.balance == 2
+    assert reserve(r.state, DETAIL_ANALYSIS, "x", T0, guest=True).status == "insufficient"
+    assert demo_refill(s, T0 + timedelta(days=2), guest=True).balance == 5
