@@ -83,7 +83,9 @@ Map<DateTime, List<CalendarItem>> calendarItems(
         caseItems[n.noticeId] = CalendarItem(notice: n, saved: true, view: view, dim: state == CaseState.applied);
       }
       final start = kase?.applicationStart;
-      if (start != null && state != CaseState.applied) {
+      // 신청 시작 줄·마름모는 시작일이 오늘이거나 그 뒤일 때만(지난 시작일은 보이지 않음)
+      final today = DateTime(now.year, now.month, now.day);
+      if (start != null && state != CaseState.applied && !start.day.isBefore(today)) {
         starts.add(CalendarItem(notice: n, saved: true, view: view, startAt: start));
       }
     }

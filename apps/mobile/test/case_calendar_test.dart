@@ -55,6 +55,21 @@ void main() {
     expect([for (final i in day) (i.notice.noticeId, i.start)], [('prep', true)]);
   });
 
+  test('신청 시작 줄은 시작일이 오늘이거나 그 뒤일 때만(지난 시작일은 없음)', () {
+    final past = summaryOf('past', deadline: dateOnly('2026-11-30'), title: '지난 시작');
+    final todayStart = summaryOf('todayStart', deadline: dateOnly('2026-11-30'), title: '오늘 시작');
+    final items = calendarItems(listOf([]), [savedOf(past), savedOf(todayStart), savedOf(prep)], cases: {
+      'past': caseOf('past', CaseState.saved, start: seoul('2026-11-23', '09:00')),
+      'todayStart': caseOf('todayStart', CaseState.preparing, start: dateOnly('2026-11-24')),
+      'prep': caseOf('prep', CaseState.preparing, start: seoul('2026-11-25', '09:00')),
+    }, now: today);
+    expect(items[DateTime(2026, 11, 23)], isNull); // 어제 시작은 줄·마름모 없음
+    expect([for (final i in items[DateTime(2026, 11, 24)]!) (i.notice.noticeId, i.start)], [('todayStart', true)]);
+    expect([for (final i in items[DateTime(2026, 11, 25)]!) (i.notice.noticeId, i.start)], [('prep', true)]);
+    // 지난 시작 공고도 마감 줄은 그대로
+    expect(items[DateTime(2026, 11, 30)]!.map((i) => i.notice.noticeId), containsAll(['past', 'todayStart']));
+  });
+
   test('지원 건 기록을 쓰지 않으면(저장소 없음) 예전처럼', () {
     final items = calendarItems(listOf([other]), [savedOf(prep), savedOf(applied)]);
     expect(items[DateTime(2026, 11, 27)]!.length, 3);
