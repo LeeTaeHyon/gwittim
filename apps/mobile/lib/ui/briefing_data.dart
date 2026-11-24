@@ -156,13 +156,14 @@ Briefing buildBriefing(
       if ((daysLeft(s.notice, today) ?? 99) <= savedSoonDays && keep(s)) s,
   ]..sort((a, b) => a.notice.applicationDeadline!.date.compareTo(b.notice.applicationDeadline!.date));
   final savedSoon = cases == null ? soonAll : soonAll.take(maxCaseCards).toList();
+  final soonIds = {for (final s in savedSoon) s.notice.noticeId};
+  // 오늘 신청을 시작하면서 곧 마감인 지원 건은 '저장한 공고' 카드에만(신청 시작 줄을 더함). 신청 시작 카드에서는 뺀다.
   final startToday = cases == null
       ? const <SavedEntry>[]
       : [
           for (final s in saved)
-            if (startsToday(s, cases[s.notice.noticeId], today) && keep(s)) s,
+            if (startsToday(s, cases[s.notice.noticeId], today) && keep(s) && !soonIds.contains(s.notice.noticeId)) s,
         ].take(maxCaseCards - savedSoon.length).toList();
-  final soonIds = {for (final s in savedSoon) s.notice.noticeId};
 
   RecommendationEntry? urgent;
   int? nearest;

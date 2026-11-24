@@ -138,6 +138,49 @@ void main() {
       expect(b.isEmpty, isFalse);
     });
 
+    group('오늘 신청 시작이면서 곧 마감인 지원 건', () {
+      final both = summaryOf('both', deadline: dateOnly('2026-11-25'), title: '시작하고 곧 마감');
+      final bothCase = caseOf('both', CaseState.saved, start: seoul('2026-11-24', '09:00'));
+
+      test('저장한 공고 카드에만 들어가고 신청 시작 카드에서는 빠짐', () {
+        final b = buildBriefing(listOf([]), [savedOf(both), savedOf(startsNow)], today, cases: {
+          'both': bothCase,
+          'start': caseOf('start', CaseState.saved, start: seoul('2026-11-24', '09:00')),
+        });
+        expect(b.savedSoon.map((s) => s.notice.noticeId), ['both']);
+        expect(b.startToday.map((s) => s.notice.noticeId), ['start']);
+        // 소식에 같은 공고가 두 번 나오지 않음
+        expect(distinctNoticeCount(b), b.savedSoon.length + b.startToday.length);
+      });
+
+      test('하루 최대 3개: 겹친 건은 한 번만 세고 남은 자리를 신청 시작이 씀', () {
+        final saved = [
+          savedOf(both),
+          savedOf(summaryOf('s1', deadline: dateOnly('2026-11-25'))),
+          savedOf(startsNow),
+          savedOf(summaryOf('s2', deadline: dateOnly('2026-12-20'))),
+        ];
+        final b = buildBriefing(listOf([]), saved, today, cases: {
+          'both': bothCase,
+          's1': caseOf('s1', CaseState.saved),
+          'start': caseOf('start', CaseState.saved, start: seoul('2026-11-24', '09:00')),
+          's2': caseOf('s2', CaseState.saved, start: seoul('2026-11-24', '10:00')),
+        });
+        expect(b.savedSoon.map((s) => s.notice.noticeId), ['both', 's1']);
+        expect(b.startToday.length, 1); // 3 - 2
+        expect(b.savedSoon.length + b.startToday.length, maxCaseCards);
+      });
+
+      test('말풍선 신청 시작 건수는 그대로 1, 브리핑은 비어 있지 않음', () {
+        final home = buildHomeSections(listOf([]), [savedOf(both)], today, cases: {'both': bothCase});
+        final b = buildBriefing(listOf([]), [savedOf(both)], today, cases: {'both': bothCase});
+        expect(home.nudge!.startToday, 1);
+        expect(b.startToday, isEmpty);
+        expect(b.savedSoon.single.notice.noticeId, 'both');
+        expect(b.isEmpty, isFalse);
+      });
+    });
+
     test('지원 건 기록을 쓰지 않으면 예전과 같음', () {
       final b = buildBriefing(listOf([]), saved, today);
       expect(b.savedSoon.map((s) => s.notice.noticeId), ['due', 'appliedDue']);
@@ -168,5 +211,31 @@ void main() {
     await tester.pumpAndSettle();
     expect(findText('오늘 09:00 신청 시작'), findsOneWidget);
     expect(store.emphasizedOn('start', today), isTrue);
+  });
+
+  testWidgets('브리핑: 오늘 시작하며 곧 마감인 건은 저장한 공고 카드 하나에 신청 시작 줄을 더해 보임', (tester) async {
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final both = summaryOf('both', deadline: dateOnly('2026-11-25'), title: '시작하고 곧 마감');
+    final store = ApplicationCaseStore(
+      storage: MemoryCaseStorage({'both': caseOf('both', CaseState.saved, start: seoul('2026-11-24', '09:00'))}),
+      now: () => today,
+    );
+    await tester.pumpWidget(
+      GwittimApp(
+        repository: FakeCaseRepository(saved: [savedOf(both)]),
+        openUrl: (_) async => true,
+        today: today,
+        briefingStore: MemoryBriefingStore(),
+        caseStore: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('브리핑 닫기'), findsOneWidget);
+    expect(findText('저장한 공고'), findsOneWidget); // 카드 머리
+    expect(findText('오늘 09:00 신청 시작'), findsOneWidget); // 저장한 공고 카드 안 한 줄
+    expect(findText('시작하고 곧 마감'), findsOneWidget); // 같은 공고가 카드 두 장에 나오지 않음
+    expect(findText('신청 시작'), findsNothing); // 신청 시작 카드 머리 없음
   });
 }

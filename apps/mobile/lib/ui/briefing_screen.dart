@@ -609,6 +609,14 @@ class _SavedSoonBubble extends StatelessWidget {
           Text(keepTitle(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
           if (view != null) ...[
             Text(keepAll(view.remaining), style: _title(c).copyWith(color: c.urgent)),
+            // 오늘 신청을 시작하는 건은 신청 시작 카드 대신 여기에 한 줄 (D-052)
+            if (startsToday(entries.first, cases?[n.noticeId], today)) ...[
+              const SizedBox(height: 6),
+              Text(
+                _startTodayText(cases?[n.noticeId]),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.accent),
+              ),
+            ],
             if (view.next case final next?) ...[
               const SizedBox(height: 6),
               Text(keepAll('${view.stateLabel} · ${next.text}'), style: TextStyle(fontSize: 14, color: c.sub)),
@@ -623,7 +631,16 @@ class _SavedSoonBubble extends StatelessWidget {
           ],
           if (entries.length > 1) ...[
             const SizedBox(height: 4),
-            Text('저장한 공고 ${entries.length - 1}건도 이틀 안에 마감', style: captionStyle(context)),
+            Text(
+              keepAll(
+                '저장한 공고 ${entries.length - 1}건도 이틀 안에 마감'
+                '${switch (_alsoStarting(entries.skip(1), cases, today)) {
+                  0 => '',
+                  final k => '(그중 $k건 오늘 신청 시작)',
+                }}',
+              ),
+              style: captionStyle(context),
+            ),
           ],
           const SizedBox(height: 16),
           SoftButton(label: '공고 보기', onPressed: onOpen),
@@ -632,6 +649,16 @@ class _SavedSoonBubble extends StatelessWidget {
     );
   }
 }
+
+/// '오늘 09:00 신청 시작'(시각이 없으면 '오늘 신청 시작'). 저장한 공고 카드와 신청 시작 카드가 같은 문구를 쓴다.
+String _startTodayText(ApplicationCase? kase) {
+  final start = kase?.applicationStart;
+  return start != null && start.hasTime ? '오늘 ${start.time} 신청 시작' : '오늘 신청 시작';
+}
+
+/// [entries] 중 오늘 신청을 시작하는 지원 건 수.
+int _alsoStarting(Iterable<SavedEntry> entries, ApplicationCaseStore? cases, DateTime today) =>
+    cases == null ? 0 : entries.where((e) => startsToday(e, cases[e.notice.noticeId], today)).length;
 
 /// 신청 시작 소식 (D-052): 저장한 공고 중 오늘 신청이 시작되는 것.
 class _StartBubble extends StatelessWidget {
@@ -646,7 +673,6 @@ class _StartBubble extends StatelessWidget {
     final c = context.gw;
     final n = entries.first.notice;
     final kase = ApplicationCaseScope.maybeOf(context)?[n.noticeId];
-    final start = kase?.applicationStart;
     final view = caseView(n, kase, now: today);
     return GwCard(
       bubble: true,
@@ -657,10 +683,7 @@ class _StartBubble extends StatelessWidget {
           Text('신청 시작', style: _kicker(c)),
           const SizedBox(height: 6),
           Text(keepTitle(n.title), style: _title(c), maxLines: 3, overflow: TextOverflow.ellipsis),
-          Text(
-            start != null && start.hasTime ? '오늘 ${start.time} 신청 시작' : '오늘 신청 시작',
-            style: _title(c).copyWith(color: c.accent),
-          ),
+          Text(_startTodayText(kase), style: _title(c).copyWith(color: c.accent)),
           const SizedBox(height: 6),
           Text(keepAll(view.remaining), style: TextStyle(fontSize: 14, color: c.sub)),
           if (entries.length > 1) ...[
