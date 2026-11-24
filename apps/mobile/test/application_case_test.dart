@@ -254,6 +254,7 @@ void main() {
         final storage = MemoryCaseStorage({
           'moved': c('moved', CaseState.saved),
           'undone': c('undone', CaseState.applied),
+          'prep': c('prep', CaseState.saved),
         });
         final store = ApplicationCaseStore(storage: storage, now: () => now);
         await store.recordSaved('new');
@@ -262,10 +263,13 @@ void main() {
         await store.recordSaved('undone');
         await store.markSkipped('undone');
         await store.undo('undone');
+        await store.recordSaved('prep');
+        await store.startPreparing('prep');
         await store.load();
         expect(store['new']!.state, CaseState.saved);
         expect(store['moved']!.state, CaseState.applied);
         expect(store['undone']!.state, CaseState.saved);
+        expect(store['prep']!.state, CaseState.preparing);
       });
 
       test('규칙 2: 이번 실행에 저장 취소한 기록은 지운 채', () async {
@@ -281,12 +285,14 @@ void main() {
           'judged': c('judged', CaseState.preparing, eligibility: 'met'),
         });
         final store = ApplicationCaseStore(storage: storage, now: () => now);
-        await store.adopt(['auto', 'judged']); // 읽기 전 저장 목록에서 자동으로 만든 기록
+        await store.adopt(['auto', 'judged', 'fresh']); // 읽기 전 저장 목록에서 자동으로 만든 기록
         await store.updateEligibility(recs({'judged': 'needs_check'})); // 읽기 전 판정 갱신
         await store.load();
         expect(store['auto']!.state, CaseState.preparing);
         expect(store['judged']!.state, CaseState.preparing);
         expect(store['judged']!.eligibilityStatus, 'met');
+        // 기기에 없던 자동 기록은 그대로 남음
+        expect(store['fresh']!.state, CaseState.saved);
       });
 
       test('규칙 4: 이번 실행에 모두 지웠으면(로그아웃·탈퇴) 기기 기록을 되살리지 않음', () async {
@@ -294,6 +300,17 @@ void main() {
         await store.clearAll();
         await store.load();
         expect(store.all, isEmpty);
+      });
+
+      test('규칙 4: 모두 지운 뒤 다시 저장한 건은 남고, 기기 기록은 되살리지 않음', () async {
+        final storage = MemoryCaseStorage({'a': c('a', CaseState.saved)});
+        final store = ApplicationCaseStore(storage: storage, now: () => now);
+        await store.clearAll();
+        await store.recordSaved('b');
+        await store.load();
+        await store.flushed;
+        expect(store.all.map((c) => c.noticeId), ['b']);
+        expect(storage.saved.keys, ['b']);
       });
 
       test('쓰기는 읽기가 끝난 뒤 합친 상태로(기기에 있던 기록을 덮지 않음)', () async {
