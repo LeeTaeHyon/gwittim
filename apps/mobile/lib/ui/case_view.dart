@@ -56,15 +56,11 @@ const _stateLabels = {
   CaseState.removed: '학교 공지에서 삭제됨',
 };
 
-/// [applicationStart]·[applyUrl]은 공고 상세(`Notice`)에만 있다. 목록 응답(`NoticeSummary`)에는 없어
-/// 넘기지 않으면 신청 시작 항목이 없고 신청 경로는 원문(`sourceUrl`)으로 간다(보고: 정하지 못한 것).
-CaseView caseView(
-  NoticeSummary n,
-  ApplicationCase? c, {
-  required DateTime now,
-  DateInfo? applicationStart,
-  String? applyUrl,
-}) {
+/// 신청 시작·신청 사이트는 목록 요약에 없어 지원 건에 복사해 둔 값([ApplicationCase.applicationStart]·
+/// [ApplicationCase.applyUrl])만 읽는다. 아직 못 받았으면 신청 시작 항목이 없고 신청 경로는 원문으로 간다.
+CaseView caseView(NoticeSummary n, ApplicationCase? c, {required DateTime now}) {
+  final applicationStart = c?.applicationStart;
+  final applyUrl = c?.applyUrl;
   final state = c == null ? null : effectiveState(c, n, now);
   final ended = state != null && isEnded(state);
   final remaining = remainingText(n, now);

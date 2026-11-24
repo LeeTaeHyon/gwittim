@@ -44,6 +44,9 @@ class ApplicationCase {
   final String? emphasizedOn;     // 마지막으로 강조(말풍선 건수·브리핑 카드)에 들어간 날 'YYYY-MM-DD'
   final String? eligibilityStatus; // 서버 판정 met / needs_check / not_met. 모르면 null(팀장 결정 2026-11-24)
   final DateTime? eligibilityAt;   // 그 판정을 받은 시각(기기 시각)
+  final DateInfo? applicationStart; // 공고 상세에서 복사(목록 요약에는 없음, 팀장 결정 2026-11-24)
+  final String? applyUrl;           // 공고 상세에서 복사
+  final int? detailVersion;         // 위 두 값을 받은 notice_version. null이면 아직 못 받음
 }
 ```
 
@@ -60,7 +63,8 @@ class ApplicationCase {
 | missed | 마감이 뒤로 바뀌어 아직 안 지남 | previous | 공고 변경 |
 | saved·preparing·missed | lifecycle closed | closed | 공고 변경 |
 | closed | lifecycle open | previous | 공고 변경 |
-| 모든 상태 | lifecycle removed 또는 공고가 저장 목록 응답에 없음 | removed | 공고 변경 |
+| 모든 상태 | lifecycle removed | removed | 공고 변경 |
+| 모든 상태 | 공고가 저장 목록 응답에 없음(다른 기기에서 저장 취소, 공고 문서가 사라짐) | 기록 지움(이번 실행에 이 기기로 저장한 공고는 빼고) | 공고 변경 |
 | 모든 상태 | 저장 취소·'목록에서 지우기' | 기록 지움 | 사용자 |
 
 - 날짜·공고 변경 전이는 저장하지 않고 **읽을 때 계산**한다(`effectiveState(case, notice, now)`). 기기에 남기는 것은 사용자 전이와 `previous`·`seenDeadline`·`emphasizedOn`뿐. 그래야 마감이 늦춰지면 저절로 되살아남
@@ -69,8 +73,13 @@ class ApplicationCase {
 **판정 저장(팀장 결정 2026-11-24)**
 - 저장할 때 그 화면에 추천 정보(`Recommendation`)가 있으면 그 `eligibilityStatus`와 받은 시각을, 없으면 null로 기록
 - 추천 목록(`listRecommendations`)을 받을 때마다 저장소 한 곳에서, 목록에 있는 지원 건의 판정 값과 시각을 갱신(화면마다 따로 고치지 않음)
-- 프로필을 저장(바꿈)하면 모든 지원 건의 판정 값을 null로 지우고, 그 뒤 받는 새 추천 목록으로 다시 채움
+- 학교·학과·학년·재학 상태가 바뀌면 모든 지원 건의 판정 값을 null로 지우고, 그 뒤 받는 새 추천 목록으로 다시 채움(AI 전송 동의·관심 분야만 바뀐 저장은 그대로)
 - 추천 목록에 없는 공고는 값이 그대로(처음부터 없었으면 null)
+
+**신청 시작·신청 사이트 복사(팀장 결정 2026-11-24)**
+- 목록 요약(`notice_summary`)에는 두 값이 없어, 지원 건에 상세 값을 복사해 두고 모든 화면은 지원 건의 값만 읽음. 계약은 건드리지 않음
+- 받는 때: 저장 직후(뒤에서, 화면을 막지 않음), 리포트가 상세를 받았을 때, 저장 목록·추천 목록의 요약 notice_version이 기록된 버전과 다를 때(기록이 없는 건 포함)
+- 실패하면 버전을 적지 않고 두어 다음 목록 갱신 때 다시 시도. 못 받은 동안은 신청 시작 항목이 없고 신청 경로는 원문으로
 
 **저장**
 - shared_preferences 키 `application_cases`: `{noticeId: {...}}` JSON 하나. 읽기·쓰기 실패는 앱을 멈추지 않고 빈 상태로(기존 `major_picks`와 같은 방식)
@@ -83,7 +92,7 @@ class ApplicationCase {
 
 ## 3. 단계 2: 문구 함수
 
-`CaseView caseView(NoticeSummary n, ApplicationCase? c, {required DateTime now})` 하나만 만들고, 모든 화면은 이 결과 문자열을 그대로 쓴다. 화면에서 남은 날·상태 문구를 따로 만들지 않는다. 추천 정보(`Recommendation`)는 넘기지 않고, 판정은 지원 건에 저장된 값만 본다(§2 판정 저장).
+`CaseView caseView(NoticeSummary n, ApplicationCase? c, {required DateTime now})` 하나만 만들고(신청 시작·신청 사이트는 지원 건에 복사한 값), 모든 화면은 이 결과 문자열을 그대로 쓴다. 화면에서 남은 날·상태 문구를 따로 만들지 않는다. 추천 정보(`Recommendation`)는 넘기지 않고, 판정은 지원 건에 저장된 값만 본다(§2 판정 저장).
 
 ```dart
 class CaseView {
@@ -100,9 +109,9 @@ class CaseItem { final String text; final String kind; /* 확인·행동 */ fina
 
 | 항목 | 조건 | 문구 | 근거(evidence) | url |
 |---|---|---|---|---|
-| 신청 시작 | `applicationStart`가 지금보다 뒤 | 'M월 D일 HH:MM 신청 시작'(시각 없으면 'M월 D일 신청 시작') | `applicationStart.evidence` | — |
+| 신청 시작 | 지원 건의 `applicationStart`가 지금보다 뒤 | 'M월 D일 HH:MM 신청 시작'(시각 없으면 'M월 D일 신청 시작') | `applicationStart.evidence` | — |
 | 조건 확인 | 지원 건의 `eligibilityStatus == 'needs_check'` | '지원 조건 직접 확인' | 서버 판정(지원 건에 저장된 값) | — |
-| 신청 경로 | 항상 | `applyUrl` 있으면 '신청 사이트에서 신청', 없고 `sourceUrl` 있으면 '원문에서 신청 방법 확인', 둘 다 없으면 '받은 알림톡에서 신청 방법 확인' | null | `applyUrl` → `sourceUrl` → null |
+| 신청 경로 | 항상 | 지원 건의 `applyUrl` 있으면 '신청 사이트에서 신청', 없고 `sourceUrl` 있으면 '원문에서 신청 방법 확인', 둘 다 없으면 '받은 알림톡에서 신청 방법 확인' | null | `applyUrl` → `sourceUrl` → null |
 | 마감 | 확정 마감 있음 | 'M월 D일 HH:MM 마감' 또는 'M월 D일 마감' | `applicationDeadline.evidence` | — |
 
 - `deadlineNote`는 할 일로 쓰지 않음
@@ -216,6 +225,9 @@ class CaseItem { final String text; final String kind; /* 확인·행동 */ fina
 - 잘랐으면 무엇을 잘랐는지
 
 ## 10. 알려진 한계
+
+- 공고 문서가 서버에서 사라지면 저장 목록 응답에서 빠져, 다른 기기에서 저장을 취소한 것과 구분할 수 없다. 그래서 그 지원 건 기록은 지운다(신청함 기록도 함께 사라짐). 게시된 채 삭제된 공고(lifecycle removed)는 '학교 공지에서 삭제됨'으로 남는다
+- 신청 시작·신청 사이트는 상세를 받기 전(저장 직후 받기 실패 등)에는 화면에 나오지 않는다
 
 - 판정은 추천 목록(최대 50건)에 들어온 공고만 받는다. 추천 목록에 한 번도 없었던 공고(관련 없는 저장 공고, 학교를 바꾼 뒤의 다른 학교 공지 등)는 계속 null이라 '지원 조건 직접 확인' 항목이 나오지 않는다. 판정을 서버에서 따로 받으려면 저장 목록 응답에 판정을 붙이는 계약 변경이 필요(12/8 이후 검토)
 - 마지막으로 받은 뒤 공고 조건이 바뀌었어도 그 공고가 추천 목록에 다시 나오기 전까지는 예전 판정이 남는다(받은 시각은 함께 기록)

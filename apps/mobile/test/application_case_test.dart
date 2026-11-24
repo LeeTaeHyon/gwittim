@@ -9,9 +9,9 @@ DateInfo dateOnly(String date) => DateInfo(date: date, time: null, timezone: nul
 DateInfo seoul(String date, String time) =>
     DateInfo(date: date, time: time, timezone: 'Asia/Seoul', precision: 'minute', evidence: '$date $time');
 
-NoticeSummary notice(String id, {DateInfo? deadline, String lifecycle = 'open'}) => NoticeSummary(
+NoticeSummary notice(String id, {DateInfo? deadline, String lifecycle = 'open', int version = 1}) => NoticeSummary(
   noticeId: id,
-  noticeVersion: 1,
+  noticeVersion: version,
   title: '공고 $id',
   category: 'contest',
   sourceUrl: 'https://example.com/$id',
@@ -39,6 +39,16 @@ class FakeInner implements NoticeRepository {
   List<SavedEntry> saved = [];
   UserProfile? profile = const UserProfile(universityId: 'mjc', grade: 2, enrollmentStatus: 'enrolled');
   bool failSave = false;
+  final details = <String, Notice>{};
+  bool failDetail = false;
+  int detailCalls = 0;
+
+  @override
+  Future<Notice?> getNotice(String noticeId) async {
+    detailCalls++;
+    if (failDetail) throw const RepositoryException(RepositoryErrorKind.unavailable);
+    return details[noticeId];
+  }
 
   @override
   Future<RecommendationList> listRecommendations() async => list;
@@ -62,6 +72,27 @@ class FakeInner implements NoticeRepository {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+Notice detail(String id, {int version = 1, DateInfo? start, String? applyUrl}) => Notice(
+  summary: notice(id, version: version),
+  description: null,
+  applicationStart: start,
+  activityPeriod: null,
+  eligibility: const Eligibility(
+    conditions: [],
+    unresolvedEvidence: [],
+    extractionComplete: false,
+    explicitlyUnrestricted: false,
+    unrestrictedEvidence: null,
+  ),
+  lastVerifiedAt: null,
+  applyUrl: applyUrl,
+);
+
+SavedEntry savedEntry(String id, {int version = 1}) => SavedEntry(
+  saved: SavedNotice(noticeId: id, savedAt: DateTime(2026, 11, 24), savedNoticeVersion: version, savedDeadlineSnapshot: null),
+  notice: notice(id, version: version),
+);
 
 class FailingStorage implements CaseStorage {
   @override
@@ -220,10 +251,10 @@ void main() {
       expect(ApplicationCase.fromJson('a', 'x'), isNull);
     });
 
-    test('저장 목록에 없는 공고의 기록은 지움', () async {
-      final store = ApplicationCaseStore(storage: MemoryCaseStorage(), now: () => now);
-      await store.recordSaved('a');
-      await store.recordSaved('b');
+    test('저장 목록에 없는 공고의 기록은 지움(이전 실행에서 남은 기록)', () async {
+      ApplicationCase c(String id) => ApplicationCase(noticeId: id, state: CaseState.saved, changedAt: now);
+      final store = ApplicationCaseStore(storage: MemoryCaseStorage({'a': c('a'), 'b': c('b')}), now: () => now);
+      await store.load();
       await store.pruneTo(['b']);
       expect(store['a'], isNull);
       expect(store['b'], isNotNull);
@@ -302,11 +333,111 @@ void main() {
       expect(store['a']!.eligibilityStatus, 'needs_check');
     });
 
-    test('저장 목록을 받으면 없는 공고의 기록을 지움', () async {
-      await repo.saveNotice('a');
+    test('저장 목록을 받으면 없는 공고의 기록을 지움(이전 실행에서 남은 기록)', () async {
+      final old = ApplicationCaseStore(
+        storage: MemoryCaseStorage({'a': ApplicationCase(noticeId: 'a', state: CaseState.applied, changedAt: now)}),
+        now: () => now,
+      );
+      await old.load();
       inner.saved = [];
+      await CaseTrackingRepository(inner, old).listSaved();
+      expect(old['a'], isNull); // 공고 문서가 사라지면 신청함 기록도 사라진다(알려진 한계)
+    });
+
+    test('저장 직후 캐시된 옛 저장 목록(새 공고가 없음)이 와도 방금 만든 기록은 지우지 않음', () async {
+      inner.saved = [savedEntry('old')];
+      await repo.listSaved(); // 저장 전 목록
+      await repo.saveNotice('new');
+      // 캐시 등으로 저장 전 목록이 다시 와도
       await repo.listSaved();
+      expect(store['new'], isNotNull);
+      // 다른 기기에서 저장 취소된(이번 실행에 이 기기로 저장하지 않은) 공고는 지운다
+      await store.recordSaved('other-device');
+      final fresh = ApplicationCaseStore(storage: MemoryCaseStorage({'gone': ApplicationCase(noticeId: 'gone', state: CaseState.saved, changedAt: now)}), now: () => now);
+      await fresh.load();
+      await CaseTrackingRepository(inner, fresh).listSaved();
+      expect(fresh['gone'], isNull);
+    });
+
+    test('이번 실행에서 저장 취소한 뒤엔 다시 지울 수 있음', () async {
+      await repo.saveNotice('a');
+      await repo.deleteSaved('a');
       expect(store['a'], isNull);
+      await store.recordSaved('a'); // 다시 저장
+      await repo.deleteSaved('a');
+      expect(store['a'], isNull);
+    });
+
+    test('저장 직후 뒤에서 상세를 받아 신청 시작·신청 사이트를 복사', () async {
+      inner.details['a'] = detail('a', version: 3, start: seoul('2026-12-01', '09:00'), applyUrl: 'https://mpu.mjc.ac.kr');
+      await repo.saveNotice('a');
+      await repo.fetchDetail('a'); // 뒤에서 받는 것을 기다림
+      final c = store['a']!;
+      expect(c.applicationStart!.date, '2026-12-01');
+      expect(c.applyUrl, 'https://mpu.mjc.ac.kr');
+      expect(c.detailVersion, 3);
+    });
+
+    test('리포트가 상세를 받으면 복사', () async {
+      await store.recordSaved('a');
+      inner.details['a'] = detail('a', version: 2, applyUrl: 'https://mpu.mjc.ac.kr');
+      await repo.getNotice('a');
+      expect(store['a']!.applyUrl, 'https://mpu.mjc.ac.kr');
+      expect(store['a']!.detailVersion, 2);
+    });
+
+    test('실패하면 버전을 적지 않고, 목록 갱신 때 다시 시도', () async {
+      inner.failDetail = true;
+      await repo.saveNotice('a');
+      await repo.fetchDetail('a');
+      expect(store['a']!.detailVersion, isNull);
+      inner.failDetail = false;
+      inner.details['a'] = detail('a', version: 1, applyUrl: 'https://mpu.mjc.ac.kr');
+      inner.saved = [savedEntry('a')];
+      await repo.listSaved();
+      await repo.fetchDetail('a');
+      expect(store['a']!.detailVersion, 1);
+      expect(store['a']!.applyUrl, 'https://mpu.mjc.ac.kr');
+    });
+
+    test('요약 버전이 기록과 다를 때만 다시 받음', () async {
+      inner.details['a'] = detail('a', version: 1);
+      await repo.saveNotice('a');
+      await repo.fetchDetail('a');
+      final calls = inner.detailCalls;
+      inner.saved = [savedEntry('a', version: 1)];
+      await repo.listSaved();
+      expect(inner.detailCalls, calls); // 같은 버전이면 안 받음
+      inner.details['a'] = detail('a', version: 2, start: dateOnly('2026-12-14'));
+      inner.list = RecommendationList(
+        mode: 'personalized',
+        generatedAt: now,
+        items: [
+          RecommendationEntry(
+            recommendation: const Recommendation(noticeId: 'a', score: 1, eligibilityStatus: 'met', reasonCodes: []),
+            notice: notice('a', version: 2),
+          ),
+        ],
+      );
+      await repo.listRecommendations();
+      await repo.fetchDetail('a');
+      expect(inner.detailCalls, greaterThan(calls));
+      expect(store['a']!.detailVersion, 2);
+      expect(store['a']!.applicationStart!.date, '2026-12-14');
+    });
+
+    test('기록을 다시 읽어도 복사한 값이 남음', () async {
+      final storage = MemoryCaseStorage();
+      final s1 = ApplicationCaseStore(storage: storage, now: () => now);
+      await s1.recordSaved('a');
+      await s1.recordDetail(detail('a', version: 4, start: seoul('2026-12-01', '09:00'), applyUrl: 'https://x'));
+      await s1.flushed;
+      final s2 = ApplicationCaseStore(storage: storage, now: () => now);
+      await s2.load();
+      expect(s2['a']!.applicationStart!.time, '09:00');
+      expect(s2['a']!.applicationStart!.timezone, 'Asia/Seoul');
+      expect(s2['a']!.applyUrl, 'https://x');
+      expect(s2['a']!.detailVersion, 4);
     });
 
     test('탈퇴(서버 데이터 삭제)하면 모두 지움', () async {

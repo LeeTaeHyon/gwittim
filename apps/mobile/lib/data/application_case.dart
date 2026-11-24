@@ -25,6 +25,9 @@ class ApplicationCase {
     this.emphasizedOn,
     this.eligibilityStatus,
     this.eligibilityAt,
+    this.applicationStart,
+    this.applyUrl,
+    this.detailVersion,
   });
 
   final String noticeId;
@@ -50,6 +53,14 @@ class ApplicationCase {
   /// 그 판정을 받은 시각(기기 시각).
   final DateTime? eligibilityAt;
 
+  /// 공고 상세에서 복사한 신청 시작·신청 사이트. 목록 요약에는 없어 저장할 때 상세를 한 번 받아 둔다
+  /// (팀장 결정 2026-11-24). [detailVersion]이 null이면 아직 못 받은 것.
+  final DateInfo? applicationStart;
+  final String? applyUrl;
+
+  /// 위 두 값을 받은 공고의 notice_version.
+  final int? detailVersion;
+
   ApplicationCase copyWith({
     CaseState? state,
     CaseState? previous,
@@ -60,6 +71,7 @@ class ApplicationCase {
     String? eligibilityStatus,
     DateTime? eligibilityAt,
     bool clearEligibility = false,
+    ({DateInfo? applicationStart, String? applyUrl, int version})? detail,
   }) => ApplicationCase(
     noticeId: noticeId,
     state: state ?? this.state,
@@ -69,6 +81,9 @@ class ApplicationCase {
     emphasizedOn: emphasizedOn ?? this.emphasizedOn,
     eligibilityStatus: clearEligibility ? null : (eligibilityStatus ?? this.eligibilityStatus),
     eligibilityAt: clearEligibility ? null : (eligibilityAt ?? this.eligibilityAt),
+    applicationStart: detail == null ? applicationStart : detail.applicationStart,
+    applyUrl: detail == null ? applyUrl : detail.applyUrl,
+    detailVersion: detail == null ? detailVersion : detail.version,
   );
 
   Map<String, dynamic> toJson() => {
@@ -79,6 +94,9 @@ class ApplicationCase {
     if (emphasizedOn != null) 'emphasized_on': emphasizedOn,
     if (eligibilityStatus != null) 'eligibility_status': eligibilityStatus,
     if (eligibilityAt != null) 'eligibility_at': eligibilityAt!.toIso8601String(),
+    if (applicationStart case final s?) 'application_start': _dateInfoJson(s),
+    if (applyUrl != null) 'apply_url': applyUrl,
+    if (detailVersion != null) 'detail_version': detailVersion,
   };
 
   /// 알 수 없는 값이 있으면 null(그 건은 버린다).
@@ -96,6 +114,9 @@ class ApplicationCase {
       emphasizedOn: json['emphasized_on'] as String?,
       eligibilityStatus: json['eligibility_status'] as String?,
       eligibilityAt: json['eligibility_at'] == null ? null : DateTime.tryParse('${json['eligibility_at']}'),
+      applicationStart: _dateInfoFrom(json['application_start']),
+      applyUrl: json['apply_url'] as String?,
+      detailVersion: json['detail_version'] as int?,
     );
   }
 
@@ -104,6 +125,23 @@ class ApplicationCase {
       if (s.name == name) return s;
     }
     return null;
+  }
+}
+
+Map<String, dynamic> _dateInfoJson(DateInfo d) => {
+  'date': d.date,
+  'time': d.time,
+  'timezone': d.timezone,
+  'precision': d.precision,
+  'evidence': d.evidence,
+};
+
+DateInfo? _dateInfoFrom(Object? json) {
+  if (json is! Map) return null;
+  try {
+    return DateInfo.fromJson(Map<String, dynamic>.from(json));
+  } catch (_) {
+    return null; // 모양이 다르면 못 받은 것으로 본다
   }
 }
 
@@ -258,6 +296,7 @@ class ApplicationCaseStore extends ChangeNotifier {
 
   /// 저장(saveNotice) 성공 뒤. 이미 기록이 있으면 판정만 채운다.
   Future<void> recordSaved(String noticeId, {String? eligibilityStatus}) async {
+    _savedThisRun.add(noticeId);
     final now = _now();
     final old = _cases[noticeId];
     final c = old == null
@@ -274,6 +313,7 @@ class ApplicationCaseStore extends ChangeNotifier {
 
   /// 저장 취소(deleteSaved) 성공 뒤, 또는 '목록에서 지우기'.
   Future<void> forget(String noticeId) async {
+    _savedThisRun.remove(noticeId);
     if (!_cases.containsKey(noticeId)) return;
     await _put({..._cases}..remove(noticeId));
   }
@@ -352,9 +392,28 @@ class ApplicationCaseStore extends ChangeNotifier {
     await _put({for (final c in _cases.values) c.noticeId: c.copyWith(clearEligibility: true)});
   }
 
-  /// 저장 목록을 받은 뒤: 목록에 없는 공고의 기록을 지운다(다른 기기에서 저장 취소한 경우).
+  /// 공고 상세에서 신청 시작·신청 사이트를 복사한다. 지원 건이 없으면 아무것도 안 함.
+  Future<void> recordDetail(Notice notice) async {
+    final id = notice.summary.noticeId;
+    final c = _cases[id];
+    if (c == null) return;
+    final version = notice.summary.noticeVersion;
+    if (c.detailVersion == version && c.applyUrl == notice.applyUrl && deadlineKey(c.applicationStart) == deadlineKey(notice.applicationStart)) {
+      return;
+    }
+    await _put({
+      ..._cases,
+      id: c.copyWith(detail: (applicationStart: notice.applicationStart, applyUrl: notice.applyUrl, version: version)),
+    });
+  }
+
+  /// 이번 실행에서 이 기기로 저장한 공고. 저장 목록 응답이 저장보다 늦게 만들어진 것(캐시 등)이라도
+  /// 이 공고들의 기록은 지우지 않는다. 이번 실행에서 지우는 길은 저장 취소뿐이다.
+  final _savedThisRun = <String>{};
+
+  /// 저장 목록을 받은 뒤: 목록에 없는 공고의 기록을 지운다(다른 기기에서 저장 취소한 경우, 공고 문서가 사라진 경우).
   Future<void> pruneTo(Iterable<String> savedIds) async {
-    final keep = savedIds.toSet();
+    final keep = {...savedIds, ..._savedThisRun};
     if (_cases.keys.every(keep.contains)) return;
     await _put({
       for (final c in _cases.values)
@@ -364,6 +423,7 @@ class ApplicationCaseStore extends ChangeNotifier {
 
   /// 탈퇴·로그아웃 때 모두 지운다.
   Future<void> clearAll() async {
+    _savedThisRun.clear();
     // 기기 저장소를 못 쓰면 다음 실행 때 남는다
     await _put({});
   }
@@ -389,11 +449,36 @@ class CaseTrackingRepository implements NoticeRepository, WrappingRepository {
     }
   }
 
+  /// 상세를 받는 중인 공고. 같은 공고를 겹쳐 받지 않는다.
+  final _fetching = <String, Future<void>>{};
+
+  /// 지원 건의 신청 시작·신청 사이트를 상세에서 받아 둔다. 화면을 막지 않게 기다리지 않고 부른다.
+  /// 실패하면 아무것도 적지 않는다(다음 목록 갱신 때 다시 시도).
+  Future<void> fetchDetail(String noticeId) => _fetching[noticeId] ??= () async {
+    try {
+      final notice = await _inner.getNotice(noticeId);
+      if (notice != null) await cases.recordDetail(notice);
+    } catch (_) {
+      // 못 받은 동안은 신청 시작·신청 사이트 항목을 만들지 않는다
+    } finally {
+      _fetching.remove(noticeId);
+    }
+  }();
+
+  /// 목록 요약의 notice_version이 기록된 버전과 다른 지원 건(기록이 없는 건 포함)의 상세를 다시 받는다.
+  void _refreshDetails(Iterable<NoticeSummary> summaries) {
+    for (final n in summaries) {
+      final c = cases[n.noticeId];
+      if (c != null && c.detailVersion != n.noticeVersion) fetchDetail(n.noticeId);
+    }
+  }
+
   @override
   Future<RecommendationList> listRecommendations() async {
     final list = await _inner.listRecommendations();
     _remember(list);
     await cases.updateEligibility(list);
+    _refreshDetails(list.items.map((e) => e.notice));
     return list;
   }
 
@@ -402,6 +487,7 @@ class CaseTrackingRepository implements NoticeRepository, WrappingRepository {
     final list = await _inner.searchNotices(query: query, category: category);
     _remember(list);
     await cases.updateEligibility(list);
+    _refreshDetails(list.items.map((e) => e.notice));
     return list;
   }
 
@@ -409,6 +495,7 @@ class CaseTrackingRepository implements NoticeRepository, WrappingRepository {
   Future<List<SavedEntry>> listSaved() async {
     final saved = await _inner.listSaved();
     await cases.pruneTo(saved.map((s) => s.notice.noticeId));
+    _refreshDetails(saved.map((s) => s.notice));
     return saved;
   }
 
@@ -416,6 +503,7 @@ class CaseTrackingRepository implements NoticeRepository, WrappingRepository {
   Future<void> saveNotice(String noticeId) async {
     await _inner.saveNotice(noticeId);
     await cases.recordSaved(noticeId, eligibilityStatus: _lastStatus[noticeId]);
+    fetchDetail(noticeId); // 저장 직후 뒤에서 상세를 받아 신청 시작·신청 사이트를 복사한다
   }
 
   @override
@@ -453,8 +541,13 @@ class CaseTrackingRepository implements NoticeRepository, WrappingRepository {
     await cases.clearAll();
   }
 
+  /// 리포트가 상세를 받으면 지원 건에도 복사한다.
   @override
-  Future<Notice?> getNotice(String noticeId) => _inner.getNotice(noticeId);
+  Future<Notice?> getNotice(String noticeId) async {
+    final notice = await _inner.getNotice(noticeId);
+    if (notice != null) await cases.recordDetail(notice);
+    return notice;
+  }
 
   @override
   Future<Map<String, String>> categoryNames() => _inner.categoryNames();

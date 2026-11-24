@@ -25,8 +25,15 @@ NoticeSummary notice({DateInfo? deadline, String lifecycle = 'open', String? sou
       lifecycleStatus: lifecycle,
     );
 
-ApplicationCase kase(CaseState s, {String? eligibility}) =>
-    ApplicationCase(noticeId: 'n', state: s, changedAt: DateTime(2026, 11, 1), eligibilityStatus: eligibility);
+ApplicationCase kase(CaseState s, {String? eligibility, DateInfo? applicationStart, String? applyUrl}) => ApplicationCase(
+  noticeId: 'n',
+  state: s,
+  changedAt: DateTime(2026, 11, 1),
+  eligibilityStatus: eligibility,
+  applicationStart: applicationStart,
+  applyUrl: applyUrl,
+  detailVersion: applicationStart == null && applyUrl == null ? null : 1,
+);
 
 /// 한국 시각 → 기기 시각과 상관없는 같은 순간. 날짜 비교는 기기 날짜를 쓰므로, 시험은 기기 시각 = 한국 시각으로 본다.
 DateTime kst(int y, int m, int d, [int h = 0, int mi = 0]) => DateTime.utc(y, m, d, h, mi).subtract(const Duration(hours: 9)).toLocal();
@@ -128,7 +135,7 @@ void main() {
     List<String> texts(CaseView v) => [for (final i in v.items) i.text];
 
     test('신청 경로: 신청 사이트 → 원문 → 받은 알림톡', () {
-      expect(caseView(notice(deadline: deadline), kase(CaseState.saved), now: now, applyUrl: 'https://mpu.mjc.ac.kr').next,
+      expect(caseView(notice(deadline: deadline), kase(CaseState.saved, applyUrl: 'https://mpu.mjc.ac.kr'), now: now).next,
           const CaseItem(text: '신청 사이트에서 신청', kind: '행동', url: 'https://mpu.mjc.ac.kr'));
       expect(caseView(notice(deadline: deadline), kase(CaseState.saved), now: now).next,
           const CaseItem(text: '원문에서 신청 방법 확인', kind: '행동', url: 'https://example.com/n'));
@@ -146,16 +153,16 @@ void main() {
 
     test('신청 시작 전·후', () {
       final start = seoul('2026-11-30', '10:00');
-      final before = caseView(notice(deadline: deadline), kase(CaseState.saved), now: kst(2026, 11, 30, 9, 59), applicationStart: start);
+      final before = caseView(notice(deadline: deadline), kase(CaseState.saved, applicationStart: start), now: kst(2026, 11, 30, 9, 59));
       expect(before.next, CaseItem(text: '11월 30일 10:00 신청 시작', kind: '확인', evidence: start.evidence));
-      final after = caseView(notice(deadline: deadline), kase(CaseState.saved), now: kst(2026, 11, 30, 10), applicationStart: start);
+      final after = caseView(notice(deadline: deadline), kase(CaseState.saved, applicationStart: start), now: kst(2026, 11, 30, 10));
       expect(texts(after).any((t) => t.contains('신청 시작')), isFalse);
       // 날짜만 시작은 그 날 0시부터 시작으로 본다
       final dayStart = dateOnly('2026-12-14');
       final later = notice(deadline: dateOnly('2027-01-04'));
-      expect(caseView(later, kase(CaseState.saved), now: DateTime(2026, 12, 13, 23), applicationStart: dayStart).next!.text,
+      expect(caseView(later, kase(CaseState.saved, applicationStart: dayStart), now: DateTime(2026, 12, 13, 23)).next!.text,
           '12월 14일 신청 시작');
-      expect(caseView(later, kase(CaseState.saved), now: DateTime(2026, 12, 14), applicationStart: dayStart).next!.text,
+      expect(caseView(later, kase(CaseState.saved, applicationStart: dayStart), now: DateTime(2026, 12, 14)).next!.text,
           '원문에서 신청 방법 확인');
     }, skip: koreaDevice ? false : '기기 시간대가 한국이 아님');
 
@@ -179,8 +186,8 @@ void main() {
     });
 
     test('신청 시작 전이면 신청 시작이 조건 확인보다 먼저', () {
-      final v = caseView(notice(deadline: deadline), kase(CaseState.saved, eligibility: 'needs_check'),
-          now: DateTime(2026, 11, 24), applicationStart: dateOnly('2026-12-01'));
+      final v = caseView(notice(deadline: deadline), kase(CaseState.saved, eligibility: 'needs_check', applicationStart: dateOnly('2026-12-01')),
+          now: DateTime(2026, 11, 24));
       expect(texts(v), ['12월 1일 신청 시작', '지원 조건 직접 확인', '원문에서 신청 방법 확인', '12월 10일 마감']);
     });
 
