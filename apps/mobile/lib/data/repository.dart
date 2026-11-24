@@ -68,6 +68,11 @@ abstract class NoticeRepository {
   Future<Credits> getCredits();
 }
 
+/// 다른 저장소를 감싸 기능을 더하는 저장소(지원 건 기록 등). 캐시 버리기 같은 일을 안쪽까지 전한다.
+abstract interface class WrappingRepository {
+  NoticeRepository get inner;
+}
+
 /// 동의 기록은 프로필 PUT으로 저장한다(별도 경로 없음). 저장소 구현이 달라도 같은 흐름을 쓴다.
 extension AgentConsentActions on NoticeRepository {
   /// 지금 문구([agentConsentVersion])에 동의한 기록을 남긴다. 프로필이 없으면 [RepositoryErrorKind.notFound].
