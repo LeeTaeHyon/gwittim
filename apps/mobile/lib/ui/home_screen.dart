@@ -50,7 +50,6 @@ class HomeScreen extends StatefulWidget {
     this.onOpenProfile,
     this.onSetupProfile,
     this.onShowAll,
-    this.onShowCalendar,
   });
 
   final NoticeRepository repository;
@@ -67,9 +66,6 @@ class HomeScreen extends StatefulWidget {
   /// '마감이 먼 맞춤 공고' 전체 보기 (공고 탭)
   final VoidCallback? onShowAll;
 
-  /// '이번 주 마감' 전체 N건 (달력 탭)
-  final VoidCallback? onShowCalendar;
-
   @override
   State<HomeScreen> createState() => HomeScreenState();
 }
@@ -82,6 +78,9 @@ class HomeScreenState extends State<HomeScreen> {
   /// 프로필을 읽었고 없다고 확인된 경우만 true (읽지 못하면 미상으로 보고 안내하지 않는다)
   bool _profileMissing = false;
   bool _setupChecked = false;
+
+  /// 이번 주 마감 카드를 펼쳤는지. 화면 상태로만 가진다(새로 고침·탭 이동에는 유지, 앱을 다시 켜면 접힘).
+  bool _weekExpanded = false;
 
   DateTime get _today => widget.today ?? DateTime.now();
 
@@ -289,7 +288,7 @@ class HomeScreenState extends State<HomeScreen> {
     final caption = captionStyle(context);
     final list = data.list;
     final store = ApplicationCaseScope.maybeOf(context);
-    final home = buildHomeSections(
+    final built = buildHomeSections(
       list,
       data.saved,
       _today,
@@ -299,11 +298,13 @@ class HomeScreenState extends State<HomeScreen> {
       emphasizedEarlier: store == null ? null : (id) => store.emphasizedEarlier(id, _today),
     );
     // 말풍선 건수에 들어간 지원 건은 오늘 강조한 것으로 기록한다(하루 1번)
-    final counted = home.nudge?.caseIds ?? const <String>{};
+    final counted = built.nudge?.caseIds ?? const <String>{};
     if (store != null && counted.any((id) => !store.emphasizedOn(id, _today))) {
       WidgetsBinding.instance.addPostFrameCallback((_) => store.markEmphasized(counted, _today));
     }
-    final weekRows = list.personalized ? homeWeekRows : homeLatestRows;
+    // 펼친 동안은 아래 구역에서 마감 카드와 겹치는 줄·마감 변경 카드를 숨긴다. 말풍선 건수는 그대로.
+    final more = built.moreCount;
+    final home = _weekExpanded ? built.expanded() : built;
 
     Widget line(HomeRow r, {required bool dated}) => _HomeLine(
       row: r,
@@ -319,11 +320,8 @@ class HomeScreenState extends State<HomeScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
     );
 
-    final Widget deadlineTrailing = home.isNext
-        ? Text('앞으로 2주', style: caption)
-        : home.weekTotal > weekRows && widget.onShowCalendar != null
-        ? _ShowAll(label: '전체 ${home.weekTotal}건', onTap: widget.onShowCalendar!)
-        : Text('앞으로 7일', style: caption);
+    final deadlineTrailing = Text(home.isNext ? '앞으로 2주' : '앞으로 7일', style: caption);
+    final still = MediaQuery.maybeDisableAnimationsOf(context) == true;
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -340,17 +338,35 @@ class HomeScreenState extends State<HomeScreen> {
         ],
         SectionTitle(home.isNext ? '다음 마감' : (list.personalized ? '이번 주 마감' : '곧 마감되는 공고'), trailing: deadlineTrailing),
         const SizedBox(height: 12),
-        rows([
-          if (home.deadlines.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Text(
-                keepAll(list.personalized ? '맞춤 공고 중 앞으로 2주 안에 마감되는 공고가 없습니다.' : '앞으로 2주 안에 마감되는 공고가 없습니다.'),
-                style: TextStyle(fontSize: 15, color: c.sub),
-              ),
+        GwCard(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          // 펼치고 접을 때 카드 높이가 부드럽게 바뀐다(ui-style §4 '목록 높이 변화'). 애니메이션 줄이기면 바로.
+          child: AnimatedSize(
+            duration: still ? Duration.zero : const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (home.deadlines.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Text(
+                      keepAll(list.personalized ? '맞춤 공고 중 앞으로 2주 안에 마감되는 공고가 없습니다.' : '앞으로 2주 안에 마감되는 공고가 없습니다.'),
+                      style: TextStyle(fontSize: 15, color: c.sub),
+                    ),
+                  ),
+                for (final r in home.deadlines) line(r, dated: true),
+                if (more > 0)
+                  _MoreToggle(
+                    expanded: _weekExpanded,
+                    more: more,
+                    onTap: () => setState(() => _weekExpanded = !_weekExpanded),
+                  ),
+              ],
             ),
-          for (final r in home.deadlines) line(r, dated: true),
-        ]),
+          ),
+        ),
         if (home.fresh.isNotEmpty) ...[
           const SizedBox(height: 28),
           SectionTitle('새 공고', trailing: Text('최근 3일', style: caption)),
@@ -396,6 +412,45 @@ class _ShowAll extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [Text(label), const Icon(Icons.chevron_right_rounded, size: 18)],
+      ),
+    );
+  }
+}
+
+/// 이번 주 마감 카드 맨 아래 펼침 줄: 'N건 더 보기 ∨' / '접기 ∧'. 리포트 체크리스트의 '○개 더 보기'와 같은 모양.
+/// 공고 줄(오른쪽 화살표, 리포트 열기)과 달리 가운데 맞춘 글자와 아래·위 화살표로 '그 자리에서 펼침'을 보인다.
+class _MoreToggle extends StatelessWidget {
+  const _MoreToggle({required this.expanded, required this.more, required this.onTap});
+
+  final bool expanded;
+  final int more;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return Semantics(
+      button: true,
+      expanded: expanded,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  expanded ? '접기' : '$more건 더 보기',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.sub),
+                ),
+              ),
+              Icon(expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18, color: c.sub),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -586,48 +641,49 @@ class _HomeLine extends StatelessWidget {
           const Pill('저장한 공고', tone: PillTone.neutral),
         if (row.fresh) const Pill('새 공고', tone: PillTone.neutral),
       ],
+      // 추천 이유는 메타 끝의 작은 글자 대신 제목 위 칩으로 (2026-11-25 실기기 확인 후 팀장 요청)
+      if (_reason case final reason when reason.isNotEmpty) _ReasonChip(reason),
     ];
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            dated ? _dateBlock(c, n) : _categoryIcon(c, n),
-            const SizedBox(width: 12),
-            // 위에서부터 표시(전체 폭) → 제목 줄(제목 + 상태 원) → 메타(전체 폭). 상태 원은 제목 옆에만 둔다.
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (marks.isNotEmpty) ...[
-                    Wrap(spacing: 6, runSpacing: 4, children: marks),
-                    const SizedBox(height: 6),
-                  ],
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          keepTitle(n.title),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body, height: 1.4),
-                        ),
-                      ),
-                      if (status != null) ...[const SizedBox(width: 8), EligibilityDot(status)],
+    // 줄 전체가 리포트를 여는 버튼이다. 오른쪽 끝 화살표로 누를 곳을 보이고, 화살표는 화면 읽기에서 뺀다.
+    return Semantics(
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            children: [
+              dated ? _dateBlock(c, n) : _categoryIcon(c, n),
+              const SizedBox(width: 12),
+              // 위에서부터 표시(이유 칩 포함) → 제목 → 메타. 상태 원은 오른쪽 끝 화살표 옆에 세로 가운데로 둔다.
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (marks.isNotEmpty) ...[
+                      Wrap(spacing: 6, runSpacing: 4, children: marks),
+                      const SizedBox(height: 6),
                     ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text.rich(
-                    TextSpan(children: dated ? _datedMeta(c, n) : _iconMeta(c, n)),
-                    style: TextStyle(fontSize: 13, color: c.muted),
-                  ),
-                ],
+                    Text(
+                      keepTitle(n.title),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body, height: 1.4),
+                    ),
+                    const SizedBox(height: 2),
+                    Text.rich(
+                      TextSpan(children: dated ? _datedMeta(c, n) : _iconMeta(c, n)),
+                      style: TextStyle(fontSize: 13, color: c.muted),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              if (status != null) ...[const SizedBox(width: 8), EligibilityDot(status)],
+              const SizedBox(width: 4),
+              ExcludeSemantics(child: Icon(Icons.chevron_right_rounded, size: 20, color: c.faint)),
+            ],
+          ),
         ),
       ),
     );
@@ -685,7 +741,7 @@ class _HomeLine extends StatelessWidget {
   /// 메타의 라벨 앞 가운뎃점. 가운뎃점을 라벨에 붙여 줄이 바뀌면 가운뎃점 앞에서 바뀐다(줄 끝에 홀로 남지 않음).
   static String _then(String label) => ' ·\u00A0${keepTogether(label)}';
 
-  /// 메타 마지막: 저장 후 마감 변경 문구가 추천 이유보다 앞선다(마감 줄·아이콘 줄 공통).
+  /// 메타 마지막: 저장 후 마감 변경 문구, 아니면 지원 건의 다음 할 일(마감 줄·아이콘 줄 공통). 추천 이유는 제목 위 칩.
   List<InlineSpan> _last(GwColors c) {
     if (row.deadlineChanged) {
       return [
@@ -695,7 +751,7 @@ class _HomeLine extends StatelessWidget {
         ),
       ];
     }
-    // 지원 건이면 추천 이유 대신 다음 할 일 (D-052)
+    // 지원 건이면 다음 할 일 (D-052)
     if (row.view?.next case final next?) {
       return [
         TextSpan(
@@ -704,14 +760,7 @@ class _HomeLine extends StatelessWidget {
         ),
       ];
     }
-    final reason = _reason;
-    return [
-      if (reason.isNotEmpty)
-        TextSpan(
-          text: _then(reason),
-          style: TextStyle(fontWeight: FontWeight.w500, color: c.accent),
-        ),
-    ];
+    return const [];
   }
 
   /// 'D-3 · 17:00 마감 · 공모전 · 관심 분야'. 마지막은 저장 후 마감 변경 문구가 이유보다 앞선다.
@@ -758,6 +807,37 @@ class _HomeLine extends StatelessWidget {
         TextSpan(text: keepAll(n.deadlineNote ?? '마감일 없음')),
       ..._last(c),
     ];
+  }
+}
+
+/// 홈 줄 제목 위 추천 이유 칩: 별 아이콘 + '관심 분야'·'관심·전공'. 리포트 결론 카드의 '추천' 줄과 같은 별 아이콘.
+/// 지원 건 상태 칩(네이비 글자)과 구분되게 글자는 accent.
+class _ReasonChip extends StatelessWidget {
+  const _ReasonChip(this.reason);
+
+  final String reason;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return Container(
+      height: 26,
+      padding: const EdgeInsets.only(left: 8, right: 10),
+      decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(13)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ExcludeSemantics(
+            child: Icon(Icons.star_rounded, size: MediaQuery.textScalerOf(context).scale(14), color: c.accent),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            reason,
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.accent),
+          ),
+        ],
+      ),
+    );
   }
 }
 

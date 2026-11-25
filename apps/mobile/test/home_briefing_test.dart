@@ -632,7 +632,7 @@ void main() {
   });
 
   group('홈 구역과 줄 (D-050)', () {
-    testWidgets('이번 주 마감 5줄, 넘치면 전체 N건으로 달력 탭, 마감이 먼 맞춤 공고 전체 보기는 공고 탭', (tester) async {
+    testWidgets('이번 주 마감 5줄, 넘치면 카드 안 N건 더 보기(달력으로 가지 않음), 마감이 먼 맞춤 공고 전체 보기는 공고 탭', (tester) async {
       bigScreen(tester);
       await pumpHome(
         tester,
@@ -648,12 +648,14 @@ void main() {
       expect(findText('먼 공고'), findsOneWidget);
       expect(find.text('새 공고'), findsNothing); // 새 공고가 없으면 구역을 숨긴다
 
-      await tester.tap(find.text('전체 6건'));
+      // 구역 제목 오른쪽은 늘 '앞으로 7일'. 넘치는 후보는 카드 맨 아래 펼침 줄로 그 자리에서 본다 (home-report-clarity-spec A2)
+      expect(find.text('앞으로 7일'), findsOneWidget);
+      expect(find.textContaining(RegExp(r'전체 \d+건')), findsNothing);
+      await tester.tap(find.text('1건 더 보기'));
       await tester.pumpAndSettle();
-      expect(find.byType(CalendarScreen), findsOneWidget);
-
-      await tester.tap(find.descendant(of: find.byType(GwTabBar), matching: find.text('오늘')));
-      await tester.pumpAndSettle();
+      expect(find.byType(CalendarScreen), findsNothing);
+      expect(findText('임박 6'), findsOneWidget);
+      expect(find.text('접기'), findsOneWidget);
       expect(find.byType(NoticesScreen), findsNothing);
       await tester.tap(find.text('전체 보기'));
       await tester.pumpAndSettle();
@@ -675,7 +677,7 @@ void main() {
       expect(findText('맞춤 공고 중 앞으로 2주 안에 마감되는 공고가 없습니다.'), findsOneWidget);
     });
 
-    testWidgets('최신 모드: 곧 마감되는 공고 3줄, 넘치면 전체 N건, 새 공고·마감이 먼 구역 없음', (tester) async {
+    testWidgets('최신 모드: 곧 마감되는 공고 3줄, 넘치면 N건 더 보기로 펼침, 새 공고·마감이 먼 구역 없음', (tester) async {
       bigScreen(tester);
       await pumpHome(
         tester,
@@ -684,17 +686,35 @@ void main() {
         ], personalized: false),
       );
       expect(find.text('곧 마감되는 공고'), findsOneWidget);
-      expect(find.text('전체 4건'), findsOneWidget);
+      expect(find.text('앞으로 7일'), findsOneWidget);
+      expect(find.textContaining(RegExp(r'전체 \d+건')), findsNothing);
       expect(findText('최신 2'), findsOneWidget);
       expect(findText('최신 3'), findsNothing);
+      expect(find.text('1건 더 보기'), findsOneWidget);
       expect(find.text('새 공고'), findsNothing);
       expect(find.text('마감이 먼 맞춤 공고'), findsNothing);
       expect(findText('현재 마감이 가까운 순으로 표시합니다'), findsOneWidget);
       // 비교할 프로필이 없어 줄에 조건 상태 원을 두지 않는다
       expect(find.descendant(of: find.byType(HomeScreen), matching: find.byType(EligibilityDot)), findsNothing);
+
+      await tester.tap(find.text('1건 더 보기'));
+      await tester.pumpAndSettle();
+      expect(findText('최신 3'), findsOneWidget);
+      expect(find.text('접기'), findsOneWidget);
+
+      // 후보가 줄 수(3) 이하면 펼침 줄이 없다
+      await pumpHome(
+        tester,
+        ListRepo([
+          for (var i = 0; i < 3; i++) entry('최신 $i', deadline: '2026-10-${18 + i}', published: '2026-10-17'),
+        ], personalized: false),
+      );
+      expect(findText('최신 2'), findsOneWidget);
+      expect(find.textContaining('더 보기'), findsNothing);
+      expect(find.textContaining(RegExp(r'전체 \d+건')), findsNothing);
     });
 
-    testWidgets('맞춤 홈 줄: 상태 원은 제목 줄 오른쪽(제목과 위 맞춤), 표시와 메타는 원과 같은 줄에 없다', (tester) async {
+    testWidgets('맞춤 홈 줄: 상태 원은 오른쪽 화살표 옆에 줄 세로 가운데, 이유 칩은 제목 위', (tester) async {
       bigScreen(tester);
       await pumpHome(
         tester,
@@ -705,17 +725,21 @@ void main() {
       );
       final dots = find.descendant(of: find.byType(HomeScreen), matching: find.byType(EligibilityDot));
       expect(dots, findsNWidgets(2));
-      for (final (title, dot) in [('새 임박', dots.at(0)), ('먼 공고', dots.at(1))]) {
+      for (final (i, title) in ['새 임박', '먼 공고'].indexed) {
+        final line = tester.getRect(find.ancestor(of: findText(title), matching: find.byType(InkWell)).first);
         final t = tester.getRect(findText(title));
-        final d = tester.getRect(dot);
-        expect(d.top, closeTo(t.top, 0.5), reason: title);
-        expect(d.left, greaterThanOrEqualTo(t.right + 8 - 0.5), reason: title);
-        // 메타는 원 아래에서 시작한다(원 옆을 비워 두지 않고 전체 폭을 쓴다)
-        expect(tester.getRect(metaOf(title)).top, greaterThanOrEqualTo(d.bottom - 0.5), reason: title);
+        final d = tester.getRect(dots.at(i));
+        // 줄 세로 가운데, 제목·메타보다 오른쪽, 화살표 바로 왼쪽
+        expect(d.center.dy, closeTo(line.center.dy, 0.5), reason: title);
+        expect(d.left, greaterThanOrEqualTo(t.right - 0.5), reason: title);
+        expect(d.left, greaterThanOrEqualTo(tester.getRect(metaOf(title)).right - 0.5), reason: title);
+        final arrow = tester.getRect(find.descendant(of: find.ancestor(of: findText(title), matching: find.byType(InkWell)).first, matching: find.byIcon(Icons.chevron_right_rounded)));
+        expect(arrow.left, greaterThan(d.right), reason: title);
+        expect(arrow.center.dy, closeTo(d.center.dy, 0.5), reason: title);
+        // 이유 칩은 제목 위
+        final chip = tester.getRect(find.descendant(of: find.ancestor(of: findText(title), matching: find.byType(InkWell)).first, matching: find.text('관심 분야')));
+        expect(chip.bottom, lessThanOrEqualTo(t.top), reason: title);
       }
-      // '새 공고' 표시가 있는 줄: 원은 표시 옆이 아니라 그 아래 제목 옆
-      final mark = tester.getRect(find.descendant(of: find.byType(Pill), matching: find.text('새 공고')));
-      expect(tester.getRect(dots.at(0)).top, greaterThanOrEqualTo(mark.bottom));
     });
 
     testWidgets('글자 1.3배에서 메타가 넘쳐도 가운뎃점이 줄 끝에 남지 않는다', (tester) async {
@@ -731,8 +755,9 @@ void main() {
         ]),
       );
       expect(tester.takeException(), isNull);
+      expect(find.text('관심·직무·전공'), findsOneWidget); // 이유는 제목 위 칩
       final lines = visualLines(tester, metaOf('긴 메타'));
-      expect(lines.join(' '), 'D-6 · 공모전·경진대회 · 관심·직무·전공');
+      expect(lines.join(' '), 'D-6 · 공모전·경진대회');
       for (final l in lines) {
         expect(l.endsWith('·') || l.endsWith('· '), isFalse, reason: '$lines');
       }
@@ -753,7 +778,8 @@ void main() {
       // 저장한 공고는 지원 건(D-052): '저장한 공고' 표시 대신 상태 칩, 남은 날은 모든 화면과 같은 문구
       expect(find.widgetWithText(Pill, '저장'), findsOneWidget);
       expect(plain(tester, metaOf('저장 바뀜')), 'D-2 · 10월 19일 마감 · 공모전·경진대회 · 마감 3일 연장');
-      expect(plain(tester, metaOf('관련')), 'D-3 · 공모전·경진대회 · 관심 분야');
+      expect(plain(tester, metaOf('관련')), 'D-3 · 공모전·경진대회');
+      expect(find.text('관심 분야'), findsOneWidget); // 이유 칩
       // 추천 정보가 없는 저장 공고에는 상태 원이 없다(관련 공고 줄에만 하나)
       expect(find.descendant(of: find.byType(HomeScreen), matching: find.byType(EligibilityDot)), findsOneWidget);
       expect(findTextContaining('저장한 공고의 마감 3일 연장'), findsNothing);
@@ -816,7 +842,12 @@ void main() {
           entry('통계', deadline: '2026-10-19', reasons: ['major_prior_match']),
         ]),
       );
-      expect(plain(tester, metaOf('시각')), '오늘 마감 · 17:00 마감 · 행사 · 관심·직무·전공');
+      expect(plain(tester, metaOf('시각')), '오늘 마감 · 17:00 마감 · 행사');
+      // 이유 칩: 별 아이콘 + accent 글자, 표시('새 공고')와 같은 줄
+      final reason = tester.widget<Text>(find.text('관심·직무·전공'));
+      expect(reason.style?.color, GwColors.light.accent);
+      expect(reason.style?.fontSize, 13);
+      expect(tester.getRect(find.text('관심·직무·전공')).top, closeTo(tester.getRect(find.descendant(of: find.byType(Pill), matching: find.text('새 공고'))).top, 0.5));
       expect(find.text('새 공고'), findsOneWidget); // 줄 위 표시. 같은 공고라 새 공고 구역은 없다
       expect(plain(tester, metaOf('통계')), 'D-2 · 공모전·경진대회');
       expect(find.byType(MajorPickLabel), findsOneWidget);
@@ -837,9 +868,11 @@ void main() {
       );
       expect(find.text('새 공고'), findsOneWidget); // 구역 제목
       expect(find.text('최근 3일'), findsOneWidget);
-      expect(plain(tester, metaOf('새 공모전')), '12월 20일 마감 · D-64 · 관심 분야');
-      expect(plain(tester, metaOf('먼 장학')), '11월 30일 마감 · D-44 · 직무·전공');
-      expect(plain(tester, metaOf('먼 알림톡')), '마감일 없음 · 관심 분야');
+      expect(plain(tester, metaOf('새 공모전')), '12월 20일 마감 · D-64');
+      expect(plain(tester, metaOf('먼 장학')), '11월 30일 마감 · D-44');
+      expect(plain(tester, metaOf('먼 알림톡')), '마감일 없음');
+      expect(find.text('관심 분야'), findsNWidgets(3)); // 이유는 제목 위 칩
+      expect(find.text('직무·전공'), findsOneWidget);
 
       final contest = tester.widget<Icon>(find.byIcon(Icons.emoji_events_rounded));
       expect(contest.size, 26);
@@ -879,6 +912,37 @@ void main() {
       expect(find.descendant(of: tabCards, matching: find.byType(Pill)), findsWidgets);
     });
 
+    testWidgets('360 폭·글자 1.3배: 상태 칩·새 공고 표시·이유 칩이 한 줄에 모자라면 칩 단위로 아랫줄, 넘치지 않음', (tester) async {
+      phone360(tester, 1.3);
+      await pumpHome(
+        tester,
+        ListRepo(
+          [
+            entry(
+              '저장 새 공고',
+              deadline: '2026-10-20',
+              reasons: ['interest_match', 'role_match', 'major_match'],
+              published: '2026-10-16',
+            ),
+          ],
+          saved: [savedOne('저장 새 공고', deadline: '2026-10-20')],
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      final state = tester.getRect(find.widgetWithText(Pill, '저장'));
+      final fresh = tester.getRect(find.descendant(of: find.byType(Pill), matching: find.text('새 공고')));
+      final reason = tester.getRect(find.text('관심·직무·전공'));
+      final title = tester.getRect(findText('저장 새 공고'));
+      expect(fresh.left, greaterThan(state.right)); // 표시 순서: 상태 → 새 공고 → 이유
+      expect(reason.top, greaterThanOrEqualTo(fresh.top - 0.5));
+      expect(reason.bottom, lessThanOrEqualTo(title.top)); // 칩은 모두 제목 위
+      // 칩이 글 묶음 폭을 넘지 않는다(상태 원 왼쪽까지)
+      final dot = tester.getRect(find.descendant(of: find.byType(HomeScreen), matching: find.byType(EligibilityDot)));
+      expect(reason.right, lessThanOrEqualTo(dot.left));
+      // 별 아이콘도 글자 배율을 따른다
+      expect(tester.getSize(find.byIcon(Icons.star_rounded)).height, closeTo(14 * 1.3, 0.5));
+    });
+
     testWidgets('마감 줄 날짜 블록: 큰 날짜와 요일(월 없음), 화면 읽기에서는 뺀다', (tester) async {
       bigScreen(tester);
       await pumpApp(tester, MemoryBriefingStore(alwaysShown: true));
@@ -888,6 +952,146 @@ void main() {
       expect(dayNumber, findsWidgets);
       expect(find.descendant(of: find.byType(ExcludeSemantics), matching: find.text('금')), findsWidgets);
       expect(tester.getSize(find.ancestor(of: dayNumber.first, matching: find.byType(Container)).first).width, 44);
+    });
+  });
+
+  group('이번 주 마감 카드 펼치기 (home-report-clarity-spec A)', () {
+    /// 7일 안 후보 8건. 마감순 6~8번째는 최근 3일 안 게시라 접힌 홈에서는 아래 '새 공고' 구역에 나온다.
+    List<RecommendationEntry> eight() => [
+      for (var i = 1; i <= 8; i++)
+        entry('임박 $i', deadline: '2026-10-${16 + i}', reasons: interest, published: i >= 6 ? '2026-10-16' : null),
+    ];
+
+    Finder freshTitle() => find.widgetWithText(SectionTitle, '새 공고');
+    Finder freshMarks() => find.descendant(of: find.byType(Pill), matching: find.text('새 공고'));
+
+    /// 말풍선의 화면 읽기 이름
+    String nudge(WidgetTester tester) => tester.getSemantics(find.bySemanticsLabel(RegExp('^오늘의 귀띔'))).label;
+
+    /// [titles]가 화면에서 위에서부터 이 순서로 놓였는지
+    void inOrder(WidgetTester tester, List<String> titles) {
+      final tops = [for (final t in titles) tester.getTopLeft(findText(t)).dy];
+      for (var i = 1; i < tops.length; i++) {
+        expect(tops[i], greaterThan(tops[i - 1]), reason: '${titles[i - 1]} → ${titles[i]}');
+      }
+    }
+
+    test('펼친 홈: 마감 카드에 7일 안 전부, 아래 구역의 같은 공고 줄과 마감 변경 카드는 빼고, 말풍선은 그대로', () {
+      final h = buildHomeSections(
+        list(eight()),
+        [savedOne('저장 변경', deadline: '2026-10-24', was: '2026-10-21')],
+        today,
+      );
+      expect(h.deadlines.map((r) => r.id), ['임박 1', '임박 2', '임박 3', '임박 4', '임박 5']);
+      expect(h.moreCount, 4); // 임박 6~8과 저장 변경
+      expect(h.fresh.map((r) => r.id), ['임박 6', '임박 7', '임박 8']);
+      expect(h.changed.map((s) => s.notice.noticeId), ['저장 변경']);
+      final open = h.expanded();
+      // 같은 날이면 저장한 공고 먼저(기존 마감순 규칙)
+      expect(open.deadlines.map((r) => r.id), [for (var i = 1; i <= 7; i++) '임박 $i', '저장 변경', '임박 8']);
+      expect(open.fresh, isEmpty);
+      expect(open.changed, isEmpty);
+      expect(open.moreCount, 0);
+      expect(identical(open.nudge, h.nudge), isTrue);
+      expect(open.deadlines.where((r) => r.fresh).map((r) => r.id), ['임박 6', '임박 7', '임박 8']);
+      // 펼칠 것이 없으면 그대로
+      final small = buildHomeSections(list(eight().take(5).toList()), const [], today);
+      expect(small.moreCount, 0);
+      expect(identical(small.expanded(), small), isTrue);
+    });
+
+    testWidgets('8건: 접힌 카드 5줄과 3건 더 보기 → 펼치면 8줄 마감순, 새 공고 구역 숨김 → 접으면 복원', (tester) async {
+      bigScreen(tester);
+      final semantics = tester.ensureSemantics();
+      await pumpHome(tester, ListRepo(eight()));
+      for (var i = 1; i <= 5; i++) {
+        expect(findText('임박 $i'), findsOneWidget);
+      }
+      expect(find.text('3건 더 보기'), findsOneWidget);
+      expect(freshTitle(), findsOneWidget);
+      expect(freshMarks(), findsNothing); // 아래 구역(아이콘 줄)에는 표시가 없다
+      inOrder(tester, ['임박 5', '3건 더 보기', '새 공고', '임박 6']); // 6~8은 펼침 줄 아래 '새 공고' 구역
+      final before = nudge(tester);
+      expect(before, contains('새 공고 3건'));
+
+      await tester.tap(find.text('3건 더 보기'));
+      await tester.pumpAndSettle();
+      expect(freshTitle(), findsNothing);
+      expect(freshMarks(), findsNWidgets(3)); // 펼친 마감 줄 6~8에 '새 공고' 표시
+      for (var i = 6; i <= 8; i++) {
+        expect(findText('임박 $i'), findsOneWidget); // 한 번만
+      }
+      inOrder(tester, [for (var i = 1; i <= 8; i++) '임박 $i', '접기']);
+      expect(nudge(tester), before);
+
+      // 탭을 오가도 펼친 상태는 유지
+      await tester.tap(find.descendant(of: find.byType(GwTabBar), matching: find.text('공고')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(of: find.byType(GwTabBar), matching: find.text('오늘')));
+      await tester.pumpAndSettle();
+      expect(find.text('접기'), findsOneWidget);
+
+      await tester.tap(find.text('접기'));
+      await tester.pumpAndSettle();
+      expect(find.text('3건 더 보기'), findsOneWidget);
+      expect(freshTitle(), findsOneWidget);
+      expect(freshMarks(), findsNothing);
+      inOrder(tester, ['임박 5', '3건 더 보기', '새 공고', '임박 6']);
+      expect(nudge(tester), before);
+      semantics.dispose();
+
+      // 후보 5건이면 펼침 줄이 없다
+      await pumpHome(tester, ListRepo(eight().take(5).toList()));
+      expect(find.textContaining('더 보기'), findsNothing);
+    });
+
+    testWidgets('펼칠 후보에 마감이 바뀐 저장 공고: 펼치면 줄 메타에 변경 문구, 하단 카드 숨김, 접으면 카드 복원', (tester) async {
+      bigScreen(tester);
+      final semantics = tester.ensureSemantics();
+      await pumpHome(
+        tester,
+        ListRepo(
+          [for (var i = 1; i <= 5; i++) entry('임박 $i', deadline: '2026-10-${17 + i}', reasons: interest)],
+          saved: [savedOne('저장 변경', deadline: '2026-10-23', was: '2026-10-20')],
+        ),
+      );
+      expect(find.text('1건 더 보기'), findsOneWidget);
+      expect(findTextContaining('저장한 공고의 마감 3일 연장'), findsOneWidget);
+      final before = nudge(tester);
+      expect(before, contains('마감 변경 1건'));
+
+      await tester.tap(find.text('1건 더 보기'));
+      await tester.pumpAndSettle();
+      expect(findTextContaining('저장한 공고의 마감 3일 연장'), findsNothing);
+      expect(plain(tester, metaOf('저장 변경')), endsWith('마감 3일 연장'));
+      expect(nudge(tester), before);
+
+      await tester.tap(find.text('접기'));
+      await tester.pumpAndSettle();
+      expect(findTextContaining('저장한 공고의 마감 3일 연장'), findsOneWidget);
+      expect(findText('저장 변경'), findsNothing);
+      expect(nudge(tester), before);
+      semantics.dispose();
+    });
+
+    testWidgets('공고 줄은 오른쪽 화살표(화면 읽기에서 뺌)가 있는 버튼, 펼침 줄은 가운데 글자와 아래 화살표', (tester) async {
+      bigScreen(tester);
+      final semantics = tester.ensureSemantics();
+      await pumpHome(tester, ListRepo(eight()));
+      final arrows = find.descendant(
+        of: find.byType(HomeScreen),
+        matching: find.descendant(of: find.byType(ExcludeSemantics), matching: find.byIcon(Icons.chevron_right_rounded)),
+      );
+      expect(arrows, findsNWidgets(8)); // 마감 5 + 새 공고 3
+      // 화살표는 줄 오른쪽 끝, 제목보다 오른쪽
+      expect(tester.getTopLeft(arrows.first).dx, greaterThan(tester.getTopRight(findText('임박 1')).dx));
+      final line = tester.getSemantics(find.ancestor(of: findText('임박 1'), matching: find.byType(InkWell)).first);
+      expect(line.flagsCollection.isButton, isTrue);
+      final more = find.text('3건 더 보기');
+      final moreRow = find.ancestor(of: more, matching: find.byType(Row)).first;
+      expect(find.descendant(of: moreRow, matching: find.byIcon(Icons.expand_more_rounded)), findsOneWidget);
+      expect(tester.getSize(find.ancestor(of: more, matching: find.byType(InkWell)).first).height, greaterThanOrEqualTo(48));
+      semantics.dispose();
     });
   });
 

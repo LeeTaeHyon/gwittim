@@ -19,6 +19,36 @@ NoticeSummary summary({DateInfo? deadline, String? note, String status = 'open'}
 );
 
 void main() {
+  test('결론 카드 마감 값: 날짜·시각·D-day, 오늘, 지남, 원문 설명, 미상', () {
+    final today = DateTime(2026, 11, 25, 9);
+    final tz = 'Asia/Seoul';
+    expect(
+      verdictDeadlineText(
+        summary(
+          deadline: info('2026-12-03', time: '17:00', tz: tz),
+        ),
+        today,
+      ),
+      '12월 3일 17:00 마감 · D-8',
+    );
+    expect(verdictDeadlineText(summary(deadline: info('2026-12-03')), today), '12월 3일 마감 · D-8');
+    expect(
+      verdictDeadlineText(
+        summary(
+          deadline: info('2026-11-25', time: '17:00', tz: tz),
+        ),
+        today,
+      ),
+      '오늘 17:00 마감',
+    );
+    expect(verdictDeadlineText(summary(deadline: info('2026-11-25')), today), '오늘 마감');
+    expect(verdictDeadlineText(summary(deadline: info('2026-11-20')), today), '11월 20일 마감 · 마감 지남');
+    // 모집 상태가 미확인이어도 확인된 날짜는 그대로 보인다
+    expect(verdictDeadlineText(summary(deadline: info('2026-12-03'), status: 'unknown'), today), '12월 3일 마감 · D-8');
+    expect(verdictDeadlineText(summary(note: '예산 소진 시까지'), today), '예산 소진 시까지');
+    expect(verdictDeadlineText(summary(), today), '마감일 미상');
+  });
+
   test('날짜만 확인된 값은 시각을 보여주지 않는다', () {
     expect(formatDateInfo(info('2026-11-02')), '2026년 11월 2일 (월)');
   });

@@ -266,6 +266,9 @@ void main() {
     final v = caseView(a, store['a'], now: today);
     final expected = '내 지원 · 준비 중 · ${v.next!.text} · ${v.remaining}';
     await tester.scrollUntilVisible(findText('받은 분석 보기'), 200, scrollable: find.byType(Scrollable).first);
+    // 결론 카드가 생겨 버튼이 화면 아래 끝에 걸칠 수 있어 가운데까지 끌어온다
+    await tester.ensureVisible(findText('받은 분석 보기'));
+    await tester.pumpAndSettle();
     await tester.tap(findText('받은 분석 보기'));
     await tester.pumpAndSettle();
     expect(find.byType(AnalysisReportScreen), findsOneWidget);

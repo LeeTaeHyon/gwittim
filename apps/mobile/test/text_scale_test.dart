@@ -18,6 +18,8 @@ import 'package:gwittim/ui/theme.dart';
 import 'app_test.dart' show OneNoticeRepository, notice;
 import 'auth_gate_test.dart' show FakeAuth;
 import 'finders.dart';
+import 'home_briefing_test.dart' show ListRepo, entry;
+import 'report_verdict_test.dart' show reportNotice, rec;
 
 /// 전역 글꼴 배율 상한. 기기 글자 크기를 최대로 키워도 앱은 [maxTextScale]배까지만 키운다.
 void main() {
@@ -152,6 +154,8 @@ void main() {
     ));
     await tester.pump();
     expect(find.bySemanticsLabel('불러오는 중'), findsWidgets);
+    // 결론 카드가 맨 위에 생겨 체크리스트는 첫 화면 아래에 있다
+    await tester.scrollUntilVisible(find.text('지원 전 체크리스트'), 200, scrollable: find.byType(Scrollable).first);
     expect(find.text('지원 전 체크리스트'), findsOneWidget);
     expect(find.text('포스터 크게 보기'), findsNothing);
     frame.completeError(StateError('decoding failed'));
@@ -290,6 +294,65 @@ void main() {
     expect(find.text('파이썬'), findsOneWidget);
     await scrollToEnd(tester);
     expect(tester.takeException(), isNull);
+  });
+
+  // home-report-clarity-spec §5: 펼친 이번 주 마감 카드와 리포트 결론 카드
+  testWidgets('360 폭·큰 글자: 홈 펼친 마감 카드, 리포트 결론 카드가 넘치지 않는다', (tester) async {
+    smallPhoneBigText(tester);
+    final repo = ListRepo([
+      for (var i = 1; i <= 8; i++)
+        entry(
+          '[합성 샘플] 아주 긴 제목의 이번 주 마감 공고 $i번 참가자 모집 안내',
+          deadline: '2026-10-${16 + i}',
+          reasons: const ['interest_match', 'role_match', 'major_match'],
+          published: i >= 6 ? '2026-10-16' : null,
+        ),
+    ]);
+    await tester.runAsync(repo.preload);
+    await tester.pumpWidget(
+      GwittimApp(
+        repository: repo,
+        openUrl: (_) async => true,
+        today: today,
+        briefingStore: MemoryBriefingStore(alwaysShown: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('3건 더 보기'), 300, scrollable: _vertical.hitTestable().first);
+    await tester.ensureVisible(find.text('3건 더 보기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3건 더 보기').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.text('3건 더 보기'), findsNothing); // 펼쳐졌다
+    await scrollToEnd(tester);
+    expect(tester.takeException(), isNull, reason: '홈 펼친 상태');
+
+    await tester.pumpWidget(
+      GwMaterialApp(
+        themeController: ThemeController(),
+        home: ReportScreen(
+          repository: OneNoticeRepository(
+            reportNotice(note: '예산 소진 시까지 선착순으로 접수하며 조기 마감될 수 있음', unresolved: ['직전 학기 평점 3.0 이상']),
+          ),
+          noticeId: 'n',
+          openUrl: (_) async => true,
+          today: today,
+          recommendation: rec(
+            'needs_check',
+            results: const [
+              ConditionResult(field: 'grade', status: 'unknown', evidence: '2~3학년', unknownReason: 'profile_missing'),
+              ConditionResult(field: 'enrollment_status', status: 'unknown', evidence: '재학생', unknownReason: 'profile_missing'),
+            ],
+            reasons: const ['interest_match', 'role_match', 'major_match'],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(reportVerdictKey), findsOneWidget);
+    expect(tester.takeException(), isNull, reason: '리포트 결론 카드');
+    await scrollToEnd(tester);
+    expect(tester.takeException(), isNull, reason: '리포트 끝까지');
   });
 }
 

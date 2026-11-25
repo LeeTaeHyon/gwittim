@@ -21,6 +21,21 @@ String deadlineLabel(NoticeSummary n) {
   return '마감일 미상';
 }
 
+/// 리포트 결론 카드의 마감 값 (home-report-clarity-spec B1).
+/// '12월 3일 17:00 마감 · D-8', 시각이 확인되지 않았으면 '12월 3일 마감 · D-8'.
+/// 오늘이면 '오늘 17:00 마감' 또는 '오늘 마감', 날짜가 지났으면 '10월 10일 마감 · 마감 지남'.
+/// 날짜가 없으면 원문 설명(예산 소진 시까지 등), 설명도 없으면 '마감일 미상'.
+/// 모집 상태(open·unknown)와 상관없이 확인된 날짜로만 계산한다. 마감·삭제 공고는 부르는 쪽에서 [lifecycleLabel]을 쓴다.
+String verdictDeadlineText(NoticeSummary n, DateTime today) {
+  final d = n.applicationDeadline;
+  if (d == null) return n.deadlineNote ?? '마감일 미상';
+  final days = d.day.difference(DateTime(today.year, today.month, today.day)).inDays;
+  final time = d.hasTime ? ' ${d.time}' : '';
+  if (days == 0) return '오늘$time 마감';
+  final base = '${d.day.month}월 ${d.day.day}일$time 마감';
+  return days > 0 ? '$base · D-$days' : '$base · 마감 지남';
+}
+
 /// 남은 날짜 표시. 날짜 단위로만 계산한다.
 String? daysLeftLabel(NoticeSummary n, DateTime today) {
   final d = n.applicationDeadline;

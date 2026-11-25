@@ -85,7 +85,7 @@ class HomeSections {
   const HomeSections({
     required this.personalized,
     this.deadlines = const [],
-    this.weekTotal = 0,
+    this.week = const [],
     this.fresh = const [],
     this.later = const [],
     this.changed = const [],
@@ -98,8 +98,14 @@ class HomeSections {
   /// 마감 구역에 보이는 줄. 7일 안 후보 앞의 몇 건이고, 7일 안이 없으면 '다음 마감' 1건, 그것도 없으면 비어 있다.
   final List<HomeRow> deadlines;
 
-  /// 7일 안 후보 전체 수 (화면에 안 나온 것 포함)
-  final int weekTotal;
+  /// 7일 안 후보 전체 (공고 ID로 중복을 뺀 마감순). 접힌 마감 카드에 안 나온 것과 아래 구역에 나온 것도 들어 있다.
+  final List<HomeRow> week;
+
+  /// 7일 안 후보 전체 수
+  int get weekTotal => week.length;
+
+  /// 마감 카드를 펼치면 더 보이는 7일 안 후보 수 ('N건 더 보기'). 0이면 펼침 줄이 없다.
+  int get moreCount => isNext ? 0 : week.length - deadlines.length;
 
   /// 새 공고 구역 줄
   final List<HomeRow> fresh;
@@ -115,6 +121,31 @@ class HomeSections {
 
   /// 마감 구역이 7일 안이 아니라 '다음 마감' 1건인지
   bool get isNext => weekTotal == 0 && deadlines.isNotEmpty;
+
+  /// 마감 카드를 펼친 홈 (home-report-clarity-spec A2): 마감 카드에 7일 안 후보 전부.
+  /// 아래 구역에서는 마감 카드와 같은 공고 줄만 빼고, 같은 공고의 마감 변경 카드도 뺀다. 말풍선은 그대로.
+  HomeSections expanded() {
+    if (moreCount == 0) return this;
+    final ids = {for (final r in week) r.id};
+    return HomeSections(
+      personalized: personalized,
+      deadlines: week,
+      week: week,
+      fresh: [
+        for (final r in fresh)
+          if (!ids.contains(r.id)) r,
+      ],
+      later: [
+        for (final r in later)
+          if (!ids.contains(r.id)) r,
+      ],
+      changed: [
+        for (final s in changed)
+          if (!ids.contains(s.notice.noticeId)) s,
+      ],
+      nudge: nudge,
+    );
+  }
 
   /// 홈 줄에 나온 공고 ID (순서대로)
   List<String> get rowIds => [
@@ -253,7 +284,7 @@ HomeSections buildHomeSections(
   return HomeSections(
     personalized: personalized,
     deadlines: deadlines,
-    weekTotal: week.length,
+    week: week,
     fresh: fresh,
     later: later,
     changed: [

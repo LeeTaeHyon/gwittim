@@ -437,14 +437,15 @@ void main() {
         null,
         none,
       );
-      expect(rows.map((r) => r.label), ['학과', '직접 확인 3개', '직접 확인']);
-      final grouped = rows[1];
+      // 확인 필요 줄이 안내 줄보다 먼저 (home-report-clarity-spec B2)
+      expect(rows.map((r) => r.label), ['직접 확인 3개', '직접 확인', '학과']);
+      final grouped = rows[0];
       expect(grouped.evidences, ['직무 관련 자격증 소유자', '근무지 인접 거주자 우대', '주말 근무 가능자']);
       expect(grouped.note, contains('자동으로 비교하지 못했습니다'));
       expect(grouped.count, 3);
       // 성적 조건은 안내가 달라서 따로 남는다 (1개라 묶지 않음)
-      expect(rows[2].evidences, ['직전 학기 평점 3.0 이상']);
-      expect(rows[2].note, contains('성적을 받지 않습니다'));
+      expect(rows[1].evidences, ['직전 학기 평점 3.0 이상']);
+      expect(rows[1].note, contains('성적을 받지 않습니다'));
     });
 
     test('우대 사항은 지원 자격 뒤에 따로 묶고 확인 필요 수에 넣지 않는다', () {
@@ -506,8 +507,9 @@ void main() {
         rec,
         (f) => f == 'major_id' ? '컴퓨터공학과' : null,
       );
-      expect(rows.map((r) => (r.field, r.label)), [('학과', '컴퓨터공학과'), ('학년', '프로필 미입력')]);
-      expect(rows.last.state, CheckState.check);
+      // 확인 필요 줄이 충족 줄보다 먼저 (home-report-clarity-spec B2)
+      expect(rows.map((r) => (r.field, r.label)), [('학년', '프로필 미입력'), ('학과', '컴퓨터공학과')]);
+      expect(rows.first.state, CheckState.check);
     });
 
     test('추천 이유 낱말', () {
@@ -553,7 +555,8 @@ void main() {
     expect(find.descendant(of: find.byType(HomeScreen), matching: find.byType(NoticeCard)), findsNothing);
     expect(find.textContaining('합격 가능성'), findsNothing); // 홈 끝 문구는 뺐다 (브리핑·리포트에만)
     expect(findText(projectTitle), findsOneWidget); // 같은 공고는 홈에서 한 번만
-    expect(findText('D-13 · 17:00 마감 · 행사 · 관심·직무·전공'), findsOneWidget); // 남은 날·시각이 앞, 이유는 줄여 잇는다
+    expect(findText('D-13 · 17:00 마감 · 행사'), findsOneWidget); // 남은 날·시각이 앞
+    expect(find.text('관심·직무·전공'), findsOneWidget); // 이유는 줄여 제목 위 칩으로
     expect(find.text('새 공고'), findsOneWidget); // 마감 줄에 이미 나온 새 공고는 표시만, 새 공고 구역은 없다
     expect(find.text('마감이 먼 맞춤 공고'), findsNothing); // 관련 공고가 이 하나뿐이다
     // 귀띔 말풍선은 달라진 것의 건수만 (D-050)
