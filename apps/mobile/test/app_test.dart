@@ -152,8 +152,7 @@ Notice notice({
   activityPeriod: null,
   eligibility: Eligibility(
     conditions: conditions,
-    unresolvedEvidence: [...unresolved, ...preferred],
-    preferredEvidence: preferred,
+    unresolved: [for (final u in unresolved) UnresolvedItem(u), for (final u in preferred) UnresolvedItem(u, '우대 사항')],
     extractionComplete: complete,
     explicitlyUnrestricted: unrestricted,
     unrestrictedEvidence: unrestricted ? '누구나' : null,
@@ -787,7 +786,7 @@ void main() {
     expect(find.text('확인 필요'), findsOneWidget);
     expect(find.text('직접 확인'), findsOneWidget);
     expect(find.text('학교 공지에서 확인하기'), findsOneWidget);
-    expect(findTextContaining('첨부파일·이미지에 조건이 더 있을 수 있습니다'), findsOneWidget);
+    expect(findTextContaining('지원 자격을 모두 확인하지 못했습니다'), findsOneWidget);
     expect(find.textContaining('23:59'), findsNothing);
   });
 

@@ -44,8 +44,7 @@ Notice reportNotice({
   activityPeriod: null,
   eligibility: Eligibility(
     conditions: conditions,
-    unresolvedEvidence: unresolved,
-    preferredEvidence: const [],
+    unresolved: [for (final u in unresolved) UnresolvedItem(u)],
     extractionComplete: complete,
     explicitlyUnrestricted: false,
     unrestrictedEvidence: null,
@@ -158,11 +157,15 @@ void main() {
     testWidgets('조건이 다 추출되지 않아도 조건 값 뒤에 덧붙이지 않고 체크리스트 아래 안내에 맡긴다', (tester) async {
       await pumpReport(
         tester,
-        reportNotice(deadline: _day('2026-10-30'), complete: false),
+        reportNotice(
+          deadline: _day('2026-10-30'),
+          complete: false,
+          conditions: const [EligibilityCondition(field: 'major_id', evidence: '컴퓨터공학과')],
+        ),
         recommendation: rec('met', results: const [_majorMet]),
       );
       expect(verdict(tester).take(2), ['조건', '조건 충족']);
-      expect(findTextContaining('첨부파일·이미지에 조건이 더 있을 수 있습니다'), findsOneWidget);
+      expect(findTextContaining('지원 자격을 모두 확인하지 못했습니다'), findsOneWidget);
     });
   });
 
@@ -213,8 +216,7 @@ void main() {
         activityPeriod: null,
         eligibility: const Eligibility(
           conditions: [],
-          unresolvedEvidence: [],
-          preferredEvidence: [],
+          unresolved: [],
           extractionComplete: false,
           explicitlyUnrestricted: true,
           unrestrictedEvidence: '참가대상: 누구나',
@@ -292,8 +294,7 @@ void main() {
           activityPeriod: null,
           eligibility: const Eligibility(
             conditions: [],
-            unresolvedEvidence: ['운전면허 소지자', '야간 근무 가능자'],
-            preferredEvidence: ['운전면허 소지자'],
+            unresolved: [UnresolvedItem('운전면허 소지자', '우대 사항'), UnresolvedItem('야간 근무 가능자')],
             extractionComplete: true,
             explicitlyUnrestricted: false,
             unrestrictedEvidence: null,

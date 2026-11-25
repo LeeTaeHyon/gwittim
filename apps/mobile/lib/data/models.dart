@@ -89,34 +89,51 @@ class EligibilityCondition {
   final String evidence;
 }
 
+/// 자동 비교하지 못한 조건 하나. note는 표시: '우대 사항', '항목 제한 없음', 그 밖은 null 등 (D-056).
+class UnresolvedItem {
+  const UnresolvedItem(this.evidence, [this.note]);
+
+  final String evidence;
+  final String? note;
+
+  /// 지원 자격이 아니라 갖추면 유리한 조건 (D-015)
+  bool get isPreferred => note == '우대 사항';
+
+  /// '학년 무관'처럼 한 항목에만 제한이 없다는 문구. 확인할 조건이 아니다 (D-056)
+  bool get isNoLimit => note == '항목 제한 없음';
+
+  /// 직접 확인할 조건 (우대·항목 제한 없음이 아닌 것)
+  bool get needsCheck => !isPreferred && !isNoLimit;
+}
+
 class Eligibility {
   const Eligibility({
     required this.conditions,
-    required this.unresolvedEvidence,
+    required this.unresolved,
     required this.extractionComplete,
     required this.explicitlyUnrestricted,
     required this.unrestrictedEvidence,
-    this.preferredEvidence = const [],
   });
 
   final List<EligibilityCondition> conditions;
-  final List<String> unresolvedEvidence;
 
-  /// unresolvedEvidence 중 우대 사항(note '우대 사항', D-015). 지원 자격이 아니라 갖추면 유리한 조건.
-  final List<String> preferredEvidence;
+  /// 미해석 항목마다 표시를 보존한다. 같은 문구가 필수·우대에 각각 있어도 두 항목 모두 남는다 (D-056).
+  final List<UnresolvedItem> unresolved;
   final bool extractionComplete;
   final bool explicitlyUnrestricted;
   final String? unrestrictedEvidence;
+
+  List<UnresolvedItem> get checkItems => [for (final u in unresolved) if (u.needsCheck) u];
+  List<UnresolvedItem> get preferredItems => [for (final u in unresolved) if (u.isPreferred) u];
+  List<UnresolvedItem> get noLimitItems => [for (final u in unresolved) if (u.isNoLimit) u];
 
   factory Eligibility.fromJson(Map<String, dynamic> m) => Eligibility(
     conditions: [
       for (final c in m['conditions'] as List)
         EligibilityCondition(field: c['field'] as String, evidence: c['evidence'] as String),
     ],
-    unresolvedEvidence: [for (final u in m['unresolved_conditions'] as List) u['evidence'] as String],
-    preferredEvidence: [
-      for (final u in m['unresolved_conditions'] as List)
-        if (u['note'] == '우대 사항') u['evidence'] as String,
+    unresolved: [
+      for (final u in m['unresolved_conditions'] as List) UnresolvedItem(u['evidence'] as String, u['note'] as String?),
     ],
     extractionComplete: m['extraction_complete'] as bool,
     explicitlyUnrestricted: m['explicitly_unrestricted'] as bool,
