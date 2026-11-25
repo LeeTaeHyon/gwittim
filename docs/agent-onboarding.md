@@ -1,6 +1,7 @@
 # 귀띔 에이전트 인수인계 (검증본)
 
 - 기준 시점: 2026-11-24 19:34 KST. 기준 커밋: origin/main `3310e44`(#157 병합)
+- 갱신: 2026-11-25 13:45 KST. §1 상태 표와 아래 "11/25 바뀐 것"은 이 시각에 다시 조회한 값(origin/main `ed0778e`). §2 이후의 대조·검증 표는 11/24 조회값 그대로다
 - 저장소 파일 경로와 줄 번호는 origin/main `3310e44` 기준이다. 메인 체크아웃은 뒤처져 있어 줄 번호가 다를 수 있다
 - 이 문서는 직접 조회한 결과만 적는다. `docs/handoff.md`와 메모리 요약은 근거로 쓰지 않고 대조 대상으로만 썼다
 - 작업 중에도 다른 세션이 계속 병합했다(조사 시작 때 `152292f` → 19:28에 `3310e44`, #158이 열림). 이 문서를 읽는 시점에는 숫자가 달라졌을 수 있다. 쓰기 전에 아래 "다시 확인하는 명령"부터 돌린다
@@ -8,6 +9,21 @@
   - `~mybaton/` = `C:/Users/dlxog/.mybaton/worktrees/Gwittim-91d26c74/`
   - `.claude/worktrees/` = `C:/Users/dlxog/Desktop/all/Code_Project/Gwittim/.claude/worktrees/`
   - 시각: GitHub·gcloud 원문은 UTC이고, 본문은 KST(UTC+9)로 적는다
+
+## 11/25 바뀐 것 (직접 조회)
+
+- 병합(11/24 밤~11/25): #163 게스트 로그인(D-054), #104 공고 분석 자체 모델(D-042), #165 자체 모델 되돌림, #164 배포 기록 00017, #162 처리방침 구글 문서 초안, #153 고르는 칩 크기, #158 브리핑 범위 명세
+- 공고 분석 자체 모델(D-042): **적용 보류, main에서 제거**
+  - 11/25 00:09 #104 병합 → 00:10~00:59 정기 배치로 실제 반영 → 원문에 적힌 마감이 사라지는 문제(59건 중 명시 마감 16건)로 01:03 되돌림
+  - 되돌린 뒤 로컬 공고·Firestore 공개본 모두 반영 전과 같음
+  - #165(`5cc03e1`)가 #104를 되돌리고 시도 기록을 `legacy/extract-model/`에 보관(코드·시험·문서·README). `decisions.md` D-042는 "보류·되돌림"으로 남음
+  - 운영 규칙 버전은 `rule-0.10` 그대로
+- 상세 분석 본문 입력(#155, D-053): **11/25 닫음(보류, 미병합)**
+  - 평가 합격선 미달. 브랜치 `feat/detail-body-input`(`b9a156b`)과 worktree `.claude/worktrees/detail-body`는 남김
+  - 다시 살리면 #163과 4곳 충돌(`backend/agent/service.py`, `backend/firebase_store.py`, `docs/agent-privacy-spec.md`, `docs/decisions.md`). 양쪽 내용을 함께 살리면 풀림
+  - 평가 도구(`tools/agent_eval_*`)와 D-053은 main에 없고 이 브랜치에만 있음
+  - #162 처리방침 초안은 #155 반영본을 바탕으로 써서 '공고 본문' 문장이 있음. 게시할 때 빼야 함
+- 메인 체크아웃: 11/25 origin/main과 같게 맞춤. 그 전 미커밋 문서 12개는 로컬 브랜치 `wip/local-docs-1125`(`13a6182`, 푸시 안 함)에 보관
 
 ## 0. 다시 확인하는 명령
 
@@ -21,17 +37,17 @@ git worktree list | wc -l ; git branch | wc -l
 
 ## 1. 지금 상태 (재현 명령 → 실제 출력)
 
-| 항목 | 명령 | 출력(2026-11-24) |
+| 항목 | 명령 | 출력(2026-11-25 13:45 갱신) |
 |---|---|---|
-| main 최신 | `git log -1 origin/main` | `3310e44` 19:27 "Merge pull request #157 from LeeTaeHyon/feat/care-loop" |
-| 메인 체크아웃(`Gwittim` 폴더) | `git status`, `git rev-list --count main..origin/main` | 브랜치 `main` `93f7fc9`, origin/main보다 **25커밋 뒤**. 미커밋 5개(수정 2: `docs/final-prep-todo.md`, `docs/stage2-results.md` / 새 파일 3: `docs/agent-detail-body-spec.md`, `docs/agent-quality-eval-spec.md`, `docs/notice-detail-poster-spec.md`) |
-| PR | `gh pr list --state all` | 전체 158건 = 병합 151, 열림 4, 닫힘 3(#37·#48·#79) |
-| 열린 PR | 〃 | #104 `feat/extract-model`(11/18), #153 `feat/analysis-chips`(11/23), #155 `feat/detail-body-input`(11/24), #158 `docs/briefing-spec`(11/24) |
-| Cloud Run 트래픽 | `gcloud run services describe gwittim-api ...` | `gwittim-api-00014-shg` 100% |
+| main 최신 | `git log -1 origin/main` | `ed0778e` 11/25 07:19 "Merge pull request #158 from LeeTaeHyon/docs/briefing-spec" |
+| 메인 체크아웃(`Gwittim` 폴더) | `git status`, `git rev-list --count main..origin/main` | 브랜치 `main` `ed0778e`, origin/main과 같음. 미커밋 0(11/24의 미커밋 문서는 로컬 브랜치 `wip/local-docs-1125`에 보관) |
+| PR | `gh pr list --state all` | 전체 166건 = 병합 161, 열림 1, 닫힘 4(#37·#48·#79·#155) |
+| 열린 PR | 〃 | #166 `docs/agent-handoff-docs`(이 문서) |
+| Cloud Run 트래픽 | `gcloud run services describe gwittim-api ...` | `gwittim-api-00017-p8j` 100%. runbook 기록상 커밋 `175019e`(#163 게스트 로그인, `docs/deploy-runbook.md:113`) |
 | 리비전 이력 | `gcloud run revisions list ...` | 00014 11/23 14:53, 00013 11/23 14:31, 00012 11/23 06:52, 00011 11/23 05:58, 00010 11/23 04:46, 00009 11/23 04:16, 00008 11/23 04:09, 00007 11/15 15:09 |
 | 00014 ↔ 커밋 | `docs/deploy-runbook.md:108` | 00014 = `423faf0`. 리비전 메타데이터에는 커밋 정보가 없다(source zip 경로만 있음). 대응 관계는 runbook 기록으로만 확인 |
 | 00014 환경변수 이름 | `gcloud run revisions describe ... --format=json` (이름만 읽음) | 일반 환경변수: `GWITTIM_FIREBASE_PROJECT_ID`, `GWITTIM_INGEST_TOKEN`, `GWITTIM_LLM_PROVIDER`, `GWITTIM_LLM_MONTHLY_CAP_KRW` / 시크릿: `DEEPSEEK_API_KEY`(`deepseek-api-key`) |
-| 정기 배치 코드 | `git -C ../Gwittim-batch rev-parse --short HEAD` | `423faf0`(detached). origin/main보다 뒤다. 그 뒤 main에 들어온 변경에 서버·배치 코드 차이가 있는지는 이 문서에서 따로 세지 않았다 |
+| 정기 배치 코드 | `git -C ../Gwittim-batch rev-parse --short HEAD` | `5cc03e1`(detached, #165 자체 모델 되돌림). 그 뒤 main 병합은 문서·앱뿐이라 배치 코드 차이 없음. 11/25 09:00 정기 배치 정상, 로컬 공고 637건 모두 자체 모델 분석 아님 |
 | 예약 작업 | `Get-ScheduledTask`, `Get-ScheduledTaskInfo` | `Gwittim 수집 배치 (하루 2회)` Ready, 마지막 실행 11/24 18:00 결과 0, 다음 실행 11/25 09:00 |
 | 마지막 배치 결과 | `data/local/batch.log` 188번째 줄 | 알림톡 단계 `collected 306, published 3, held_past 282, inbox 16`. 같은 실행에서 위비티 `listed 30·parsed 1`, 콘테스트코리아 `listed 24·parsed 10`, 카톡 내보내기 6개 방 ok |
 | 최신 APK | `ls data/local/apk` | `data/local/apk/gwittim-0.10.4-302d582.apk`(60,974,876바이트, SHA-256 앞자리 `51bee8331d41`). `apps/mobile/pubspec.yaml` version은 `0.9.0+2`다(APK 이름과 다름) |
@@ -252,7 +268,7 @@ git worktree list | wc -l ; git branch | wc -l
   | 지금 | — | 14.8%(58/393) | 기준선 |
   | D1 | 본문 입력 | 35.1%(138/393) | 불합격. 어긋남 1.6%, 오판 1건 |
   | D2 | D1 + 인용 대조 | 33.6%(130/387) | 불합격·버림. 거른 줄 0개, 원가 1.7배 |
-  | D3 | D1 + 줄 수 상한 | 47.3% | 불합격. 근거율 94.98%(700/737). 그래도 팀장 결정으로 PR #155(D-053)에 반영 |
+  | D3 | D1 + 줄 수 상한 | 47.3% | 불합격. 근거율 94.98%(700/737). 팀장 결정으로 PR #155(D-053)에 반영했으나 11/25 PR 닫음(보류, 미병합) |
   | D4 | D3 + 역량 근거를 본문으로 | 46.6% | 불합격·"효과 없음"으로 버림(`docs/agent-detail-body-spec.md:25`) |
   | G | 일반 AI 비교군 | 62.8%(247/393) | G도 70% 미달 |
   | X2+L | 외부 찾기 변형 | 쓸 결과 요청당 1.75개(합격선 3) | 불합격. 12요청 중 과금됐는데 0개인 요청 2회 |
@@ -265,7 +281,7 @@ git worktree list | wc -l ; git branch | wc -l
   - Gemma 라벨 학습(앱 배치) 종류 정확도 0.418 → 사람 정답 학습 0.782. McNemar p < 0.0001(1688·1693줄, D-035, 11/15). Gemma 라벨 학습은 버림
   - 캐스케이드(애매하면 Gemma): 관심사 F1 0.800 → 0.734로 떨어져 종류에 쓰지 않음(1746줄 근처)
   - 관심사 꼬리표별 문턱(D-037): 정확히 일치 0.841 → 0.843. 헛붙임 95 → 75로 줄었지만 놓침이 24 → 38로 늘었고, 검증 세트가 40건 남짓이라 안 씀(1832·1848줄)
-- 공고 분석 자체 모델(D-042, PR #104 열림, main 미병합)
+- 공고 분석 자체 모델(D-042): 11/25 #104 병합·실제 반영 뒤 마감 누락으로 되돌리고 보류(#165, `legacy/extract-model/`). 아래는 11/24 조회값
   - `data/local/extract_distill/compare_out/report.json`: 자체 모델 마감 맞음 83, 기타 조건 80/111(72%)
   - 브랜치 기록의 84·82%를 담은 data 파일은 확인 불가
   - 기타 조건 LLM 필터 안은 재현율 85 → 81%로 떨어져 버림(브랜치 기록)
@@ -378,6 +394,7 @@ git worktree list | wc -l ; git branch | wc -l
 
 - 방식: 문맥 없는 하위 에이전트에게 이 파일만 읽게 했다(다른 파일·명령 금지, 이 절은 무시). 정답은 위 원시 조회에서 뽑았다
 - 회차별 점수: **1회차 15/15**(2026-11-24 19:40). 틀린 문항이 없어 문서를 고치지 않았고 2회차는 하지 않았다
+- 아래 문항의 정답은 11/24 기준이다. 상태 문항 1~4와 권한 문항 9(#155)는 11/25에 바뀌었으니 맨 앞 "11/25 바뀐 것"과 §1 표로 판단한다
 
 | # | 종류 | 문항 | 정답(원시 근거) | 1회차 |
 |---|---|---|---|---|
