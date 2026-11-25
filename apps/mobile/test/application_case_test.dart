@@ -80,7 +80,7 @@ Notice detail(String id, {int version = 1, DateInfo? start, String? applyUrl}) =
   activityPeriod: null,
   eligibility: const Eligibility(
     conditions: [],
-    unresolvedEvidence: [],
+    unresolved: [],
     extractionComplete: false,
     explicitlyUnrestricted: false,
     unrestrictedEvidence: null,

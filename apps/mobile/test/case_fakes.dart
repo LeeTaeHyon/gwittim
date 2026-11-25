@@ -35,7 +35,7 @@ Notice noticeOf(NoticeSummary s, {DateInfo? start, String? applyUrl, String? sou
   activityPeriod: null,
   eligibility: const Eligibility(
     conditions: [],
-    unresolvedEvidence: [],
+    unresolved: [],
     extractionComplete: true,
     explicitlyUnrestricted: false,
     unrestrictedEvidence: null,

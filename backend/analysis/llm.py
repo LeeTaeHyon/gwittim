@@ -19,7 +19,16 @@ from backend.dictionaries import codes
 from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
-from .rules import EXCLUDES, OTHER_STATUS, RuleBasedAnalyzer, is_activity_line, is_llm_condition, tidy_unresolved
+from .rules import (
+    EXCLUDES,
+    FLAG_NOTES,
+    OTHER_STATUS,
+    RuleBasedAnalyzer,
+    has_required_location,
+    is_activity_line,
+    is_llm_condition,
+    tidy_unresolved,
+)
 
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _PHONE = re.compile(r"(?:\+?82[-\s]?)?0\d{1,2}[-\s.)]?\d{3,4}[-\s.]?\d{4}")
@@ -177,6 +186,7 @@ class OllamaAnalyzer:
 
         # 조건: 규칙이 없는 필드만, 근거·값 검증 통과분만
         elig = fields["eligibility"]
+        title_and_body = [title, *raw["body_text"].splitlines()]
         have = {c["field"] for c in elig["conditions"]}
         for c in out.get("conditions") or []:
             if not isinstance(c, dict) or c.get("field") not in _FIELDS or c["field"] in have:
@@ -185,6 +195,10 @@ class OllamaAnalyzer:
                 continue
             if EXCLUDES.search(c["evidence"]):
                 self.rejected.append(f"빼는 조건을 허용으로 답함: {c['evidence'][:40]}")
+                continue
+            if not has_required_location(c["evidence"], title_and_body):
+                # 근거를 잘라 보내도 원문 구절로 역할을 판단한다: 우대·모호·항목 제한 없음 구절 안이면 필수 조건이 아니다 (D-056)
+                self.rejected.append(f"필수 구절 밖의 근거(우대·모호·항목 제한 없음): {c['evidence'][:40]}")
                 continue
             if c["field"] == "enrollment_status" and OTHER_STATUS.search(c["evidence"]):
                 # 졸업 예정자·복학생 등은 프로필 재학 상태로 판정할 수 없다. 규칙처럼 직접 확인으로 둔다 (D-046)
@@ -208,10 +222,11 @@ class OllamaAnalyzer:
                 extra.append({"evidence": t, "note": "LLM 추출"})
             else:
                 self.rejected.append(f"자격 조건 아님·중복: {t[:40]}")
-        # 규칙 결과와 합쳐 다시 정리: 같은 조건이 규칙·LLM에서 두 번 나오지 않게, 우대 사항 표시도 함께 (D-015)
+        # 규칙 결과와 합쳐 다시 정리: 같은 역할 안에서만 중복을 합치고, 우대·항목 제한 없음 표시는 원문 위치로 정한다 (D-015, D-056)
         elig["unresolved_conditions"], _ = tidy_unresolved(elig["unresolved_conditions"] + extra, lines)
-        if elig["unresolved_conditions"]:
-            elig["extraction_complete"] = False  # LLM은 완전성을 올리지 않고 내리기만 한다
+        if any(u["note"] not in FLAG_NOTES for u in elig["unresolved_conditions"]):
+            # LLM은 완전성을 올리지 않고 내리기만 한다. 우대·항목 제한 없음만 더해지면 두 값을 그대로 둔다
+            elig["extraction_complete"] = False
             elig["explicitly_unrestricted"], elig["unrestricted_evidence"] = False, None  # 제한 없음도 내리기만
 
         year = int(raw["published"]["date"][:4]) if raw.get("published") else None

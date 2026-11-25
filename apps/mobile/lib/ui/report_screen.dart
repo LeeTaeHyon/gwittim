@@ -93,6 +93,9 @@ List<CheckRow> groupCheckRows(List<CheckRow> rows) {
   return out;
 }
 
+const notFoundLabel = '공고에서 지원 조건을 찾지 못했습니다';
+const notFoundOtherLabel = '그 밖의 지원 조건은 공고에서 찾지 못했습니다';
+
 final _privateCondition = RegExp(r'평점|학점|성적|소득|연령|나이');
 
 /// 지원 전 체크리스트 (D-009). 판정은 서버의 condition_results를 그대로 쓰고, 앱은 다시 판정하지 않는다.
@@ -128,34 +131,39 @@ List<CheckRow> checklistRows(
       rows.add(CheckRow(CheckState.info, conditionFieldLabel(c.field), evidence: c.evidence));
     }
   }
-  final preferred = elig.preferredEvidence.toSet();
-  for (final u in elig.unresolvedEvidence) {
-    if (preferred.contains(u)) continue;
+  final checks = elig.checkItems;
+  for (final u in checks) {
     rows.add(
       CheckRow(
         CheckState.check,
         '직접 확인',
-        evidence: u,
-        note: _privateCondition.hasMatch(u)
+        evidence: u.evidence,
+        note: _privateCondition.hasMatch(u.evidence)
             ? '귀띔은 성적을 받지 않습니다. 이 조건은 $origin에서 직접 확인해 주세요.'
             : '자동으로 비교하지 못했습니다. $origin에서 확인해 주세요.',
       ),
     );
   }
-  // 우대 사항은 지원 자격 뒤에, 확인 필요보다 약한 안내로 보인다 (D-015)
-  for (final u in elig.unresolvedEvidence.where(preferred.contains)) {
-    rows.add(CheckRow(CheckState.info, '우대 사항', evidence: u, note: '갖추면 유리한 조건입니다.'));
+  // 항목 제한 없음은 확인할 조건이 아니라 확인된 정보다 (D-056)
+  for (final u in elig.noLimitItems) {
+    rows.add(CheckRow(CheckState.info, '제한 없음', evidence: u.evidence));
   }
-  if (elig.conditions.isEmpty && elig.unresolvedEvidence.isEmpty) {
-    rows.add(
-      elig.explicitlyUnrestricted
-          ? CheckRow(CheckState.met, '누구나 지원 가능', evidence: elig.unrestrictedEvidence)
-          : CheckRow(
-              CheckState.info,
-              '공고에서 지원 조건을 찾지 못했습니다',
-              note: '조건이 없다는 뜻은 아닙니다. ${originName(notice.sourceId, object: true)} 확인해 주세요.',
-            ),
-    );
+  // 우대 사항은 지원 자격 뒤에, 확인 필요보다 약한 안내로 보인다 (D-015)
+  for (final u in elig.preferredItems) {
+    rows.add(CheckRow(CheckState.info, '우대 사항', evidence: u.evidence, note: '갖추면 유리한 조건입니다.'));
+  }
+  if (elig.conditions.isEmpty && checks.isEmpty) {
+    if (elig.explicitlyUnrestricted) {
+      rows.add(CheckRow(CheckState.met, '누구나 지원 가능', evidence: elig.unrestrictedEvidence));
+    } else {
+      rows.add(
+        CheckRow(
+          CheckState.info,
+          elig.noLimitItems.isEmpty ? notFoundLabel : notFoundOtherLabel,
+          note: '조건이 없다는 뜻은 아닙니다. ${originName(notice.sourceId, object: true)} 확인해 주세요.',
+        ),
+      );
+    }
   }
   return sortCheckRows(groupCheckRows(rows));
 }
@@ -1126,10 +1134,11 @@ class _ChecklistState extends State<_Checklist> {
           Text(keepAll(intro), style: TextStyle(fontSize: 14, height: 1.55, color: context.gw.sub)),
           const SizedBox(height: 8),
           ..._lines(rows, mets),
-          if (!notice.eligibility.extractionComplete)
+          // 원인(첨부·제목·이미지)을 알 수 없어 단정하지 않는다. '찾지 못했습니다' 줄이 있으면 그 줄이 이미 안내한다
+          if (!notice.eligibility.extractionComplete && !rows.any((r) => r.label == notFoundLabel || r.label == notFoundOtherLabel))
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(keepAll('첨부파일·이미지에 조건이 더 있을 수 있습니다. 지원 전에 원문을 확인해 주세요.'), style: captionStyle(context)),
+              child: Text(keepAll('지원 자격을 모두 확인하지 못했습니다. 자세한 자격은 원문에서 확인해 주세요.'), style: captionStyle(context)),
             ),
         ],
       ),

@@ -134,11 +134,11 @@
       "required": ["evidence", "note"],
       "properties": {
         "evidence": { "type": "string", "minLength": 1 },
-        "note": { "type": ["string", "null"], "description": "설명. '우대 사항'이면 지원 자격이 아니라 갖추면 유리한 조건 (D-015)." }
+        "note": { "type": ["string", "null"], "description": "설명. 정해 둔 값 둘: '우대 사항'은 지원 자격이 아니라 갖추면 유리한 조건 (D-015), '항목 제한 없음'은 '학년 무관'처럼 한 항목에만 제한이 없다는 문구로 나머지 자격이 열렸다는 근거가 아님 (D-056). 둘 다 필수 조건이 아니며 판정·완전성·명시적 제한 없음에서 뺀다. 그 밖은 null 또는 자유 설명." }
       }
     },
     "eligibility": {
-      "description": "빈 conditions는 '조건 못 찾음'. 명시적 제한 없음은 explicitly_unrestricted로만 표현 (D-005 #5).",
+      "description": "빈 conditions는 '조건 못 찾음'. 명시적 제한 없음은 explicitly_unrestricted로만 표현 (D-005 #5). 명시적 제한 없음은 전체 지원 대상에 대한 문구만 근거로 하며, 우대·항목 제한 없음 미해석 조건과 함께 있을 수 있다 (D-056).",
       "type": "object",
       "additionalProperties": false,
       "required": [
