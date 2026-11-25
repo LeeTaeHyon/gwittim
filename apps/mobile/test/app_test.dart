@@ -555,7 +555,8 @@ void main() {
     expect(find.descendant(of: find.byType(HomeScreen), matching: find.byType(NoticeCard)), findsNothing);
     expect(find.textContaining('합격 가능성'), findsNothing); // 홈 끝 문구는 뺐다 (브리핑·리포트에만)
     expect(findText(projectTitle), findsOneWidget); // 같은 공고는 홈에서 한 번만
-    expect(findText('D-13 · 17:00 마감 · 행사 · 관심·직무·전공'), findsOneWidget); // 남은 날·시각이 앞, 이유는 줄여 잇는다
+    expect(findText('D-13 · 17:00 마감 · 행사'), findsOneWidget); // 남은 날·시각이 앞
+    expect(find.text('관심·직무·전공'), findsOneWidget); // 이유는 줄여 제목 위 칩으로
     expect(find.text('새 공고'), findsOneWidget); // 마감 줄에 이미 나온 새 공고는 표시만, 새 공고 구역은 없다
     expect(find.text('마감이 먼 맞춤 공고'), findsNothing); // 관련 공고가 이 하나뿐이다
     // 귀띔 말풍선은 달라진 것의 건수만 (D-050)

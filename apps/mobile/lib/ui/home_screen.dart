@@ -641,6 +641,8 @@ class _HomeLine extends StatelessWidget {
           const Pill('저장한 공고', tone: PillTone.neutral),
         if (row.fresh) const Pill('새 공고', tone: PillTone.neutral),
       ],
+      // 추천 이유는 메타 끝의 작은 글자 대신 제목 위 칩으로 (2026-11-25 실기기 확인 후 팀장 요청)
+      if (_reason case final reason when reason.isNotEmpty) _ReasonChip(reason),
     ];
     // 줄 전체가 리포트를 여는 버튼이다. 오른쪽 끝 화살표로 누를 곳을 보이고, 화살표는 화면 읽기에서 뺀다.
     return Semantics(
@@ -654,7 +656,7 @@ class _HomeLine extends StatelessWidget {
             children: [
               dated ? _dateBlock(c, n) : _categoryIcon(c, n),
               const SizedBox(width: 12),
-              // 위에서부터 표시(전체 폭) → 제목 줄(제목 + 상태 원) → 메타(전체 폭). 상태 원은 제목 옆에만 둔다.
+              // 위에서부터 표시(이유 칩 포함) → 제목 → 메타. 상태 원은 오른쪽 끝 화살표 옆에 세로 가운데로 둔다.
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -663,19 +665,11 @@ class _HomeLine extends StatelessWidget {
                       Wrap(spacing: 6, runSpacing: 4, children: marks),
                       const SizedBox(height: 6),
                     ],
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            keepTitle(n.title),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body, height: 1.4),
-                          ),
-                        ),
-                        if (status != null) ...[const SizedBox(width: 8), EligibilityDot(status)],
-                      ],
+                    Text(
+                      keepTitle(n.title),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.body, height: 1.4),
                     ),
                     const SizedBox(height: 2),
                     Text.rich(
@@ -685,6 +679,7 @@ class _HomeLine extends StatelessWidget {
                   ],
                 ),
               ),
+              if (status != null) ...[const SizedBox(width: 8), EligibilityDot(status)],
               const SizedBox(width: 4),
               ExcludeSemantics(child: Icon(Icons.chevron_right_rounded, size: 20, color: c.faint)),
             ],
@@ -746,7 +741,7 @@ class _HomeLine extends StatelessWidget {
   /// 메타의 라벨 앞 가운뎃점. 가운뎃점을 라벨에 붙여 줄이 바뀌면 가운뎃점 앞에서 바뀐다(줄 끝에 홀로 남지 않음).
   static String _then(String label) => ' ·\u00A0${keepTogether(label)}';
 
-  /// 메타 마지막: 저장 후 마감 변경 문구가 추천 이유보다 앞선다(마감 줄·아이콘 줄 공통).
+  /// 메타 마지막: 저장 후 마감 변경 문구, 아니면 지원 건의 다음 할 일(마감 줄·아이콘 줄 공통). 추천 이유는 제목 위 칩.
   List<InlineSpan> _last(GwColors c) {
     if (row.deadlineChanged) {
       return [
@@ -756,7 +751,7 @@ class _HomeLine extends StatelessWidget {
         ),
       ];
     }
-    // 지원 건이면 추천 이유 대신 다음 할 일 (D-052)
+    // 지원 건이면 다음 할 일 (D-052)
     if (row.view?.next case final next?) {
       return [
         TextSpan(
@@ -765,14 +760,7 @@ class _HomeLine extends StatelessWidget {
         ),
       ];
     }
-    final reason = _reason;
-    return [
-      if (reason.isNotEmpty)
-        TextSpan(
-          text: _then(reason),
-          style: TextStyle(fontWeight: FontWeight.w500, color: c.accent),
-        ),
-    ];
+    return const [];
   }
 
   /// 'D-3 · 17:00 마감 · 공모전 · 관심 분야'. 마지막은 저장 후 마감 변경 문구가 이유보다 앞선다.
@@ -819,6 +807,35 @@ class _HomeLine extends StatelessWidget {
         TextSpan(text: keepAll(n.deadlineNote ?? '마감일 없음')),
       ..._last(c),
     ];
+  }
+}
+
+/// 홈 줄 제목 위 추천 이유 칩: 별 아이콘 + '관심 분야'·'관심·전공'. 리포트 결론 카드의 '추천' 줄과 같은 별 아이콘.
+/// 지원 건 상태 칩(네이비 글자)과 구분되게 글자는 accent.
+class _ReasonChip extends StatelessWidget {
+  const _ReasonChip(this.reason);
+
+  final String reason;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    return Container(
+      height: 26,
+      padding: const EdgeInsets.only(left: 8, right: 10),
+      decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(13)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ExcludeSemantics(child: Icon(Icons.star_rounded, size: 14, color: c.accent)),
+          const SizedBox(width: 4),
+          Text(
+            reason,
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.accent),
+          ),
+        ],
+      ),
+    );
   }
 }
 

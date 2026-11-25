@@ -714,7 +714,7 @@ void main() {
       expect(find.textContaining(RegExp(r'전체 \d+건')), findsNothing);
     });
 
-    testWidgets('맞춤 홈 줄: 상태 원은 제목 줄 오른쪽(제목과 위 맞춤), 표시와 메타는 원과 같은 줄에 없다', (tester) async {
+    testWidgets('맞춤 홈 줄: 상태 원은 오른쪽 화살표 옆에 줄 세로 가운데, 이유 칩은 제목 위', (tester) async {
       bigScreen(tester);
       await pumpHome(
         tester,
@@ -725,17 +725,21 @@ void main() {
       );
       final dots = find.descendant(of: find.byType(HomeScreen), matching: find.byType(EligibilityDot));
       expect(dots, findsNWidgets(2));
-      for (final (title, dot) in [('새 임박', dots.at(0)), ('먼 공고', dots.at(1))]) {
+      for (final (i, title) in ['새 임박', '먼 공고'].indexed) {
+        final line = tester.getRect(find.ancestor(of: findText(title), matching: find.byType(InkWell)).first);
         final t = tester.getRect(findText(title));
-        final d = tester.getRect(dot);
-        expect(d.top, closeTo(t.top, 0.5), reason: title);
-        expect(d.left, greaterThanOrEqualTo(t.right + 8 - 0.5), reason: title);
-        // 메타는 원 아래에서 시작한다(원 옆을 비워 두지 않고 전체 폭을 쓴다)
-        expect(tester.getRect(metaOf(title)).top, greaterThanOrEqualTo(d.bottom - 0.5), reason: title);
+        final d = tester.getRect(dots.at(i));
+        // 줄 세로 가운데, 제목·메타보다 오른쪽, 화살표 바로 왼쪽
+        expect(d.center.dy, closeTo(line.center.dy, 0.5), reason: title);
+        expect(d.left, greaterThanOrEqualTo(t.right - 0.5), reason: title);
+        expect(d.left, greaterThanOrEqualTo(tester.getRect(metaOf(title)).right - 0.5), reason: title);
+        final arrow = tester.getRect(find.descendant(of: find.ancestor(of: findText(title), matching: find.byType(InkWell)).first, matching: find.byIcon(Icons.chevron_right_rounded)));
+        expect(arrow.left, greaterThan(d.right), reason: title);
+        expect(arrow.center.dy, closeTo(d.center.dy, 0.5), reason: title);
+        // 이유 칩은 제목 위
+        final chip = tester.getRect(find.descendant(of: find.ancestor(of: findText(title), matching: find.byType(InkWell)).first, matching: find.text('관심 분야')));
+        expect(chip.bottom, lessThanOrEqualTo(t.top), reason: title);
       }
-      // '새 공고' 표시가 있는 줄: 원은 표시 옆이 아니라 그 아래 제목 옆
-      final mark = tester.getRect(find.descendant(of: find.byType(Pill), matching: find.text('새 공고')));
-      expect(tester.getRect(dots.at(0)).top, greaterThanOrEqualTo(mark.bottom));
     });
 
     testWidgets('글자 1.3배에서 메타가 넘쳐도 가운뎃점이 줄 끝에 남지 않는다', (tester) async {
@@ -751,8 +755,9 @@ void main() {
         ]),
       );
       expect(tester.takeException(), isNull);
+      expect(find.text('관심·직무·전공'), findsOneWidget); // 이유는 제목 위 칩
       final lines = visualLines(tester, metaOf('긴 메타'));
-      expect(lines.join(' '), 'D-6 · 공모전·경진대회 · 관심·직무·전공');
+      expect(lines.join(' '), 'D-6 · 공모전·경진대회');
       for (final l in lines) {
         expect(l.endsWith('·') || l.endsWith('· '), isFalse, reason: '$lines');
       }
@@ -773,7 +778,8 @@ void main() {
       // 저장한 공고는 지원 건(D-052): '저장한 공고' 표시 대신 상태 칩, 남은 날은 모든 화면과 같은 문구
       expect(find.widgetWithText(Pill, '저장'), findsOneWidget);
       expect(plain(tester, metaOf('저장 바뀜')), 'D-2 · 10월 19일 마감 · 공모전·경진대회 · 마감 3일 연장');
-      expect(plain(tester, metaOf('관련')), 'D-3 · 공모전·경진대회 · 관심 분야');
+      expect(plain(tester, metaOf('관련')), 'D-3 · 공모전·경진대회');
+      expect(find.text('관심 분야'), findsOneWidget); // 이유 칩
       // 추천 정보가 없는 저장 공고에는 상태 원이 없다(관련 공고 줄에만 하나)
       expect(find.descendant(of: find.byType(HomeScreen), matching: find.byType(EligibilityDot)), findsOneWidget);
       expect(findTextContaining('저장한 공고의 마감 3일 연장'), findsNothing);
@@ -836,7 +842,12 @@ void main() {
           entry('통계', deadline: '2026-10-19', reasons: ['major_prior_match']),
         ]),
       );
-      expect(plain(tester, metaOf('시각')), '오늘 마감 · 17:00 마감 · 행사 · 관심·직무·전공');
+      expect(plain(tester, metaOf('시각')), '오늘 마감 · 17:00 마감 · 행사');
+      // 이유 칩: 별 아이콘 + accent 글자, 표시('새 공고')와 같은 줄
+      final reason = tester.widget<Text>(find.text('관심·직무·전공'));
+      expect(reason.style?.color, GwColors.light.accent);
+      expect(reason.style?.fontSize, 13);
+      expect(tester.getRect(find.text('관심·직무·전공')).top, closeTo(tester.getRect(find.descendant(of: find.byType(Pill), matching: find.text('새 공고'))).top, 0.5));
       expect(find.text('새 공고'), findsOneWidget); // 줄 위 표시. 같은 공고라 새 공고 구역은 없다
       expect(plain(tester, metaOf('통계')), 'D-2 · 공모전·경진대회');
       expect(find.byType(MajorPickLabel), findsOneWidget);
@@ -857,9 +868,11 @@ void main() {
       );
       expect(find.text('새 공고'), findsOneWidget); // 구역 제목
       expect(find.text('최근 3일'), findsOneWidget);
-      expect(plain(tester, metaOf('새 공모전')), '12월 20일 마감 · D-64 · 관심 분야');
-      expect(plain(tester, metaOf('먼 장학')), '11월 30일 마감 · D-44 · 직무·전공');
-      expect(plain(tester, metaOf('먼 알림톡')), '마감일 없음 · 관심 분야');
+      expect(plain(tester, metaOf('새 공모전')), '12월 20일 마감 · D-64');
+      expect(plain(tester, metaOf('먼 장학')), '11월 30일 마감 · D-44');
+      expect(plain(tester, metaOf('먼 알림톡')), '마감일 없음');
+      expect(find.text('관심 분야'), findsNWidgets(3)); // 이유는 제목 위 칩
+      expect(find.text('직무·전공'), findsOneWidget);
 
       final contest = tester.widget<Icon>(find.byIcon(Icons.emoji_events_rounded));
       expect(contest.size, 26);
