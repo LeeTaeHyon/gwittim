@@ -437,14 +437,15 @@ void main() {
         null,
         none,
       );
-      expect(rows.map((r) => r.label), ['학과', '직접 확인 3개', '직접 확인']);
-      final grouped = rows[1];
+      // 확인 필요 줄이 안내 줄보다 먼저 (home-report-clarity-spec B2)
+      expect(rows.map((r) => r.label), ['직접 확인 3개', '직접 확인', '학과']);
+      final grouped = rows[0];
       expect(grouped.evidences, ['직무 관련 자격증 소유자', '근무지 인접 거주자 우대', '주말 근무 가능자']);
       expect(grouped.note, contains('자동으로 비교하지 못했습니다'));
       expect(grouped.count, 3);
       // 성적 조건은 안내가 달라서 따로 남는다 (1개라 묶지 않음)
-      expect(rows[2].evidences, ['직전 학기 평점 3.0 이상']);
-      expect(rows[2].note, contains('성적을 받지 않습니다'));
+      expect(rows[1].evidences, ['직전 학기 평점 3.0 이상']);
+      expect(rows[1].note, contains('성적을 받지 않습니다'));
     });
 
     test('우대 사항은 지원 자격 뒤에 따로 묶고 확인 필요 수에 넣지 않는다', () {
@@ -506,8 +507,9 @@ void main() {
         rec,
         (f) => f == 'major_id' ? '컴퓨터공학과' : null,
       );
-      expect(rows.map((r) => (r.field, r.label)), [('학과', '컴퓨터공학과'), ('학년', '프로필 미입력')]);
-      expect(rows.last.state, CheckState.check);
+      // 확인 필요 줄이 충족 줄보다 먼저 (home-report-clarity-spec B2)
+      expect(rows.map((r) => (r.field, r.label)), [('학년', '프로필 미입력'), ('학과', '컴퓨터공학과')]);
+      expect(rows.first.state, CheckState.check);
     });
 
     test('추천 이유 낱말', () {

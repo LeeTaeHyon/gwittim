@@ -11,6 +11,7 @@ import 'common.dart';
 import 'components.dart';
 import 'credits_screen.dart';
 import 'format.dart';
+import 'home_sections.dart' show homeReason;
 import 'icons.dart';
 import 'notice_poster.dart';
 import 'skeleton.dart';
@@ -156,7 +157,34 @@ List<CheckRow> checklistRows(
             ),
     );
   }
-  return groupCheckRows(rows);
+  return sortCheckRows(groupCheckRows(rows));
+}
+
+/// 체크리스트 줄 순서 (home-report-clarity-spec B2): 미충족 → 확인 필요 → 충족 → 안내(우대 사항 포함).
+/// 같은 상태 안에서는 원래 순서를 지킨다.
+List<CheckRow> sortCheckRows(List<CheckRow> rows) => [
+  for (final state in const [CheckState.notMet, CheckState.check, CheckState.met, CheckState.info])
+    ...rows.where((r) => r.state == state),
+];
+
+/// 결론 카드의 조건 값 (B1). 판정은 서버 값 그대로 쓰고, 개수·항목 이름은 체크리스트 줄에서 센다.
+/// 반환: (값, 판정). 판정은 'met'·'needs_check'·'not_met'.
+(String, String) verdictCondition(String status, List<CheckRow> rows) {
+  List<String> names(CheckState s) => <String>{
+    for (final r in rows)
+      if (r.state == s && r.field != null) r.field!,
+  }.take(2).toList();
+  String withNames(String base, List<String> n) => n.isEmpty ? base : '$base · ${n.join(', ')}';
+  switch (status) {
+    case 'met':
+      return ('조건 충족', 'met');
+    case 'not_met':
+      return (withNames('조건 미충족', names(CheckState.notMet)), 'not_met');
+    default:
+      final count = rows.where((r) => r.state == CheckState.check).fold(0, (n, r) => n + r.count);
+      if (count == 0) return ('지원 조건 확인 필요', 'needs_check');
+      return (withNames('확인 필요 $count개', names(CheckState.check)), 'needs_check');
+  }
 }
 
 /// 추천 이유 문장 조각: (형광펜 낱말들, 2주 안 마감 여부)
@@ -450,6 +478,7 @@ class _ReportScreenState extends State<ReportScreen> {
     final seenChange = kase != null && _seenAtOpen == deadlineKey(n.applicationDeadline);
     final changed = _savedEntry != null && _savedEntry!.deadlineChanged && !seenChange ? _savedEntry : null;
     final c = context.gw;
+    final checks = checklistRows(notice, rec, _profileValue);
     return Column(
       children: [
         Expanded(
@@ -501,6 +530,7 @@ class _ReportScreenState extends State<ReportScreen> {
                   ],
                 ),
               ),
+              _Verdict(notice: n, recommendation: rec, rows: checks, today: today),
               if (cases != null && kase != null)
                 _CaseCard(
                   view: caseView(n, kase, now: today),
@@ -519,7 +549,7 @@ class _ReportScreenState extends State<ReportScreen> {
               if (changed != null) _ChangeBanner(entry: changed),
               if (notice.posterUrl case final url?) NoticePoster(key: ValueKey(url), url: url),
               _Checklist(
-                rows: checklistRows(notice, rec, _profileValue),
+                rows: checks,
                 status: rec?.eligibilityStatus,
                 notice: notice,
               ),
@@ -532,8 +562,8 @@ class _ReportScreenState extends State<ReportScreen> {
                 onOpenResult: () => _openAnalysis(notice, _analysis!),
                 onOpenCredits: _openCredits,
               ),
-              if (rec != null) _Reasons(recommendation: rec),
               _Schedule(notice: notice, today: today),
+              if (rec != null) _Reasons(recommendation: rec),
               if (notice.relatedNotices.isNotEmpty) _Related(notices: notice.relatedNotices, onOpen: _openRelated),
             ],
           ),
@@ -610,6 +640,126 @@ class _ReportScreenState extends State<ReportScreen> {
     if (left == null) return const Pill('모집 중');
     final label = '모집 중 · ${left == 0 ? '오늘 마감' : 'D-$left'}';
     return Pill(label, tone: left <= urgentDays ? PillTone.urgent : PillTone.chip);
+  }
+}
+
+/// 결론 카드를 찾는 키 (테스트용)
+const reportVerdictKey = ValueKey('report-verdict');
+
+/// 결론 카드 (home-report-clarity-spec B1): 제목·출처 바로 아래에 조건 → 마감 → 추천을 한 줄씩.
+/// 조건 판정은 서버 값 그대로이고, 개수·항목 이름은 체크리스트와 같은 줄에서 센다.
+/// 모집이 끝났거나(closed) 삭제된(removed) 공고는 마감 줄 하나에 상태만 보인다.
+class _Verdict extends StatelessWidget {
+  const _Verdict({required this.notice, required this.recommendation, required this.rows, required this.today});
+
+  final NoticeSummary notice;
+  final Recommendation? recommendation;
+  final List<CheckRow> rows;
+  final DateTime today;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final n = notice;
+    final rec = recommendation;
+    final lines = <({IconData icon, String name, String value, Color color, String spoken})>[];
+    if (n.lifecycleStatus == 'closed' || n.lifecycleStatus == 'removed') {
+      final label = lifecycleLabel(n.lifecycleStatus);
+      lines.add((icon: Icons.event_rounded, name: '마감', value: label, color: c.sub, spoken: '모집 상태 $label'));
+    } else {
+      if (rec != null) {
+        final (value, kind) = verdictCondition(rec.eligibilityStatus, rows);
+        final color = switch (kind) {
+          'met' => c.accent,
+          'not_met' => c.urgent,
+          _ => c.check,
+        };
+        final spoken = value.startsWith('조건') || value.startsWith('지원 조건') ? value : '조건 $value';
+        lines.add((
+          icon: Icons.checklist_rounded,
+          name: '조건',
+          value: value,
+          color: color,
+          spoken: spoken.replaceAll(' · ', ' '),
+        ));
+      }
+      final deadline = verdictDeadlineText(n, today);
+      final d = n.applicationDeadline;
+      final days = d?.day.difference(DateTime(today.year, today.month, today.day)).inDays;
+      final Color color;
+      if (days == null) {
+        color = n.deadlineNote == null ? c.sub : c.ink;
+      } else if (days < 0) {
+        color = c.sub;
+      } else {
+        color = days <= urgentDays ? c.urgent : c.ink;
+      }
+      lines.add((
+        icon: Icons.event_rounded,
+        name: '마감',
+        value: deadline,
+        color: color,
+        spoken: deadline.replaceAll(' · ', ' '),
+      ));
+      final reason = homeReason(rec, personalized: true);
+      if (reason.isNotEmpty) {
+        lines.add((
+          icon: Icons.star_outline_rounded,
+          name: '추천',
+          value: '$reason 관련',
+          color: c.accent,
+          spoken: '$reason 관련',
+        ));
+      }
+    }
+    return Semantics(
+      key: reportVerdictKey,
+      container: true,
+      label: [for (final l in lines) l.spoken].join(', '),
+      excludeSemantics: true,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: c.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: c.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final (i, l) in lines.indexed) ...[
+              if (i > 0) const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(l.icon, size: 18, color: c.muted),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 44,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(l.name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.sub)),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      keepAll(l.value),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 15, height: 1.4, fontWeight: FontWeight.w600, color: l.color),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -916,7 +1066,7 @@ class _ChangeBanner extends StatelessWidget {
   }
 }
 
-class _Checklist extends StatelessWidget {
+class _Checklist extends StatefulWidget {
   const _Checklist({required this.rows, required this.status, required this.notice});
 
   final List<CheckRow> rows;
@@ -924,7 +1074,18 @@ class _Checklist extends StatelessWidget {
   final Notice notice;
 
   @override
+  State<_Checklist> createState() => _ChecklistState();
+}
+
+class _ChecklistState extends State<_Checklist> {
+  /// 접어 둔 충족 줄을 펼쳤는지
+  bool _metOpen = false;
+
+  @override
   Widget build(BuildContext context) {
+    final rows = widget.rows;
+    final status = widget.status;
+    final notice = widget.notice;
     final badge = switch (status) {
       // 세 상태 모두 연한 바탕 + 진한 글자로 같은 톤 (2026-11-01 팀장 요청, 목록 카드와 같음)
       'met' => const Pill('조건 충족'),
@@ -949,7 +1110,7 @@ class _Checklist extends StatelessWidget {
           const SizedBox(height: 8),
           Text(keepAll(intro), style: TextStyle(fontSize: 14, height: 1.55, color: context.gw.sub)),
           const SizedBox(height: 8),
-          for (final r in rows) _CheckLine(row: r),
+          ..._lines(rows, mets),
           if (!notice.eligibility.extractionComplete)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -958,6 +1119,58 @@ class _Checklist extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// 확인할 줄(미충족·확인 필요)이 있고 충족 줄이 2개 이상이면 충족 줄들을 '충족 N개' 한 줄로 접는다 (B2).
+  List<Widget> _lines(List<CheckRow> rows, int mets) {
+    final metRows = rows.where((r) => r.state == CheckState.met).toList();
+    final fold = metRows.length >= 2 && rows.any((r) => r.state == CheckState.notMet || r.state == CheckState.check);
+    if (!fold) return [for (final r in rows) _CheckLine(row: r)];
+    final c = context.gw;
+    final toggle = Semantics(
+      button: true,
+      expanded: _metOpen,
+      child: InkWell(
+        onTap: () => setState(() => _metOpen = !_metOpen),
+        borderRadius: BorderRadius.circular(12),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Row(
+            children: [
+              ExcludeSemantics(
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(color: c.point, borderRadius: BorderRadius.circular(7)),
+                  child: Icon(Icons.check_rounded, size: 16, color: c.pointTick),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  _metOpen ? '접기' : '충족 $mets개',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.sub),
+                ),
+              ),
+              Icon(_metOpen ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18, color: c.sub),
+            ],
+          ),
+        ),
+      ),
+    );
+    final out = <Widget>[];
+    var placed = false;
+    for (final r in rows) {
+      if (r.state != CheckState.met) {
+        out.add(_CheckLine(row: r));
+        continue;
+      }
+      if (placed) continue;
+      placed = true;
+      if (_metOpen) out.addAll([for (final m in metRows) _CheckLine(row: m)]);
+      out.add(toggle);
+    }
+    return out;
   }
 }
 

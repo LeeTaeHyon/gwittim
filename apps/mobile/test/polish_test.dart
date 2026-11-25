@@ -201,7 +201,8 @@ void main() {
       expect(titleOpacity(), 0);
       expect((decoration().border! as Border).bottom.color.a, 0);
 
-      await tester.drag(find.text('지원 전 체크리스트'), const Offset(0, -300));
+      // 결론 카드가 맨 위에 생겨 체크리스트는 첫 화면 아래에 있다. 리포트 목록을 직접 끌어 올린다.
+      await tester.drag(find.byType(ListView).last, const Offset(0, -300));
       await tester.pumpAndSettle();
       expect(titleOpacity(), 1);
       expect((decoration().border! as Border).bottom.color, GwColors.light.line);
