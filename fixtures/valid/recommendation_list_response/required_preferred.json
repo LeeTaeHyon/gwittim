@@ -1,0 +1,81 @@
+{
+  "mode": "personalized",
+  "items": [
+    {
+      "recommendation": {
+        "notice_id": "n_synthetic_0010",
+        "notice_version": 1,
+        "score": 30.0,
+        "eligibility_status": "met",
+        "condition_results": [],
+        "reason_codes": [
+          "eligibility_met"
+        ],
+        "generated_at": "2026-10-17T03:05:00Z",
+        "ranking_version": "rank-0.1-synthetic"
+      },
+      "notice": {
+        "notice_id": "n_synthetic_0010",
+        "notice_version": 1,
+        "title": "[합성 샘플] 누구나 참여 참가자 모집, 관련 전공 우대",
+        "category": "event",
+        "source_url": "https://www.mjc.ac.kr/bbs/data/view.do?menu_idx=66&bbs_mst_idx=BM0000000026&data_idx=BD9999990010",
+        "published": {
+          "date": "2026-10-15",
+          "time": null,
+          "timezone": null,
+          "precision": "date",
+          "evidence": "날짜 2026-10-15"
+        },
+        "application_deadline": {
+          "date": "2026-10-30",
+          "time": "17:00",
+          "timezone": "Asia/Seoul",
+          "precision": "minute",
+          "evidence": "2026. 10. 30.(금) 17:00까지"
+        },
+        "deadline_note": null,
+        "lifecycle_status": "open"
+      }
+    },
+    {
+      "recommendation": {
+        "notice_id": "n_synthetic_0011",
+        "notice_version": 1,
+        "score": 20.0,
+        "eligibility_status": "needs_check",
+        "condition_results": [],
+        "reason_codes": [
+          "eligibility_needs_check"
+        ],
+        "generated_at": "2026-10-17T03:05:00Z",
+        "ranking_version": "rank-0.1-synthetic"
+      },
+      "notice": {
+        "notice_id": "n_synthetic_0011",
+        "notice_version": 1,
+        "title": "[합성 샘플] 학년 무관 행사 참가자 모집",
+        "category": "event",
+        "source_url": "https://www.mjc.ac.kr/bbs/data/view.do?menu_idx=66&bbs_mst_idx=BM0000000026&data_idx=BD9999990011",
+        "published": {
+          "date": "2026-10-15",
+          "time": null,
+          "timezone": null,
+          "precision": "date",
+          "evidence": "날짜 2026-10-15"
+        },
+        "application_deadline": {
+          "date": "2026-10-30",
+          "time": "17:00",
+          "timezone": "Asia/Seoul",
+          "precision": "minute",
+          "evidence": "2026. 10. 30.(금) 17:00까지"
+        },
+        "deadline_note": null,
+        "lifecycle_status": "open"
+      }
+    }
+  ],
+  "next_cursor": "c_synthetic_page2",
+  "generated_at": "2026-10-17T03:05:00Z"
+}
