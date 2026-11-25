@@ -153,6 +153,7 @@ def build_messages(
                 "원문에서 확인할 조건": [
                     {"원문": u.get("evidence") or UNKNOWN, "구분": u.get("note") or "자격 조건"}
                     for u in el.get("unresolved_conditions", [])
+                    if u.get("note") != NO_LIMIT_NOTE  # 항목 제한 없음은 확인할 조건이 아니다
                 ],
                 # 예/아니요 칸은 모델이 '조건을 모두 찾았는지 여부는 아니요' 식으로 옮겨 써서 문장으로 준다
                 "참고": _notes(el),
@@ -263,6 +264,7 @@ def split_long_lines(report: dict) -> tuple[dict, int]:
 SKILLS_UNKNOWN = "제공된 공고 정보에서 요구 역량을 확인하기 어렵습니다."
 TODO_NONE = "이번 모집은 지원 전에 할 일이 없습니다."
 PREFERRED_NOTE = "우대 사항"  # unresolved_condition.note (backend.analysis.rules.PREFERRED_NOTE와 같은 값)
+NO_LIMIT_NOTE = "항목 제한 없음"  # 한 항목에만 제한이 없다는 문구. 확인할 조건이 아니다 (rules.NO_LIMIT_NOTE와 같은 값, D-056)
 SKILL_MATCH = 0.5  # 역량 줄의 두 글자 묶음 중 이 비율 이상이 한 원문에 있어야 근거로 본다
 _PREF_MARK = re.compile(r"\s*[(（]\s*우대\s*[)）]\s*$")
 _NOT_TEXT = re.compile(r"[^0-9A-Za-z가-힣]")
@@ -277,15 +279,22 @@ def _grams(text: str) -> set[str]:
     return {t[i:i + 2] for i in range(len(t) - 1)} or ({t} if t else set())
 
 
-def _best_evidence(line: str, evidence: list[dict]) -> dict | None:
-    """역량 줄과 두 글자 묶음이 가장 많이 겹치는 원문 조건. SKILL_MATCH 미만이면 None."""
+def _best_evidence(line: str, evidence: list[dict], preferred: bool = False) -> dict | None:
+    """역량 줄과 두 글자 묶음이 가장 많이 겹치는 원문 조건. SKILL_MATCH 미만이면 None.
+
+    같은 점수면 줄에 모델이 붙인 '(우대)' 표시(preferred)와 같은 구분의 조건을 고른다. 같은 문구가 필수·우대에 각각 있을 때 섞이지 않게 한다.
+    """
     grams = _grams(line)
     if not grams:
         return None
     best, score = None, 0.0
     for u in evidence:
+        if u.get("note") == NO_LIMIT_NOTE:
+            continue
         s = len(grams & _grams(u.get("evidence") or "")) / len(grams)
-        if s > score:
+        same_kind = (u.get("note") == PREFERRED_NOTE) == preferred
+        best_same_kind = best is not None and (best.get("note") == PREFERRED_NOTE) == preferred
+        if s > score or (s == score and best is not None and same_kind and not best_same_kind):
             best, score = u, s
     return best if score >= SKILL_MATCH else None
 
@@ -304,7 +313,7 @@ def ground_report(report: dict, notice: dict, status: str, today: date) -> tuple
     if not any("요구 역량을 확인하기 어렵습니다" in ln for ln in skills):
         kept = []
         for ln in skills:
-            u = _best_evidence(_PREF_MARK.sub("", ln), evidence)
+            u = _best_evidence(_PREF_MARK.sub("", ln), evidence, bool(_PREF_MARK.search(ln)))
             if u is None:
                 continue
             name = _PREF_MARK.sub("", ln)

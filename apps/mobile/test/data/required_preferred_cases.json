@@ -1,0 +1,594 @@
+[
+ {
+  "id": "A1",
+  "body": "학년 무관",
+  "eligibility": {
+   "conditions": [],
+   "unresolved_conditions": [
+    {
+     "evidence": "학년 무관",
+     "note": "항목 제한 없음"
+    }
+   ],
+   "extraction_complete": false,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": []
+ },
+ {
+  "id": "A2",
+  "body": "학년 무관",
+  "eligibility": {
+   "conditions": [],
+   "unresolved_conditions": [
+    {
+     "evidence": "학년 무관",
+     "note": "항목 제한 없음"
+    }
+   ],
+   "extraction_complete": false,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": []
+ },
+ {
+  "id": "A3",
+  "body": "학년 제한 없음\n관련 전공 우대",
+  "eligibility": {
+   "conditions": [],
+   "unresolved_conditions": [
+    {
+     "evidence": "학년 제한 없음",
+     "note": "항목 제한 없음"
+    },
+    {
+     "evidence": "관련 전공 우대",
+     "note": "우대 사항"
+    }
+   ],
+   "extraction_complete": false,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": []
+ },
+ {
+  "id": "A4",
+  "body": "재학생 대상, 학년 무관",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "eq",
+     "value": "enrolled",
+     "evidence": "재학생 대상, 학년 무관",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [
+    {
+     "evidence": "학년 무관",
+     "note": "항목 제한 없음"
+    }
+   ],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "met",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "met",
+    "evidence": "재학생 대상, 학년 무관",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "A5",
+  "body": "누구나 지원 가능\n관련 전공 우대",
+  "eligibility": {
+   "conditions": [],
+   "unresolved_conditions": [
+    {
+     "evidence": "관련 전공 우대",
+     "note": "우대 사항"
+    }
+   ],
+   "extraction_complete": true,
+   "explicitly_unrestricted": true,
+   "unrestricted_evidence": "누구나 지원 가능"
+  },
+  "status": "met",
+  "results": []
+ },
+ {
+  "id": "B1",
+  "body": "지원 대상: 재학생(3~4학년 우대)",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "eq",
+     "value": "enrolled",
+     "evidence": "재학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [
+    {
+     "evidence": "3~4학년 우대",
+     "note": "우대 사항"
+    }
+   ],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "met",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "met",
+    "evidence": "재학생",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "B2",
+  "body": "지원 대상: 재학생(3~4학년 우대)",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "eq",
+     "value": "enrolled",
+     "evidence": "재학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [
+    {
+     "evidence": "3~4학년 우대",
+     "note": "우대 사항"
+    }
+   ],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "not_met",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "not_met",
+    "evidence": "재학생",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "B3",
+  "body": "우대 사항: 재학생(3~4학년 우대)",
+  "eligibility": {
+   "conditions": [],
+   "unresolved_conditions": [
+    {
+     "evidence": "재학생(3~4학년 우대)",
+     "note": "우대 사항"
+    }
+   ],
+   "extraction_complete": false,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": []
+ },
+ {
+  "id": "B4",
+  "body": "지원 자격: 3~4학년\n우대 사항: 재학생(3~4학년 우대)",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "grade",
+     "operator": "in",
+     "value": [
+      3,
+      4
+     ],
+     "evidence": "지원 자격: 3~4학년",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [
+    {
+     "evidence": "재학생(3~4학년 우대)",
+     "note": "우대 사항"
+    }
+   ],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "not_met",
+  "results": [
+   {
+    "field": "grade",
+    "status": "not_met",
+    "evidence": "지원 자격: 3~4학년",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "B5",
+  "body": "재학생(3~4학년 우대)",
+  "eligibility": {
+   "conditions": [],
+   "unresolved_conditions": [
+    {
+     "evidence": "재학생(3~4학년 우대)",
+     "note": null
+    }
+   ],
+   "extraction_complete": false,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": []
+ },
+ {
+  "id": "C1",
+  "body": "지원 자격 및 우대 사항\n지원 대상: 재학생\n우대: 3~4학년",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "eq",
+     "value": "enrolled",
+     "evidence": "지원 대상: 재학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [
+    {
+     "evidence": "3~4학년",
+     "note": "우대 사항"
+    }
+   ],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "met",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "met",
+    "evidence": "지원 대상: 재학생",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "C2",
+  "body": "지원 자격 및 우대 사항\n지원 대상: 재학생\n우대: 3~4학년",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "eq",
+     "value": "enrolled",
+     "evidence": "지원 대상: 재학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [
+    {
+     "evidence": "3~4학년",
+     "note": "우대 사항"
+    }
+   ],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "not_met",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "not_met",
+    "evidence": "지원 대상: 재학생",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "C3",
+  "body": "지원 자격 및 우대 사항\n3~4학년",
+  "eligibility": {
+   "conditions": [],
+   "unresolved_conditions": [
+    {
+     "evidence": "3~4학년",
+     "note": null
+    }
+   ],
+   "extraction_complete": false,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": []
+ },
+ {
+  "id": "C4",
+  "body": "지원 자격 및 우대 사항\n3. 신청 방법\n이메일로 접수",
+  "eligibility": {
+   "conditions": [],
+   "unresolved_conditions": [],
+   "extraction_complete": false,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": []
+ },
+ {
+  "id": "C5",
+  "body": "자격 요건\n- 재학생 대상",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "eq",
+     "value": "enrolled",
+     "evidence": "- 재학생 대상",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "met",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "met",
+    "evidence": "- 재학생 대상",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "C6",
+  "body": "지원 자격\n- 재학생 대상",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "eq",
+     "value": "enrolled",
+     "evidence": "- 재학생 대상",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "met",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "met",
+    "evidence": "- 재학생 대상",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "C7",
+  "body": "본교 재학생 대상\n2. 자격 요건\n3. 신청 방법",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "eq",
+     "value": "enrolled",
+     "evidence": "본교 재학생 대상",
+     "validation_status": "validated"
+    },
+    {
+     "field": "university_id",
+     "operator": "eq",
+     "value": "mjc",
+     "evidence": "본교 재학생 대상",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [],
+   "extraction_complete": false,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "met",
+    "evidence": "본교 재학생 대상",
+    "unknown_reason": null
+   },
+   {
+    "field": "university_id",
+    "status": "met",
+    "evidence": "본교 재학생 대상",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "C8",
+  "body": "본교 재학생 대상\n2. 지원 자격\n3. 신청 방법",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "eq",
+     "value": "enrolled",
+     "evidence": "본교 재학생 대상",
+     "validation_status": "validated"
+    },
+    {
+     "field": "university_id",
+     "operator": "eq",
+     "value": "mjc",
+     "evidence": "본교 재학생 대상",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [],
+   "extraction_complete": false,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "met",
+    "evidence": "본교 재학생 대상",
+    "unknown_reason": null
+   },
+   {
+    "field": "university_id",
+    "status": "met",
+    "evidence": "본교 재학생 대상",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "S13",
+  "body": "지원 자격\n학점 3.0 이상\n우대 사항\n학점 3.0 이상",
+  "eligibility": {
+   "conditions": [],
+   "unresolved_conditions": [
+    {
+     "evidence": "학점 3.0 이상",
+     "note": null
+    },
+    {
+     "evidence": "학점 3.0 이상",
+     "note": "우대 사항"
+    }
+   ],
+   "extraction_complete": false,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": []
+ },
+ {
+  "id": "S15",
+  "body": "지원 자격: 재학생\n우대 사항: 3~4학년",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "eq",
+     "value": "enrolled",
+     "evidence": "지원 자격: 재학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [
+    {
+     "evidence": "3~4학년",
+     "note": "우대 사항"
+    }
+   ],
+   "extraction_complete": false,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "met",
+    "evidence": "지원 자격: 재학생",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "S16",
+  "body": "지원 자격: 재학생\n평점 3.0 이상",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "eq",
+     "value": "enrolled",
+     "evidence": "지원 자격: 재학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [
+    {
+     "evidence": "평점 3.0 이상",
+     "note": null
+    }
+   ],
+   "extraction_complete": false,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "met",
+    "evidence": "지원 자격: 재학생",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "S17",
+  "body": "학년 무관\n평점 3.0 이상",
+  "eligibility": {
+   "conditions": [],
+   "unresolved_conditions": [
+    {
+     "evidence": "학년 무관",
+     "note": "항목 제한 없음"
+    },
+    {
+     "evidence": "평점 3.0 이상",
+     "note": null
+    }
+   ],
+   "extraction_complete": false,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": []
+ }
+]

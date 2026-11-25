@@ -1,6 +1,12 @@
 """지원 조건 비교 (SPEC §6 지원 조건)."""
 from __future__ import annotations
 
+# unresolved_condition.note에 정해 두고 쓰는 값 (backend.analysis.rules의 PREFERRED_NOTE·NO_LIMIT_NOTE와 같은 값, 테스트로 묶음).
+# 둘 다 지원 자격이 아니라서 판정·확인 필요에 넣지 않는다 (D-056).
+PREFERRED_NOTE = "우대 사항"
+NO_LIMIT_NOTE = "항목 제한 없음"
+FLAG_NOTES = (PREFERRED_NOTE, NO_LIMIT_NOTE)
+
 
 def _compare(condition: dict, profile_value) -> bool:
     if condition["operator"] == "eq":
@@ -16,12 +22,10 @@ def evaluate(eligibility: dict, profile: dict) -> tuple[str, list[dict]]:
     - 전체 조건 해석이 확인되고 모두 충족 → met
     - 명시적 제한 없음(explicitly_unrestricted)이고 추출이 완전하며 미해석 조건이 없을 때만 바로 met.
       제한 없음 문구가 있어도 미해석 조건·불완전한 추출이 있으면 아래 일반 판정으로 needs_check가 된다
+    - 우대 사항과 항목 제한 없음 표시가 붙은 미해석 항목은 미해석 조건으로 세지 않는다 (D-056)
     """
-    if (
-        eligibility["explicitly_unrestricted"]
-        and eligibility["extraction_complete"]
-        and not eligibility["unresolved_conditions"]
-    ):
+    unresolved = [u for u in eligibility["unresolved_conditions"] if u.get("note") not in FLAG_NOTES]
+    if eligibility["explicitly_unrestricted"] and eligibility["extraction_complete"] and not unresolved:
         return "met", []
 
     results = []
@@ -41,7 +45,7 @@ def evaluate(eligibility: dict, profile: dict) -> tuple[str, list[dict]]:
     incomplete = (
         "unknown" in statuses
         or not eligibility["conditions"]
-        or eligibility["unresolved_conditions"]
+        or unresolved
         or not eligibility["extraction_complete"]
     )
     return ("needs_check" if incomplete else "met"), results

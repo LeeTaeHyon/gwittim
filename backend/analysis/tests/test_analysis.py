@@ -141,7 +141,7 @@ def test_unrestricted_phrase_with_unresolved_condition_is_not_unrestricted(body)
 
 def test_unrestricted_with_attachment_is_needs_check():
     attachment = [{"file_name": "[합성] 모집요강.hwp", "url": None, "type": "hwp"}]
-    elig = RuleBasedAnalyzer().analyze(raw_notice("학년 제한 없음", attachments=attachment), MJC)["eligibility"]
+    elig = RuleBasedAnalyzer().analyze(raw_notice("학년·학과 제한 없이 누구나 참여 가능", attachments=attachment), MJC)["eligibility"]
     assert elig["explicitly_unrestricted"] is True and elig["extraction_complete"] is False
     assert evaluate(elig, PROFILE)[0] == "needs_check"
 
@@ -329,8 +329,8 @@ def test_tidy_unresolved_strips_marks_dedupes_and_marks_preferred():
     lines = CTS_LIKE.splitlines()
     items = [{"evidence": e, "note": None} for e in ("2. 지원자격 및 우대사항", "우대사항 / ○ 외국어 능통자 (토익 850점 이상)", "○ 근무지 인접 거주자 우대")]
     items += [{"evidence": e, "note": "LLM 추출"} for e in ("해외여행 결격 사유가 없는 자", "근무지 인접 거주자 우대", "운전면허 소지자")]
-    out, dropped = tidy_unresolved(items, lines)
-    assert dropped is True  # 제목 줄을 뺐다
+    out, blocked = tidy_unresolved(items, lines)
+    assert blocked is False  # 제목 아래에서 항목을 읽었다
     assert [(o["evidence"], o["note"]) for o in out] == [
         ("외국어 능통자 (토익 850점 이상)", PREFERRED_NOTE),
         ("근무지 인접 거주자 우대", PREFERRED_NOTE),
