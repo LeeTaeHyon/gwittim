@@ -17,7 +17,7 @@ from backend.sources import SourceConfig
 
 from .dates import date_info, parse_line
 
-ANALYSIS_VERSION = "rule-0.11"  # 0.11: 필수·우대·모호를 원문 위치로 나눠 우대·항목 제한 없음은 판정·완전성에서 제외, 필수·혼합 제목은 아래 읽은 항목으로 완전성 판단(D-056). 0.10: 졸업 예정자 줄은 재학 상태 조건으로 만들지 않고 직접 확인(D-046). 0.9: 재학상태 여러 값·기간형 신청 끝날짜·신청자 조건 줄·행정 공지 조건 제외·학년 전체 나열 무시·카테고리 보강. 0.8: 미해석 조건이 남으면 제한 없음 아님, 제한 없음 줄은 '무관' 면제 없음. 0.7: LLM 미해석 조건은 신청자 본인 조건만(D-023). 0.6: 미해석 조건 정리·우대 사항 표시(D-015). 0.5: 근로·근무 기간은 마감 아님. 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
+ANALYSIS_VERSION = "rule-0.12"  # 0.12(0.11은 되돌린 자체 모델 실험이 썼다): 필수·우대·모호를 원문 위치로 나눠 우대·항목 제한 없음은 판정·완전성에서 제외, 필수·혼합 제목은 아래 읽은 항목으로 완전성 판단(D-056). 0.10: 졸업 예정자 줄은 재학 상태 조건으로 만들지 않고 직접 확인(D-046). 0.9: 재학상태 여러 값·기간형 신청 끝날짜·신청자 조건 줄·행정 공지 조건 제외·학년 전체 나열 무시·카테고리 보강. 0.8: 미해석 조건이 남으면 제한 없음 아님, 제한 없음 줄은 '무관' 면제 없음. 0.7: LLM 미해석 조건은 신청자 본인 조건만(D-023). 0.6: 미해석 조건 정리·우대 사항 표시(D-015). 0.5: 근로·근무 기간은 마감 아님. 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
 
 
 class Analyzer(Protocol):
@@ -229,13 +229,16 @@ _REQUIRED = re.compile(r"필수|(?:지원|응시)\s*자격\s*[:：]|자격\s*요
 _TOP_HEADING = re.compile(r"^\s*(?:#{1,6}\s*\S|\d{1,2}\.\s|\d{1,2}\s+(?=[가-힣A-Za-z]))")
 _BRACKET_TITLE = re.compile(r"[\[【<]\s*(.+?)\s*[\]】>]\s*[:：]?")
 # 구절의 역할 표지 (3.2). 목록에 없는 표현은 모호로 다룬다 (테스트로 고정)
-_PREF_END = re.compile(r"우대(?:함|합니다|됩니다)?[.!]?$")
+_PREF_END = re.compile(r"우대(?:함|합니다|됩니다|해요)?[.!]?$")
 _REQ_END = re.compile(
     r"(?:대상(?:자|입니다)?|한함|한정|필수|[가-힣\d]만(?:\s*(?:지원|신청|참여))?(?:\s*가능(?:함|합니다)?)?"
     r"|(?:지원|참여)\s*가능(?:함|합니다)?)[.!]?$"
 )
 _PAREN = re.compile(r"[(（]([^()（）]*)[)）]")
 _SEPARATORS = ",，;；"
+# 소제목에 쓰는 기호. '-', '•', '※'는 목록 기호라 넣지 않는다
+_TITLE_MARK = re.compile(r"^\s*(?:[■□▶▷◆◇◎●○【]|\(?\d{1,2}\)|[①-⑳])\s*")
+SHORT_TITLE = 14  # 이 글자 수 이하이고 기호·조건 단서가 없는 줄은 새 제목으로 본다
 _TRIM = " ,;，；·"
 
 
@@ -284,6 +287,7 @@ class _Info:
     split: bool = False  # 한 줄을 역할별 구절로 나눴는지
     sect: str | None = None  # 이 줄이 속한 구역의 종류(독립 제목이 연 구역). 항목 이름은 구역이 아니다
     label_ctx: str | None = None  # 줄 앞 항목 이름의 종류(그 줄에만 적용)
+    listy: bool = False  # 목록 기호가 붙었거나 항목 이름이 붙은 줄(문장이 아니라 항목)
 
 
 def _split_top(text: str) -> list[tuple[int, int]]:
@@ -390,6 +394,10 @@ def read_lines(lines: list[str]) -> list[_Info]:
             section = None if kind == "neutral" else kind
             infos.append(_Info(line, "heading", kind, top=top))
             continue
+        if _TITLE_MARK.match(line) and ":" not in text and " / " not in text and len(text) <= SHORT_TITLE and not has_clue(text) and not SENTENCE_END.search(text):
+            section = None  # '■ 모집 기간', '■ 시상내역', '1) 공간지원': 이름은 모르지만 새 소제목이다 (D-056 3.1)
+            infos.append(_Info(line, "heading", "neutral", top=top))
+            continue
         if top:
             section = None
         forced = bool(_REQUIRED.search(line))
@@ -412,11 +420,14 @@ def read_lines(lines: list[str]) -> list[_Info]:
                     label_ctx = None if kind == "neutral" else kind
                     body = value
             else:
-                table_item = True  # '채용구분 / 계약직', '근무지: 인천'
+                # '채용구분 / 계약직', '근무지: 인천'. 'PLC / Sequence Control'처럼 한글이 없는 앞말은 항목 이름이 아니라 내용이다
+                table_item = bool(re.search(r"[가-힣]", name))
         if table_item and not has_clue(text):
             section = None  # 조건 단서 없는 새 표 항목에서 구역이 끝난다
+        elif m is None and not top and not _ENUM.match(line) and len(text) <= SHORT_TITLE and not has_clue(text):
+            section = None  # 기호 없는 짧은 줄은 이름을 모르는 새 제목으로 보고 구역을 닫는다('참여 방법', '시상 내역')
         ctx = label_ctx or ("required" if forced else section)
-        info = _Info(line, "body", top=top, sect=section, label_ctx=label_ctx)
+        info = _Info(line, "body", top=top, sect=section, label_ctx=label_ctx, listy=bool(_ENUM.match(line)) or m is not None)
         if body:
             segs, info.split = _segments(body, ctx)
             info.segs = [_Seg(role, line if role == "required" and not info.split else t) for role, t in segs]
@@ -549,13 +560,22 @@ def _compact(text: str) -> str:
 
 
 # 지원 자격이 아닌 안내 줄: 회사 소개, 복리후생·급여, 근무 조건, 모집 인원·부문, 담당 업무, 전형 절차·일정, 접수·제출, 문의, 유의사항 (D-056 3.7)
+SENTENCE_END = re.compile(r"(?:습니다|합니다|니다|세요|[가-힣]요|[가-힣]다)[.!]?\s*$")
+# 자격 문구가 끝나는 꼴: '…자', '…이상', '…소지', '…가능', '…한함', '…전공'. 구역 밖 목록 줄은 이런 꼴일 때만 단서로 본다(프로그램 소개 줄을 거른다)
+QUALIFIER_END = re.compile(
+    r"(?:자|분|생|이상|이하|미만|초과|소지|보유|경험|가능|필수|한함|한정|우대|제외|불가|해당|출신|거주|학과|전공|학위|학력|졸업|재학|대상)\)?\s*$"
+)
 INFO_LINE = re.compile(
     r"회사\s*소개|기업\s*소개|기관\s*소개|복리\s*후생|복지|급여|연봉|월급|근무\s*(?:지|지역|시간|형태|조건|요일)|고용\s*형태|채용\s*(?:구분|절차|분야|부문)"
     r"|모집\s*(?:인원|부문|분야|직무|기간)|담당\s*업무|주요\s*업무|업무\s*내용|전형|절차|일정|접수|면접|서류\s*평가|합격자|발표|문의|연락|유의|허위"
-    r"|선착순|정원|\d+\s*명|수도권|\d{4}\s*년|\d+\s*월|참고\s*사항"
+    r"|근로\s*(?:시간|기간)|선착순|정원|\d+\s*명|수도권|\d{4}\s*년|\d+\s*월|참고\s*사항"
+    # 날짜·시각('2026.11.25.(수)', '(금) 16:00'), 상금·시상·참가비·숙박, 근로 시간 상한, 제출 서류·기재 안내
+    r"|\d{4}\s*[.\-/]\s*\d{1,2}\s*[.\-/]|\d{1,2}\s*\.\s*\d{1,2}\s*\.?\s*\([월화수목금토일]\)|\d{1,2}:\d{2}"
+    r"|상금|시상|[대금은동]상\s*\(|USD|참가비|숙박|식사|최대\s*\d+\s*(?:시간|H)|\d+\s*H(?![A-Za-z])"
+    r"|이력서|자기\s*소개서|기재|양식"
 )
 # 학력·전공 낱말, 우대·자격 표지 (조건 단서)
-EDU_WORD = re.compile(r"학위|전공|학과|학력|졸업|우대|(?:\S+\s+){2,}\S*대상|대상자|한함|한정|필수|지원\s*가능|참여\s*가능")  # 짧은 제목 '근로 대상'은 단서가 아니다
+EDU_WORD = re.compile(r"학위|전공|학과|학력|졸업|우대|(?:\S+\s+){2,}\S*대상|대상자|한함|한정|지원\s*가능|참여\s*가능")  # 짧은 제목 '근로 대상'은 단서가 아니다
 
 
 @cache
@@ -576,7 +596,8 @@ def has_clue(text: str) -> bool:
 def is_notice(text: str, *, label_ok: bool = False) -> bool:
     """항목으로 만들지 않는 안내 줄인지. 기존 안내 패턴(서류·혜택·출결 등)은 신청자 조건 문구(APPLICANT_CONDITION)가 있어야만 면제되고,
     새 안내 패턴(근무 조건·모집 인원·일정 등)은 조건 단서가 있으면 면제된다 (D-056 3.7)."""
-    if (NOT_CONDITION.search(text) or NOT_ELIGIBILITY.search(text)) and not (APPLICANT_CONDITION.search(text) or UNRESTRICTED.search(text)):
+    preferred_mark = bool(_PREF_END.search(text.strip()) or any(_PREF_END.search(m[1].strip()) for m in _PAREN.finditer(text)))
+    if (NOT_CONDITION.search(text) or NOT_ELIGIBILITY.search(text)) and not (APPLICANT_CONDITION.search(text) or UNRESTRICTED.search(text) or preferred_mark):
         return True
     return bool(INFO_LINE.search(text)) and not (has_clue(text) or label_ok)
 
@@ -782,7 +803,14 @@ class RuleBasedAnalyzer:
                     if (UNRESOLVED.search(piece) and not exempt) or SEE_ATTACHMENT.search(piece) or APPLICANT_CONDITION.search(piece):
                         return True
                     # 자동으로 읽은 줄이 아니면: 조건 단서가 있는 줄, 필수 구역 안의 줄(안내 줄 제외) (D-056 3.7)
-                    return broad and not matched and keep_item(piece, section_ok=info.sect == "required")
+                    # 문장(안내문)은 항목이 아니다. 필수 구역 밖에서는 목록 기호·항목 이름이 붙은 자격 꼴 줄만 본다
+                    if not broad or matched or SENTENCE_END.search(piece):
+                        return False
+                    if OPEN_TO.search(piece) and not LIMIT.search(piece):
+                        return False  # 대상을 넓히는 말('주·야간 학생 모두 지원 가능')은 확인할 자격이 아니다 (LLM 경로와 같은 기준)
+                    if info.sect == "required":
+                        return keep_item(piece, section_ok=True)
+                    return info.listy and bool(QUALIFIER_END.search(piece)) and keep_item(piece)
 
                 item = None if UNRESTRICTED_ALL.search(line) else UNRESTRICTED_ITEM.search(line)
                 if UNRESTRICTED_ALL.search(line):

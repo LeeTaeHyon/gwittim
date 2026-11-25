@@ -124,3 +124,52 @@ def test_dotless_number_and_hash_titles_close_section():
     assert infos[1].sect == "preferred" and infos[3].sect is None
     infos = rules.read_lines(["■ 우대사항", "- 운전면허 소지자", "## 모집 개요", "- 독서 모임 참여자"])
     assert infos[3].sect is None
+
+
+# 660건 재비교에서 찾은 형태 (2026-11-26 검토): 공모전 소제목·일정·시상, 표 아닌 슬래시, 넓히는 말, 제출 안내
+R7 = """■ 지원 자격
+- 만 19세 이상 지역주민 및 대학생
+- AI 활용 콘텐츠 제작 경험자 우대
+■ 모집 기간
+- 2026.11.25.(수) ~ 12. 25.(금)
+■ 시상내역
+- 대상 (1편): USD 5,000
+- 금상 (1편): USD 3,000
+1) 공간지원
+- 개인 작업실(전용면적 14~16㎡ 규모) 지원
+■ 활동 내용
+- 월 1회 정기회의"""
+
+
+def test_bulleted_short_titles_close_required_section():
+    """'■ 모집 기간', '■ 시상내역', '1) 공간지원'은 이름 없는 소제목이다. 자격 구역이 여기서 닫혀 일정·시상·시설 줄이 직접 확인이 되지 않는다."""
+    elig, *_ = run(R7)
+    assert items(elig) == [("만 19세 이상 지역주민 및 대학생", None), ("AI 활용 콘텐츠 제작 경험자 우대", PREF)]
+
+
+def test_latin_slash_is_content_not_table_label():
+    """'PLC / Sequence Control …'의 앞말은 항목 이름이 아니다. 우대 구역이 닫히지 않아 뒤 우대 줄이 빠지지 않는다."""
+    body = "[우대사항]\n- PLC / Sequence Control 관련 실습 경험자\n- CAD 활용 가능자\n모집인원: 0명"
+    elig, *_ = run(body)
+    assert items(elig) == [("PLC / Sequence Control 관련 실습 경험자", PREF), ("CAD 활용 가능자", PREF)]
+
+
+def test_preferred_haeyo_ending_is_preferred():
+    elig, *_ = run("지원 자격: 재학생\n보험설계사 경력이 1년 이상인 분을 우대해요.")
+    assert ("보험설계사 경력이 1년 이상인 분을 우대해요.", PREF) in items(elig)
+
+
+def test_broadening_and_submission_lines_are_not_checks():
+    """대상을 넓히는 말과 제출·기재 안내는 확인할 자격이 아니다. 제한을 함께 말하면('…만 지원 가능') 남긴다."""
+    body = ("■ 신청 자격\n- 재학생\n- 주·야간 학생 모두 지원 가능\n- 개인 일정에 따라 1회차 또는 2회차만 선택 참여 가능"
+            "\n- 이력서 및 자기소개서 필수\n- 연락 가능한 전화번호 기재 필수\n- 응급구조사 자격증 보유자만 지원 가능")
+    elig, st, _ = run(body, ENROLLED2)
+    assert items(elig) == [("응급구조사 자격증 보유자만 지원 가능", None)]
+    assert st == "needs_check"
+
+
+def test_llm_does_not_bring_back_schedule_or_prize_lines(ollama):
+    """LLM이 일정·시상·활동 줄을 보내도 규칙 결과와 같다 (D-056 4)."""
+    elig, *_ = llm_run(ollama, R7, {"unresolved": ["2026.11.25.(수) ~ 12. 25.(금)", "대상 (1편): USD 5,000", "월 1회 정기회의",
+                                                  "개인 작업실(전용면적 14~16㎡ 규모) 지원"]})
+    assert items(elig) == [("만 19세 이상 지역주민 및 대학생", None), ("AI 활용 콘텐츠 제작 경험자 우대", PREF)]
