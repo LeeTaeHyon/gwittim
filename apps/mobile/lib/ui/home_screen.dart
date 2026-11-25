@@ -827,7 +827,9 @@ class _ReasonChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ExcludeSemantics(child: Icon(Icons.star_rounded, size: 14, color: c.accent)),
+          ExcludeSemantics(
+            child: Icon(Icons.star_rounded, size: MediaQuery.textScalerOf(context).scale(14), color: c.accent),
+          ),
           const SizedBox(width: 4),
           Text(
             reason,

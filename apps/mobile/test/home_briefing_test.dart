@@ -912,6 +912,37 @@ void main() {
       expect(find.descendant(of: tabCards, matching: find.byType(Pill)), findsWidgets);
     });
 
+    testWidgets('360 폭·글자 1.3배: 상태 칩·새 공고 표시·이유 칩이 한 줄에 모자라면 칩 단위로 아랫줄, 넘치지 않음', (tester) async {
+      phone360(tester, 1.3);
+      await pumpHome(
+        tester,
+        ListRepo(
+          [
+            entry(
+              '저장 새 공고',
+              deadline: '2026-10-20',
+              reasons: ['interest_match', 'role_match', 'major_match'],
+              published: '2026-10-16',
+            ),
+          ],
+          saved: [savedOne('저장 새 공고', deadline: '2026-10-20')],
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      final state = tester.getRect(find.widgetWithText(Pill, '저장'));
+      final fresh = tester.getRect(find.descendant(of: find.byType(Pill), matching: find.text('새 공고')));
+      final reason = tester.getRect(find.text('관심·직무·전공'));
+      final title = tester.getRect(findText('저장 새 공고'));
+      expect(fresh.left, greaterThan(state.right)); // 표시 순서: 상태 → 새 공고 → 이유
+      expect(reason.top, greaterThanOrEqualTo(fresh.top - 0.5));
+      expect(reason.bottom, lessThanOrEqualTo(title.top)); // 칩은 모두 제목 위
+      // 칩이 글 묶음 폭을 넘지 않는다(상태 원 왼쪽까지)
+      final dot = tester.getRect(find.descendant(of: find.byType(HomeScreen), matching: find.byType(EligibilityDot)));
+      expect(reason.right, lessThanOrEqualTo(dot.left));
+      // 별 아이콘도 글자 배율을 따른다
+      expect(tester.getSize(find.byIcon(Icons.star_rounded)).height, closeTo(14 * 1.3, 0.5));
+    });
+
     testWidgets('마감 줄 날짜 블록: 큰 날짜와 요일(월 없음), 화면 읽기에서는 뺀다', (tester) async {
       bigScreen(tester);
       await pumpApp(tester, MemoryBriefingStore(alwaysShown: true));

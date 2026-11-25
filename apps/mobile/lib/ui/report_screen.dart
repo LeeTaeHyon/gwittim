@@ -712,6 +712,9 @@ class _Verdict extends StatelessWidget {
         ));
       }
     }
+    // 값 첫 줄 높이(15 × 줄 간격 1.4, 글자 배율 반영). 아이콘·이름표를 이 높이 안에서 가운데 맞춘다.
+    final scaler = MediaQuery.textScalerOf(context);
+    final firstLine = scaler.scale(15) * 1.4;
     return Semantics(
       key: reportVerdictKey,
       container: true,
@@ -733,16 +736,22 @@ class _Verdict extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Icon(l.icon, size: 18, color: c.muted),
+                  SizedBox(
+                    height: firstLine,
+                    child: Center(child: Icon(l.icon, size: scaler.scale(18), color: c.muted)),
                   ),
                   const SizedBox(width: 8),
                   SizedBox(
-                    width: 44,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(l.name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.sub)),
+                    width: scaler.scale(44),
+                    height: firstLine,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        l.name,
+                        maxLines: 1,
+                        softWrap: false,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.sub),
+                      ),
                     ),
                   ),
                   Expanded(
@@ -1096,10 +1105,16 @@ class _ChecklistState extends State<_Checklist> {
     int countOf(CheckState s) => rows.where((r) => r.state == s).fold(0, (n, r) => n + r.count);
     final checks = countOf(CheckState.check);
     final mets = countOf(CheckState.met);
+    final compared = mets + checks + countOf(CheckState.notMet) > 0;
     final intro = status == null
         ? '공고에서 찾은 조건입니다.'
         : checks > 0
         ? (mets > 0 ? '조건 $mets개 충족. $checks개는 직접 확인해 주세요.' : '$checks개 조건은 직접 확인해 주세요.')
+        : !compared
+        ? '자동으로 비교한 조건이 없습니다.'
+        // 서버는 확인 필요인데 셀 수 있는 확인 줄이 없을 때(예: '누구나 지원 가능'만 찾고 첨부 미확인): 원문 확인을 안내
+        : status == 'needs_check' && mets > 0
+        ? '조건 $mets개 충족. 원문에서 한 번 더 확인해 주세요.'
         : '공고에서 찾은 조건을 내 프로필과 비교했습니다.';
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 36, 24, 0),

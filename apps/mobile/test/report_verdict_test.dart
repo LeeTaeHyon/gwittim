@@ -150,6 +150,9 @@ void main() {
       await pumpReport(tester, reportNotice(deadline: _day('2026-10-30')), recommendation: rec('needs_check'));
       expect(verdict(tester), ['조건', '지원 조건 확인 필요', '마감', '10월 30일 마감 · D-13']);
       expect(findText('공고에서 지원 조건을 찾지 못했습니다'), findsOneWidget);
+      // 비교한 조건이 없으니 '내 프로필과 비교했습니다'라고 쓰지 않는다
+      expect(findText('자동으로 비교한 조건이 없습니다.'), findsOneWidget);
+      expect(findTextContaining('비교했습니다'), findsNothing);
     });
 
     testWidgets('조건이 다 추출되지 않아도 조건 값 뒤에 덧붙이지 않고 체크리스트 아래 안내에 맡긴다', (tester) async {
@@ -198,6 +201,54 @@ void main() {
       await pumpReport(tester, reportNotice(deadline: _day('2026-10-17')));
       expect(verdict(tester), ['마감', '오늘 마감']);
     });
+  });
+
+  testWidgets('서버는 확인 필요인데 충족 줄만 있으면(누구나 지원 가능 + 첨부 미확인) 원문 확인 안내', (tester) async {
+    await pumpReport(
+      tester,
+      Notice(
+        summary: reportNotice(deadline: _day('2026-10-30')).summary,
+        description: null,
+        applicationStart: null,
+        activityPeriod: null,
+        eligibility: const Eligibility(
+          conditions: [],
+          unresolvedEvidence: [],
+          preferredEvidence: [],
+          extractionComplete: false,
+          explicitlyUnrestricted: true,
+          unrestrictedEvidence: '참가대상: 누구나',
+        ),
+        lastVerifiedAt: null,
+      ),
+      recommendation: rec('needs_check'),
+    );
+    expect(verdict(tester).take(2), ['조건', '지원 조건 확인 필요']);
+    expect(findText('조건 1개 충족. 원문에서 한 번 더 확인해 주세요.'), findsOneWidget);
+    expect(findTextContaining('비교했습니다'), findsNothing);
+  });
+
+  testWidgets('큰 글자(1.3배)에서 결론 카드 아이콘·이름표가 값 첫 줄과 세로 가운데로 맞는다', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await pumpReport(
+      tester,
+      reportNotice(deadline: _day('2026-10-30')),
+      recommendation: rec('needs_check', results: const [_grade], reasons: const ['interest_match']),
+    );
+    final card = find.byKey(reportVerdictKey);
+    for (final (icon, name, value) in [
+      (Icons.checklist_rounded, '조건', '확인 필요 1개 · 학년'),
+      (Icons.event_rounded, '마감', '10월 30일 마감 · D-13'),
+      (Icons.star_outline_rounded, '추천', '관심 분야 관련'),
+    ]) {
+      final v = tester.getRect(find.descendant(of: card, matching: findText(value)));
+      final i = tester.getRect(find.descendant(of: card, matching: find.byIcon(icon)));
+      final n = tester.getRect(find.descendant(of: card, matching: find.text(name)));
+      expect(i.center.dy, closeTo(v.center.dy, 1), reason: name); // 값이 한 줄이면 줄 가운데
+      expect(n.center.dy, closeTo(v.center.dy, 1), reason: name);
+      expect(i.height, closeTo(18 * 1.3, 0.5), reason: name); // 아이콘도 글자 배율을 따른다
+    }
   });
 
   group('순서', () {
