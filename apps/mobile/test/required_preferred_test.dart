@@ -62,6 +62,31 @@ const expected = {
   'S15': Expect(['met:충족[지원 자격: 재학생]', 'info:우대 사항[3~4학년]'], 'needs_check', '지원 조건 확인 필요', generic: true),
   'S16': Expect(['check:직접 확인[평점 3.0 이상]', 'met:충족[지원 자격: 재학생]'], 'needs_check', '확인 필요 1개', generic: true),
   'S17': Expect(['check:직접 확인[평점 3.0 이상]', 'info:제한 없음[학년 무관]'], 'needs_check', '확인 필요 1개', generic: true),
+  // 구역·항목 회귀 (명세 §7.6): 직접 확인 줄 수가 서버 항목 수와 같고, 근무지·모집인원·회사소개 줄은 없다
+  'R1': Expect(
+    [
+      'check:직접 확인 4개[국가보훈대상자(필수)|전문학사 졸업 또는 동등 수준 이상 학위 소지자|남자의 경우 병역필 또는 면제자|최종합격일 이후 근무 가능한 자]',
+      'info:우대 사항[VC·PE 등 금융 관리업무 경험자]',
+    ],
+    'needs_check',
+    '확인 필요 4개',
+    generic: true,
+  ),
+  'R3': Expect(
+    [
+      'check:직접 확인 3개[관련 학사 이상 학위 보유자|기계·전기·전자 전공|MS Office 기본 활용 가능자]',
+      'info:우대 사항 2개[반도체 제조 공정 실무 경험자|전기 관련 산업기사 자격증 보유자]',
+    ],
+    'needs_check',
+    '확인 필요 3개',
+    generic: true,
+  ),
+  'R5A': Expect(
+    ['check:직접 확인[해당 지역 거주자에 한함]', 'info:우대 사항[운전면허 소지자]'],
+    'needs_check',
+    '확인 필요 1개',
+    generic: true,
+  ),
 };
 
 String sig(CheckRow r) => '${r.state.name}:${r.label}[${r.evidences.join('|')}]';
@@ -104,6 +129,9 @@ void main() {
       expect(findTextContaining(generic), want.generic ? findsOneWidget : findsNothing);
       expect(findTextContaining('0개'), findsNothing);
       expect(findTextContaining('첨부'), findsNothing);
+      for (final noise in ['근무지', '모집인원', '회사소개', '채용구분', '급여']) {
+        expect(findTextContaining(noise), findsNothing, reason: noise);
+      }
       if (want.status == 'needs_check') expect(find.text('확인 필요'), findsWidgets);
     });
   }

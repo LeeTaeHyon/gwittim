@@ -184,8 +184,10 @@ UNIVERSITY = re.compile(r"우리\s*대학|본교")
 # 전체 제한 없음: 지원 대상 전체에 제한이 없다고 밝힌 문구. explicitly_unrestricted의 근거가 된다 (D-056)
 UNRESTRICTED_ALL = re.compile(r"누구나|(?:자격|대상|지원|참여|신청)\s*제한\s*없|제한\s*없이\s*(?:지원|참여|신청)")
 # 항목별 제한 없음: 학년·학과·전공 하나에만 제한이 없다는 문구. 나머지 자격이 열렸다는 근거는 아니다
-_ITEM_WORD = r"(?:학년|학과|전공)"
-UNRESTRICTED_ITEM = re.compile(rf"{_ITEM_WORD}(?:\s*[·ㆍ,/]\s*{_ITEM_WORD})*\s*(?:제한\s*없(?:음|이|습니다)?|무관)")
+_ITEM_WORD = r"(?:학년|학과|전공|학력)"
+UNRESTRICTED_ITEM = re.compile(rf"{_ITEM_WORD}(?:\s*(?:[·ㆍ,/]|및|과|와)\s*{_ITEM_WORD})*\s*(?:제한\s*없(?:음|이|습니다)?|무관)")
+# 항목 제한 없음 구절 바로 뒤에 붙은 예외: '(특정 모집 부문 제외)', ', 단, …'. 예외가 붙으면 구절 전체를 직접 확인으로 둔다 (D-056 3.4)
+_EXCEPTION = re.compile(r"\s*(?:[(（][^()（）]*(?:제외|단[,，\s])[^()（）]*[)）]|[,，]?\s*(?:단|다만)[,，\s][^,，.]*)")
 UNRESTRICTED = re.compile(UNRESTRICTED_ALL.pattern + "|" + UNRESTRICTED_ITEM.pattern)
 UNRESOLVED = re.compile(r"평점|학점|성적|소득|연령|나이|만\s*\d+\s*세|우대|요건|거주|주민등록|소재|출신|국적")
 # 신청자·작품이 갖춰야 하거나 피해야 하는 조건 줄: 성적 기준, 채플 출석 통과, 초과학기, 표절·기존 발표·수상작 응모 불가.
@@ -217,13 +219,15 @@ PREFERRED_NOTE = "우대 사항"  # 갖추면 유리한 조건
 NO_LIMIT_NOTE = "항목 제한 없음"  # '학년 무관'처럼 한 항목에만 제한이 없다는 문구
 FLAG_NOTES = (PREFERRED_NOTE, NO_LIMIT_NOTE)
 
-_ENUM = re.compile(r"^\s*(?:\(?\d{1,2}[.)]\s*|[①-⑳]\s*|[○●◦•ㆍᆞ·\-*※□■▶▷◎◆◇./]\s*|[가-하][.)]\s+)+")
+_ENUM = re.compile(r"^\s*(?:#{1,6}\s*|\(?\d{1,2}[.)]\s*|[①-⑳]\s*|[○●◦•ㆍᆞ·\-*※□■▶▷◎◆◇./]\s*|[가-하][.)]\s+)+")
 _LABEL = re.compile(r"^([^\d/:：]{1,12}?)\s*(?:\s/\s|[:：])\s*(.+)$")  # '항목 이름 / 값', '항목 이름: 값'
 _HEADING_WORD = re.compile(r"(?:지원|응시|참가|신청|자격|요건|조건|대상|우대|사항|필수|공통|분야별|직무별|기타)+")
 _REQ_WORD = re.compile(r"자격|요건|조건|대상|공통|필수")
 # 필수 조건을 말하는 줄. 우대 구역이 여기서 끝나고, 이 줄은 우대 사항이 아니다
 _REQUIRED = re.compile(r"필수|(?:지원|응시)\s*자격\s*[:：]|자격\s*요건\s*[:：]")
-_TOP_HEADING = re.compile(r"^\s*\d{1,2}\.\s")
+# 번호 제목: 점이 없어도 된다('5 근무조건'), '## 모집 개요'도 (D-056 3.1)
+_TOP_HEADING = re.compile(r"^\s*(?:#{1,6}\s*\S|\d{1,2}\.\s|\d{1,2}\s+(?=[가-힣A-Za-z]))")
+_BRACKET_TITLE = re.compile(r"[\[【<]\s*(.+?)\s*[\]】>]\s*[:：]?")
 # 구절의 역할 표지 (3.2). 목록에 없는 표현은 모호로 다룬다 (테스트로 고정)
 _PREF_END = re.compile(r"우대(?:함|합니다|됩니다)?[.!]?$")
 _REQ_END = re.compile(
@@ -278,6 +282,8 @@ class _Info:
     top: bool = False  # 번호 제목('3. 신청 방법') 꼴
     segs: list[_Seg] = field(default_factory=list)
     split: bool = False  # 한 줄을 역할별 구절로 나눴는지
+    sect: str | None = None  # 이 줄이 속한 구역의 종류(독립 제목이 연 구역). 항목 이름은 구역이 아니다
+    label_ctx: str | None = None  # 줄 앞 항목 이름의 종류(그 줄에만 적용)
 
 
 def _split_top(text: str) -> list[tuple[int, int]]:
@@ -337,6 +343,8 @@ def _segments(body: str, ctx: str | None) -> tuple[list[tuple[str, str]], bool]:
                 else:
                     merged.append([kind, a, b])
             return [(k, body[a:b].strip(_TRIM)) for k, a, b in merged], True
+        if not reqs and not trailing:
+            return [("preferred", body[a:b].strip(_TRIM)) for _, a, b in groups], len(groups) > 1
         if not trailing or ctx == "preferred":
             return [("preferred", body)], False
         return [("ambiguous", body)], False  # 닫는 표지 없이 중간에 '우대'가 있음
@@ -349,39 +357,66 @@ def _segments(body: str, ctx: str | None) -> tuple[list[tuple[str, str]], bool]:
     return [("required", body)], False
 
 
+def _unbracket(text: str) -> tuple[str, bool]:
+    """'[자격요건]' 같은 괄호 제목의 알맹이와 괄호 제목이었는지. 끝의 역슬래시·공백은 뗀다."""
+    t = re.sub(r"[\\\s]+$", "", text.strip())
+    if m := _BRACKET_TITLE.fullmatch(t):
+        return m[1], True
+    return t, False
+
+
+def _heading_of(text: str) -> str | None:
+    """독립 제목이면 종류, 아니면 None."""
+    t, _ = _unbracket(text)
+    return _heading_kind(t) if _is_heading(t) else None
+
+
 def read_lines(lines: list[str]) -> list[_Info]:
     """본문 줄마다 제목·본문 구분과 문구의 역할(필수·우대·모호)을 원문 위치로 정한다 (D-056 3.1).
 
-    우대 구역은 다음 독립 제목, 번호 제목, 필수 표지 줄, 이미지 설명에서 끝난다.
+    구역은 독립 제목 줄(괄호 제목 포함)만 연다. 항목 이름('우대사항 / …')은 그 줄에만 적용하고 구역을 열지 않는다.
+    구역은 다음 독립 제목, 번호 제목, 이미지 설명, 필수 표지 줄, 조건 단서 없는 새 표 항목에서 끝난다.
     """
     infos: list[_Info] = []
     section = None
     for line in lines:
         text = _ENUM.sub("", line).strip()
-        m = _LABEL.match(text)
-        label = m[1] if m and _is_heading(m[1]) else None
         if line == "[이미지 설명]":
             section = None
             infos.append(_Info(line, "image"))
             continue
-        if label is None and _is_heading(text):
-            kind = _heading_kind(text)
+        top = bool(_TOP_HEADING.match(line))
+        if (kind := _heading_of(text)) is not None:
             section = None if kind == "neutral" else kind
-            infos.append(_Info(line, "heading", kind, top=bool(_TOP_HEADING.match(line))))
+            infos.append(_Info(line, "heading", kind, top=top))
             continue
-        if label is not None:
-            kind = _heading_kind(label)
-            ctx = section = None if kind == "neutral" else kind
-            body = _ENUM.sub("", m[2]).strip()
-        else:
-            if _TOP_HEADING.match(line):
-                section = None
-            if _REQUIRED.search(line):
-                section, ctx = None, "required"
+        if top:
+            section = None
+        forced = bool(_REQUIRED.search(line))
+        if forced:
+            section = None
+        body, label_ctx, table_item = text, None, False
+        if m := _LABEL.match(text):
+            name, bracket = _unbracket(m[1])
+            value = _ENUM.sub("", m[2]).strip()
+            if _is_heading(name):
+                kind = _heading_kind(name)
+                if bracket:  # '[우대사항] / 내용': 괄호 제목이 구역을 열고 내용은 그 구역의 첫 줄
+                    section = None if kind == "neutral" else kind
+                    body = value
+                elif (value_kind := _heading_of(value)) is not None:  # '항목 이름 / [제목]': 뒤쪽이 제목
+                    section = None if value_kind == "neutral" else value_kind
+                    infos.append(_Info(line, "heading", value_kind, top=top))
+                    continue
+                else:
+                    label_ctx = None if kind == "neutral" else kind
+                    body = value
             else:
-                ctx = section
-            body = text
-        info = _Info(line, "body", top=bool(_TOP_HEADING.match(line)))
+                table_item = True  # '채용구분 / 계약직', '근무지: 인천'
+        if table_item and not has_clue(text):
+            section = None  # 조건 단서 없는 새 표 항목에서 구역이 끝난다
+        ctx = label_ctx or ("required" if forced else section)
+        info = _Info(line, "body", top=top, sect=section, label_ctx=label_ctx)
         if body:
             segs, info.split = _segments(body, ctx)
             info.segs = [_Seg(role, line if role == "required" and not info.split else t) for role, t in segs]
@@ -432,7 +467,7 @@ def _locate_note(evidence: str, infos: list[_Info], note: str | None) -> str | N
         roles = {s.role for i in infos if key in _compact(i.line) for s in i.segs}
     if roles == {"preferred"}:
         return PREFERRED_NOTE
-    if UNRESTRICTED_ITEM.search(text) and not UNRESTRICTED_ALL.search(text):
+    if UNRESTRICTED_ITEM.search(text) and not UNRESTRICTED_ALL.search(text) and not _EXCEPTION.search(text):
         return NO_LIMIT_NOTE
     return note
 
@@ -513,6 +548,49 @@ def _compact(text: str) -> str:
     return re.sub(r"\s+", "", text)
 
 
+# 지원 자격이 아닌 안내 줄: 회사 소개, 복리후생·급여, 근무 조건, 모집 인원·부문, 담당 업무, 전형 절차·일정, 접수·제출, 문의, 유의사항 (D-056 3.7)
+INFO_LINE = re.compile(
+    r"회사\s*소개|기업\s*소개|기관\s*소개|복리\s*후생|복지|급여|연봉|월급|근무\s*(?:지|지역|시간|형태|조건|요일)|고용\s*형태|채용\s*(?:구분|절차|분야|부문)"
+    r"|모집\s*(?:인원|부문|분야|직무|기간)|담당\s*업무|주요\s*업무|업무\s*내용|전형|절차|일정|접수|면접|서류\s*평가|합격자|발표|문의|연락|유의|허위"
+    r"|선착순|정원|\d+\s*명|수도권|\d{4}\s*년|\d+\s*월|참고\s*사항"
+)
+# 학력·전공 낱말, 우대·자격 표지 (조건 단서)
+EDU_WORD = re.compile(r"학위|전공|학과|학력|졸업|우대|(?:\S+\s+){2,}\S*대상|대상자|한함|한정|필수|지원\s*가능|참여\s*가능")  # 짧은 제목 '근로 대상'은 단서가 아니다
+
+
+@cache
+def _major_names() -> tuple[str, ...]:
+    return tuple(m["name_ko"] for m in _dictionary("majors"))
+
+
+def has_clue(text: str) -> bool:
+    """조건 단서: 자동 비교 필드(학년·재학 상태·학교·학과), 미해석 낱말, 신청자 본인 자격 낱말, 학력·전공 낱말, 우대·자격 표지, 제한 없음 문구."""
+    return bool(
+        PROFILE_HINT.search(text) or GRADE_RANGE.search(text) or GRADE_LIST.search(text) or GRADE_ONE.search(text)
+        or UNIVERSITY.search(text) or UNRESOLVED.search(text) or APPLICANT_CONDITION.search(text) or SEE_ATTACHMENT.search(text)
+        or PERSONAL_HINT.search(text) or EDU_WORD.search(text) or UNRESTRICTED.search(text)
+        or any(name in text for name in _major_names())
+    )
+
+
+def is_notice(text: str, *, label_ok: bool = False) -> bool:
+    """항목으로 만들지 않는 안내 줄인지. 기존 안내 패턴(서류·혜택·출결 등)은 신청자 조건 문구(APPLICANT_CONDITION)가 있어야만 면제되고,
+    새 안내 패턴(근무 조건·모집 인원·일정 등)은 조건 단서가 있으면 면제된다 (D-056 3.7)."""
+    if (NOT_CONDITION.search(text) or NOT_ELIGIBILITY.search(text)) and not (APPLICANT_CONDITION.search(text) or UNRESTRICTED.search(text)):
+        return True
+    return bool(INFO_LINE.search(text)) and not (has_clue(text) or label_ok)
+
+
+def keep_item(text: str, *, label_ok: bool = False, section_ok: bool = False) -> bool:
+    """이 줄을 미해석 항목으로 남길지 (D-056 3.7). 안내 줄은 조건 단서가 없으면 뺀다.
+
+    조건 단서가 있으면 남긴다. 우대 항목 이름(label_ok)도 단서다. 독립 제목이 연 구역 안의 줄은 단서가 없어도 남긴다.
+    """
+    if is_notice(text, label_ok=label_ok):
+        return False
+    return has_clue(text) or label_ok or section_ok
+
+
 def is_llm_condition(text: str, conditions: list[dict], unresolved: list[dict], lines: list[str] = ()) -> bool:
     """LLM이 낸 미해석 조건을 받을지. 신청자 본인 조건과 원문 우대 위치의 문구만 받고, 이미 보이는 문구는 다시 내지 않는다.
 
@@ -522,6 +600,8 @@ def is_llm_condition(text: str, conditions: list[dict], unresolved: list[dict], 
     """
     if NOT_ELIGIBILITY.search(text) or (NOT_CONDITION.search(text) and not APPLICANT_CONDITION.search(text)):
         return False
+    if is_notice(text):
+        return False  # 안내 줄 (D-056 4)
     if OPEN_TO.search(text) and not LIMIT.search(text):
         return False
     key = _compact(text)
@@ -652,48 +732,79 @@ class RuleBasedAnalyzer:
                 continue
             for seg in info.segs:
                 if seg.role == "preferred":
-                    unresolved.append((seg.text, PREFERRED_NOTE))  # 우대는 조건을 만들지 않고 보존만 한다 (D-056)
+                    # 우대는 조건을 만들지 않고 보존만 한다. 우대 표지·우대 항목 이름·우대 전용 구역 안의 줄만 항목으로 남긴다 (D-056 3.7)
+                    if keep_item(seg.text, label_ok=info.label_ctx == "preferred", section_ok=info.sect == "preferred"):
+                        unresolved.append((seg.text, PREFERRED_NOTE))
                     continue
                 if seg.role == "ambiguous":
-                    # 역할을 정할 수 없는 문구도 조건을 만들지 않고 직접 확인으로 남긴다
-                    if not (NOT_CONDITION.search(seg.text) and not UNRESTRICTED.search(seg.text) and not APPLICANT_CONDITION.search(seg.text)):
+                    # 역할을 정할 수 없는 문구도 조건을 만들지 않고, 조건 단서가 있을 때만 직접 확인으로 남긴다
+                    if keep_item(seg.text):
                         unresolved.append((seg.text, None))
                     continue
                 line = seg.text
+                matched = False
                 if m := GRADE_RANGE.search(line):
                     lo, hi = sorted((int(m[1]), int(m[2])))
                     add_grades(list(range(lo, hi + 1)), line)
+                    matched = True
                 elif m := GRADE_LIST.search(line):
                     add_grades(sorted({int(d) for d in re.findall(r"[1-4]", m[1])}), line)
+                    matched = True
                 elif m := GRADE_ONE.search(line):
                     add("grade", "eq", int(m[1]), line)
+                    matched = True
 
                 statuses = [s for s, p in (("enrolled", r"재학생|재\s*[·ㆍ･,/]\s*휴학생"), ("on_leave", r"휴학생"), ("graduated", r"졸업생|졸업자")) if re.search(p, line)]
                 if "enrolled" not in statuses and STUDENT_OR_GRADUATE.search(line):
                     statuses.insert(0, "enrolled")  # '학생 또는 졸업생'은 졸업생만이 아니다
                 if HIGH_SCHOOL_OR_MORE.search(line) and not NOT_CONDITION.search(line):
                     add("enrollment_status", "in", ["enrolled", "on_leave", "graduated"], line)
+                    matched = True
                 elif statuses and OTHER_STATUS.search(line):
                     unresolved.append((line, None))  # 복학생·입학예정자 등은 프로필 재학 상태로 판정할 수 없다
+                    matched = True
                 elif statuses:
+                    matched = True
                     add("enrollment_status", "eq" if len(statuses) == 1 else "in", statuses[0] if len(statuses) == 1 else statuses, line)
 
                 if source.university_id and (UNIVERSITY.search(line) or (school_status and school_status.search(line))):
                     add("university_id", "eq", source.university_id, line)
+                    matched = True
 
                 named = [m["id"] for m in majors if m["name_ko"] in line and re.search(re.escape(m["name_ko"]) + r"\s*(?:재학생|학생|대상|소속)", line)]
                 if named:
                     add("major_id", "eq" if len(named) == 1 else "in", named[0] if len(named) == 1 else named, line)
+                    matched = True
 
-                # 제한 없음 문구가 있는 줄은 '무관' 등으로 면제하지 않는다 ('학년 무관, 소득분위 3분위 이하')
-                exempt = NOT_CONDITION.search(line) and not UNRESTRICTED.search(line)
-                if (UNRESOLVED.search(line) and not exempt) or SEE_ATTACHMENT.search(line) or APPLICANT_CONDITION.search(line):
-                    unresolved.append((line, None))
+                def required_unresolved(piece: str, broad: bool = True) -> bool:
+                    # 제한 없음 문구가 있는 줄은 '무관' 등으로 면제하지 않는다 ('학년 무관, 소득분위 3분위 이하')
+                    exempt = NOT_CONDITION.search(piece) and not UNRESTRICTED.search(piece)
+                    if (UNRESOLVED.search(piece) and not exempt) or SEE_ATTACHMENT.search(piece) or APPLICANT_CONDITION.search(piece):
+                        return True
+                    # 자동으로 읽은 줄이 아니면: 조건 단서가 있는 줄, 필수 구역 안의 줄(안내 줄 제외) (D-056 3.7)
+                    return broad and not matched and keep_item(piece, section_ok=info.sect == "required")
+
+                item = None if UNRESTRICTED_ALL.search(line) else UNRESTRICTED_ITEM.search(line)
                 if UNRESTRICTED_ALL.search(line):
                     if unrestricted_line is None:
                         unrestricted_line = line  # 전체 제한 없음만 명시적 제한 없음의 근거다
-                elif m := UNRESTRICTED_ITEM.search(line):
-                    unresolved.append((m[0], NO_LIMIT_NOTE))  # 그 항목에만 제한이 없다. 나머지 자격이 열렸다는 근거가 아니다
+                    if required_unresolved(line, broad=False):  # '누구나 …' 줄 자체는 단서가 아니다
+                        unresolved.append((line, None))
+                elif item:
+                    # 그 항목에만 제한이 없다. 나머지 자격이 열렸다는 근거가 아니다. 예외가 붙으면 구절 전체를 직접 확인으로 둔다.
+                    # 같은 줄의 다른 구절은 따로 본다: 줄 전체를 하나로 묶지 않는다
+                    end = item.end()
+                    if ex := _EXCEPTION.match(line, end):
+                        end = ex.end()
+                        unresolved.append((line[item.start():end].strip(), None))
+                    else:
+                        unresolved.append((item[0], NO_LIMIT_NOTE))
+                    for piece in (line[:item.start()], line[end:]):
+                        piece = piece.strip(_TRIM)
+                        if piece and required_unresolved(piece):
+                            unresolved.append((piece, None))
+                elif required_unresolved(line):
+                    unresolved.append((line, None))
 
         unresolved = _dedupe(unresolved)
         # 우대·항목 제한 없음은 판정·완전성·명시적 제한 없음에서 뺀다 (D-056)

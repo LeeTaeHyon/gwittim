@@ -335,7 +335,7 @@ def test_tidy_unresolved_strips_marks_dedupes_and_marks_preferred():
         ("외국어 능통자 (토익 850점 이상)", PREFERRED_NOTE),
         ("근무지 인접 거주자 우대", PREFERRED_NOTE),
         ("해외여행 결격 사유가 없는 자", "LLM 추출"),
-        ("운전면허 소지자", PREFERRED_NOTE),  # '우대사항' 항목 아래 줄
+        ("운전면허 소지자", "LLM 추출"),  # 항목 이름은 그 줄에만 적용: 뒤따르는 줄은 혼합 구역 안의 모호한 줄 (D-056)
     ]
 
 

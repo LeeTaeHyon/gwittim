@@ -81,6 +81,25 @@ CASES = [
 ]
 
 
+# 7.6 구역·항목 회귀 사례: 실제 공고의 형태를 본뜬 가상 문구
+R1 = "\n".join([
+    "자격요건 / 국가보훈대상자(필수)", "우대사항 / VC·PE 등 금융 관리업무 경험자", "• 전문학사 졸업 또는 동등 수준 이상 학위 소지자",
+    "• 남자의 경우 병역필 또는 면제자", "• 최종합격일 이후 근무 가능한 자", "5 근무조건", "채용구분 / 계약직(1년)",
+    "급여 / 연 3,600만원 수준", "근무시간 / 09:00~18:00",
+])
+R2 = "\n".join([
+    "지원자격 / 모집 전공: 부동산·경영·회계 관련 학과", "우대사항 / 관련 자격증 보유자 우대, 외국어 능통자 우대", "- 영어 OPIc IH 이상 보유",
+    "참고사항 / 근무지역", "- 수도권(서울/경기)", "채용절차 / 지원서 접수", "2026년 12월 중", "서류평가 / 직무적성검사",
+])
+R3 = "\n".join([
+    "자격요건 및 우대사항", "[자격요건]", "- 관련 학사 이상 학위 보유자", "- 기계·전기·전자 전공", "- MS Office 기본 활용 가능자", "[우대사항]",
+    "- 반도체 제조 공정 실무 경험자", "- 전기 관련 산업기사 자격증 보유자", "모집인원: 0명", "근무지: 인천", "담당 업무: 설비 유지보수",
+    "회사소개 / 반도체 후공정 전문 기업입니다",
+])
+R5A = "우대사항 / 운전면허 소지자\n해당 지역 거주자에 한함"
+R6 = "지원 자격: 재학생\n■ 우대사항\n- 운전면허 소지자\n- 문서 정리를 꼼꼼히 하시는 분\n근무지: 서울"
+
+
 def golden_entry(case_id, body, profile, attachments):
     elig, status, results = run(body, profile, attachments)
     return {"id": case_id, "body": body, "eligibility": elig, "status": status, "results": results}
@@ -265,7 +284,7 @@ def test_l5b_llm_item_is_required_when_text_also_in_required_position(ollama):
     body = "지원 자격\n운전면허 소지자\n우대 사항\n운전면허 소지자"
     elig, *_ = llm_run(ollama, body, {"unresolved": ["운전면허 소지자"]})
     assert [(u["evidence"], u["note"]) for u in elig["unresolved_conditions"]] == [
-        ("운전면허 소지자", PREF), ("운전면허 소지자", "LLM 추출")]
+        ("운전면허 소지자", None), ("운전면허 소지자", PREF)]
 
 
 def test_l6_preferred_added_keeps_completeness_and_unrestricted(ollama):
@@ -357,6 +376,9 @@ def test_golden_matches_backend():
         golden_entry("S15", "지원 자격: 재학생\n우대 사항: 3~4학년", ENROLLED2, ATTACHMENT),
         golden_entry("S16", "지원 자격: 재학생\n평점 3.0 이상", ENROLLED2, ATTACHMENT),
         golden_entry("S17", "학년 무관\n평점 3.0 이상", ENROLLED2, None),
+        golden_entry("R1", R1, ENROLLED2, None),
+        golden_entry("R3", R3, ENROLLED2, None),
+        golden_entry("R5A", R5A, ENROLLED2, None),
     ]
     if os.environ.get("UPDATE_GOLDEN"):
         GOLDEN.parent.mkdir(parents=True, exist_ok=True)
