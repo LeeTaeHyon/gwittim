@@ -28,15 +28,23 @@ void main() {
     expect(rows.any((r) => (r.note ?? '').contains('프로필에 입력하면')), isFalse);
   });
 
-  test('졸업 프로필이 미확인이면 졸업생으로 안내한다', () {
+  test('졸업 프로필 미확인은 다른 대상이 함께 나열된 경우라, 그 대상에 해당하는지 확인하라고 안내한다', () {
+    // 예: '우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생'. 공고가 대상을 명시했으므로 '명시되지 않았다'고 하지 않는다
     final rows = checklistRows(notice, recommendation, (f) => f == 'enrollment_status' ? '졸업' : null);
-    expect(rows.singleWhere((r) => r.state == CheckState.check).note, '졸업생 포함 여부가 공고에 명시되지 않았습니다.');
+    final note = rows.singleWhere((r) => r.state == CheckState.check).note;
+    expect(note, '졸업생은 함께 나열된 다른 대상에 해당하는지 원문에서 확인해 주세요.');
+    expect(note, isNot(contains('명시되지 않았습니다')));
+  });
+
+  test('학적을 모르면 일반 안내', () {
+    expect(unconfirmedNote(null), '공고의 지원 대상에 해당하는지 원문에서 확인해 주세요.');
+    expect(unconfirmedNote('재학'), '재학생은 함께 나열된 다른 대상에 해당하는지 원문에서 확인해 주세요.');
   });
 
   testWidgets('결론 카드 확인 개수가 체크리스트와 같고 재입력 안내가 없다', (tester) async {
     await pumpReport(tester, notice, recommendation: recommendation);
     expect(verdict(tester).take(2), ['조건', startsWith('확인 필요 1개')]);
-    expect(findTextContaining('포함 여부가 공고에 명시되지 않았습니다'), findsOneWidget);
+    expect(findTextContaining('원문에서 확인해 주세요'), findsWidgets);
     expect(findTextContaining('프로필에 입력하면'), findsNothing);
   });
 }
