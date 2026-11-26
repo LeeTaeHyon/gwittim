@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -66,6 +67,11 @@ def _day_start_iso(now: datetime) -> str:
     return start.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _text_hash(masked: str) -> str:
+    """공백을 정리한 가린 본문의 해시. 같은 글을 다시 붙여넣었는지 가리는 기준."""
+    return hashlib.sha256(" ".join(masked.split()).encode("utf-8")).hexdigest()
+
+
 def _item(doc: dict, profile: dict | None) -> dict:
     status, results = evaluate(doc["notice"]["eligibility"], profile or _EMPTY_PROFILE)
     return {
@@ -89,11 +95,17 @@ def submit(uid: str, body: dict, deps: Deps) -> dict:
     if kakao_kind(cleaned, ()) in NOT_ANALYZED:
         return {"stored": False, "reason": "personal_notice"}
 
+    masked = mask(cleaned, ())
+    # 같은 사용자가 같은 글을 다시 넘기면 새로 저장하지 않고 기존 항목을 돌려준다(하루 상한에도 세지 않는다)
+    digest = _text_hash(masked)
+    for old in deps.shared.list(uid):
+        if _text_hash(old.get("text", "")) == digest:
+            return _item(old, deps.profiles.get(uid))
+
     now = deps.clock.now()
     if deps.shared.count_since(uid, _day_start_iso(now)) >= DAILY_LIMIT:
         raise ShareError("rate_limited")
 
-    masked = mask(cleaned, ())
     today = deps.today_kst()
     now_iso = deps.now_iso()
     share_id = secrets.token_urlsafe(16)  # 서버 생성, 추측 불가

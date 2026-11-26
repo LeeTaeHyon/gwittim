@@ -56,6 +56,13 @@ PROF_RE = (
     re.compile(r"((?:담당|책임)교수\s*:?\s*)[가-힣]{3}"),
     re.compile(r"[가-힣]{3}(?=\s?교수(?:입니다|님|\]))"),
 )
+# 계좌번호: 은행·계좌·입금 말 바로 앞이나 뒤에 붙은 10~16자리 숫자(하이픈 허용). 금액(30,000원)·대표번호는 자릿수나 쉼표로 걸러진다
+ACCT_NUM = r"(?<![\d-])\d(?:-?\d){9,15}(?![\d-])"
+ACCT_BEFORE_RE = re.compile(r"((?:은행|뱅크|농협|우체국|계좌(?:번호)?|입금(?:계좌)?)[^\n\d]{0,15})" + ACCT_NUM)
+ACCT_AFTER_RE = re.compile(ACCT_NUM + r"(?=[^\n\d]{0,6}(?:은행|뱅크|농협|우체국))")
+# 예금주: 계좌 바로 뒤 괄호 안 이름, '예금주: 홍길동'
+HOLDER_PAREN_RE = re.compile(r"(<계좌>\s*[(（\[])[가-힣]{2,4}(?=[)）\]])")
+HOLDER_LABEL_RE = re.compile(r"(예금주\s*[:：]\s*|예금주\s+)[가-힣]{2,4}")
 HONORIFIC_RE = re.compile(r"([가-힣]{2,4})님")
 NOT_NAMES = {"학생", "교수", "선생", "담당자", "여러분", "고객", "회원", "사용자", "참여자", "신청자", "재학생", "학우"}
 
@@ -136,6 +143,10 @@ def detect_names(texts: Iterable[str]) -> set[str]:
 def mask(text: str, names: Iterable[str]) -> str:
     text = STUDENT_ID_RE.sub("<학번>", text)
     text = MOBILE_RE.sub("<휴대폰>", text)
+    text = ACCT_BEFORE_RE.sub(r"\1<계좌>", text)
+    text = ACCT_AFTER_RE.sub("<계좌>", text)
+    text = HOLDER_PAREN_RE.sub(r"\1<이름>", text)
+    text = HOLDER_LABEL_RE.sub(r"\1<이름>", text)
     text = PROF_RE[0].sub(r"\1<교수>", text)
     text = PROF_RE[1].sub("<교수>", text)
     for n in names:

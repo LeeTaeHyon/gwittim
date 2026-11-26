@@ -62,6 +62,11 @@ final RegExp _fillerLine = _re('^(\\[[^\\]]*\\]|안녕하세요[^\\n]*|문의[^\
 final RegExp _mobile = _re('01[016789]-?$_d{3,4}-?$_d{4}');
 final RegExp _profAfterLabel = _re('((?:담당|책임)교수$_s*:?$_s*)[가-힣]{3}');
 final RegExp _profBeforeTitle = _re('[가-힣]{3}(?=$_s?교수(?:입니다|님|\\]))');
+final String _acctNum = '(?<![$_d-])$_d(?:-?$_d){9,15}(?![$_d-])';
+final RegExp _acctBefore = _re('((?:은행|뱅크|농협|우체국|계좌(?:번호)?|입금(?:계좌)?)[^\\n$_d]{0,15})$_acctNum');
+final RegExp _acctAfter = _re('$_acctNum(?=[^\\n$_d]{0,6}(?:은행|뱅크|농협|우체국))');
+final RegExp _holderParen = _re('(<계좌>$_s*[(（\\[])[가-힣]{2,4}(?=[)）\\]])');
+final RegExp _holderLabel = _re('(예금주$_s*[:：]$_s*|예금주$_s+)[가-힣]{2,4}');
 final RegExp _honorific = _re('([가-힣]{2,4})님');
 const Set<String> _notNames = {'학생', '교수', '선생', '담당자', '여러분', '고객', '회원', '사용자', '참여자', '신청자', '재학생', '학우'};
 final RegExp _greeting = _re('^$_notW*안녕하세요$_notW*(?:<?이름>?$_s*님$_notW*)?');
@@ -130,9 +135,12 @@ String kakaoKind(String text, Set<String> names) {
   return KakaoKind.broadcast;
 }
 
-/// 학번·휴대폰·교수 이름·받는 사람 이름을 가린다 (parser.mask).
+/// 학번·휴대폰·계좌번호·예금주·교수 이름·받는 사람 이름을 가린다 (parser.mask).
 String maskPersonal(String text, Iterable<String> names) {
   var out = text.replaceAll(_studentId, '<학번>').replaceAll(_mobile, '<휴대폰>');
+  out = out.replaceAllMapped(_acctBefore, (m) => '${m.group(1)}<계좌>').replaceAll(_acctAfter, '<계좌>');
+  out = out.replaceAllMapped(_holderParen, (m) => '${m.group(1)}<이름>');
+  out = out.replaceAllMapped(_holderLabel, (m) => '${m.group(1)}<이름>');
   out = out.replaceAllMapped(_profAfterLabel, (m) => '${m.group(1)}<교수>');
   out = out.replaceAll(_profBeforeTitle, '<교수>');
   for (final n in names.toList()..sort()) {
