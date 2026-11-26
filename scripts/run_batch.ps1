@@ -6,7 +6,7 @@
 #   팀장 폰 수집기 받은편지함(Firestore kakao_inbox). 폴더가 없으면 알림톡은 건너뛴다
 # - 알림톡 앞에서 PC 카톡의 학교 채널을 <KakaoDir>\auto 로 자동 내보낸다 (D-041, scripts\export_kakao.ps1).
 #   폰 알림은 200자에서 잘리므로 전문은 내보내기로 채운다. 방마다 가장 새 파일만 읽는다. -NoKakaoExport 로 끈다
-# - 게시판 다음, 알림톡 앞에 교외 공모전(D-038: 위비티·콘테스트코리아)을 차례로 돈다. 같은 data\local을 쓰므로 직렬로만.
+# - 게시판 다음, 알림톡 앞에 교외 공모전·대외활동(D-038, D-059: 위비티·콘테스트코리아·링커리어)을 차례로 돈다. 같은 data\local을 쓰므로 직렬로만.
 #   robots·3초 간격·실행당 상한은 수집기가 지킨다. 실패해도 배치는 이어간다(종료 코드에 넣지 않음). -NoExternal 로 끈다
 # - 명지 게시판 다음, 교외 앞에 숭의여대 공지(D-045, 학교 팩)를 돈다. 교외와 같은 규칙(실패해도 이어감). -NoSewu 로 끈다
 # Windows 알림(WinRT)이 필요하므로 Windows PowerShell 5.1로 실행한다. 이 파일은 UTF-8 BOM으로 저장한다(5.1의 한글 처리).
@@ -81,15 +81,28 @@ if ($exit -eq 0 -and -not $NoSewu) {
     }
 }
 
-# 교외 공모전 (D-038): 게시판 다음, 알림톡 앞. 출처마다 따로 돌리고 한 곳이 실패해도 다음으로 넘어간다
-$externalSources = @("wevity", "contestkorea")
+# 교외 공모전·대외활동 (D-038, D-059): 게시판 다음, 알림톡 앞. 출처마다 따로 돌리고 한 곳이 실패해도 다음으로 넘어간다
+# 정기 배치 상한(D-059, 팀장 2026-11-26 '최대한 많이'): 출처·메뉴마다 목록 5페이지·새 공고 상세 50건. 사이트 합 30건 상한은 폐지했다.
+# 외부 단계 전체 실행 시간은 30분이다. 넘으면 남은 출처는 건너뛰고(다음 배치에서 새 공고로 이어짐) 로그에 남긴다.
+# 순서(새 공고가 많은 곳이 시간 상한에 밀리지 않게): 모수·새 공고량이 큰 순서. 2026-11-26 실측 링커리어 대외활동 약 1,400건·공모전 약 400건으로
+# 가장 크고(첫 시험에서 두 메뉴 모두 상세 30건 상한까지 새 공고), 위비티 공모전·대외활동, 콘테스트코리아(첫 배치 21건)·씽굿(목록 JSON에 본문이 들어 있어 요청이 가장 적음)·올콘(목록 약 100건)이 그 뒤다.
+# 출처당 상세 50건 x 3초 + 목록 5쪽 = 약 3분이라 6곳을 모두 돌아도 약 20분이므로 보통은 시간 상한에 걸리지 않는다.
+$externalSources = @("linkareer_activity", "linkareer_contest", "wevity", "wevity_activity", "contestkorea", "thinkgood_contest", "allcon_contest")
+$externalBudgetSeconds = 30 * 60
+$externalClock = [System.Diagnostics.Stopwatch]::StartNew()
 $externalPublished = 0
 $externalNote = ""
 if ($exit -eq 0 -and -not $NoExternal) {
     foreach ($src in $externalSources) {
+        $remaining = [int]($externalBudgetSeconds - $externalClock.Elapsed.TotalSeconds)
+        if ($remaining -lt 60) {
+            Write-Log "교외 $src 건너뜀: 외부 단계 30분 상한 소진 (다음 배치로 넘김)"
+            $externalNote += " ($src 시간상한으로 다음 배치)"
+            continue
+        }
         Push-Location $code
         try {
-            $xlines = & $Uv run --frozen python -m "backend.collectors.$src" --data-dir $DataDir 2>&1 | ForEach-Object { "$_" }
+            $xlines = & $Uv run --frozen python -m "backend.collectors.$src" --data-dir $DataDir --pages 5 --max-items 50 --max-seconds $remaining 2>&1 | ForEach-Object { "$_" }
             $xexit = $LASTEXITCODE
         } finally {
             Pop-Location

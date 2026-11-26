@@ -71,5 +71,6 @@ def collect(
     max_items: int | None = None,
     known: Callable[[str], bool] = lambda _id: False,
     collected_at: str | None = None,
+    backfill: bool = False,
 ) -> CollectResult:
-    return collect_list_detail(client, SOURCE, pages=pages, max_items=max_items, known=known, collected_at=collected_at)
+    return collect_list_detail(client, SOURCE, pages=pages, max_items=max_items, known=known, collected_at=collected_at, backfill=backfill)

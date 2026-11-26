@@ -1,6 +1,6 @@
 """교외 출처끼리 같은 공고 찾기 (D-048).
 
-위비티와 콘테스트코리아에 같은 공모전이 함께 올라와 앱에 두 번 보였다(2026-11-23 첫 교외 배치: 50건 중 2쌍).
+위비티와 콘테스트코리아(D-059 이후 링커리어 포함)에 같은 공모전이 함께 올라와 앱에 두 번 보였다(2026-11-23 첫 교외 배치: 50건 중 2쌍).
 두 사이트 모두 주최 측 공고를 옮겨 싣는 곳이라 제목과 접수 마감이 같다.
 
 - 같은 공고: 접수 마감 날짜가 같고 제목이 거의 같다(머리말 괄호·기호를 뺀 글자 2-gram 겹침 0.85 이상, 또는 한쪽 제목이 다른 쪽에 통째로 들어감).
@@ -13,8 +13,17 @@ from __future__ import annotations
 
 import re
 
-# 앞쪽이 남는다. 위비티를 1차 출처로 정했다(D-038)
-EXTERNAL_PRIORITY = ("wevity_contest", "contestkorea_contest")
+# 앞쪽이 남는다. 위비티를 1차 출처로 정했다(D-038). 순서는 위비티 > 콘테스트코리아 > 링커리어 > 씽굿 > 올콘 (D-059).
+# 같은 출처의 공모전·대외활동 메뉴에 같은 공고가 함께 올라오면 공모전 메뉴 쪽을 남긴다
+EXTERNAL_PRIORITY = (
+    "wevity_contest",
+    "wevity_activity",
+    "contestkorea_contest",
+    "linkareer_contest",
+    "linkareer_activity",
+    "thinkgood_contest",
+    "allcon_contest",
+)
 SAME_TITLE = 0.85  # 0.7은 한 낱말만 다른 다른 공모전(광고·영상)을 같은 공고로 봄
 SAME_TITLE_NO_DEADLINE = 0.9
 _BRACKETS = re.compile(r"\[[^\]]*\]|\([^)]*\)|【[^】]*】|<[^>]*>")

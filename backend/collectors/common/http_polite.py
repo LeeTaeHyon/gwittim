@@ -7,6 +7,9 @@
 - 실행당 상한을 코드로 강제한다: 사이트별 목록 2페이지·상세 30건, 전체 HTTP 200건(robots.txt 포함), 실행 30분. 넘으면 Stop을 올려 그 실행(또는 그 사이트)을 끝낸다.
 - 리다이렉트는 같은 사이트·robots 허용 경로로만 따라간다.
 
+목록이 JSON POST로만 열리는 사이트(씽굿)를 위해 `fetch(url, kind, json_body=...)`(또는 form_body=...: 올콘처럼 폼 POST)로 목록 조회 POST도 보낼 수 있다(D-059). 읽기 목적의 목록 조회에만 쓰며,
+robots·간격·상한·멈춤 규칙은 GET과 같다.
+
 어댑터는 `client.fetch(url, kind)`만 쓰고, Stop(실행 종료)과 FetchError(그 URL만 실패)를 구분해 처리한다.
 """
 from __future__ import annotations
@@ -15,6 +18,7 @@ import json
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -133,8 +137,8 @@ class PoliteClient:
 
     # ---------- 공개 ----------
 
-    def fetch(self, url: str, kind: str = "detail") -> str:
-        """kind: "list" | "detail". 목록 페이지·상세 건수를 사이트별로 센다."""
+    def fetch(self, url: str, kind: str = "detail", *, json_body: dict | None = None, form_body: dict | None = None) -> str:
+        """kind: "list" | "detail". 목록 페이지·상세 건수를 사이트별로 센다. json_body·form_body를 주면 POST(목록 조회용)."""
         site = _site(url)
         self._check_run()
         self._check_stopped(site)
@@ -143,7 +147,7 @@ class PoliteClient:
             self.robots_blocked.append(url)
             raise RobotsBlocked(f"robots.txt가 막은 경로: {urlsplit(url).path}")
         self._count_site(site, kind)
-        return self._get(url)
+        return self._get(url, json_body, form_body)
 
     def summary(self) -> dict:
         return {
@@ -224,7 +228,7 @@ class PoliteClient:
 
     # ---------- 실제 요청 ----------
 
-    def _get(self, url: str) -> str:
+    def _get(self, url: str, json_body: dict | None = None, form_body: dict | None = None) -> str:
         site = _site(url)
         if self.requests >= self.limits.total_requests:
             raise self._stop(LimitReached("run", f"전체 요청 {self.limits.total_requests}건 상한"))
@@ -236,7 +240,15 @@ class PoliteClient:
                 self._sleep(wait)
         self.requests += 1
         self._last[site] = self._clock()
-        request = urllib.request.Request(url, headers={"User-Agent": self.user_agent, "Accept-Language": "ko,en;q=0.5"})
+        headers = {"User-Agent": self.user_agent, "Accept-Language": "ko,en;q=0.5"}
+        data = None
+        if json_body is not None:
+            data = json.dumps(json_body, ensure_ascii=False).encode("utf-8")
+            headers |= {"Content-Type": "application/json; charset=UTF-8", "Accept": "application/json, text/plain, */*"}
+        if form_body is not None:
+            data = urllib.parse.urlencode(form_body).encode("ascii")
+            headers |= {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", "Accept": "application/json, text/plain, */*"}
+        request = urllib.request.Request(url, data=data, headers=headers, method="POST" if data is not None else "GET")
         try:
             with self._opener(request, timeout=self.timeout) as resp:
                 data = resp.read(MAX_BODY_BYTES)

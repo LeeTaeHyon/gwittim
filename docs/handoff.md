@@ -1,9 +1,10 @@
 # 인수인계 (handoff)
 
-마지막 갱신: 2026-11-26 (카카오톡 공고 수동 전달)
+마지막 갱신: 2026-11-26 (카카오톡 공고 수동 전달 #172, 교외 출처 확대 #173)
+
 ## 카카오톡 공고 수동 전달 (2026-11-26, feat/kakao-share, D-058)
 
-- 명세 [kakao-manual-share-spec.md](kakao-manual-share-spec.md) 구현. 작업 트리에만 있고 커밋·PR·배포·Firebase 변경은 하지 않았다.
+- 명세 [kakao-manual-share-spec.md](kakao-manual-share-spec.md) 구현. PR #172 병합(0322a9d).
 - 서버: `POST/GET /v1/shared-notices`, `DELETE /v1/shared-notices/{id}` (`backend/shared_notices/service.py`). 가린 글을 한 번 더 가리고 알림톡 분석기(Gemma 없음)로 분석, 본인 경로 `users/{uid}/shared_notices/{id}`에 저장(인메모리·Firestore 저장소). 출처 `user_share`(학교·시간대 null), 하루 30건(`rate_limited`), 동의 버전 불일치 `consent_required`, 탈퇴·게스트 정리에 포함. LLM·크레딧 없음.
 - 계약: `shared_notice_request/response/list_response` 스키마 3개, `api_error`에 `rate_limited`, fixtures 정상 7·비정상 8, SPEC 0.23, 결정 D-058(D-057은 #171 몫).
 - 앱(Android): `MainActivity.kt`가 ACTION_SEND(text/plain, image/*)를 받아 MethodChannel로 넘김(콜드 스타트·onNewIntent). 확인 화면(수정·가림 미리보기) → 첫 전달 동의 화면 → 결과 화면(`ReportScreen`의 `shared`). 저장 탭에 '카톡 공고 넘기기' 진입(붙여넣기)과 '카톡에서 넘긴 공고' 묶음(삭제). 새 패키지 `google_mlkit_text_recognition` 하나, 한국어 인식기는 앱 `build.gradle.kts`에 직접 의존성(`text-recognition-korean`)과 R8 `proguard-rules.pro` 필요.
@@ -11,6 +12,12 @@
 - 남은 일(팀장): 처리방침 게시본 반영(`docs/legal/privacy.md` 초안 갱신됨), 서버 배포(새 API), 보안 규칙은 변경 없음(기본 거부, 테스트만 추가), APK 빌드 버전 정하기, 실제 카톡 학교 채널 메시지·캡처로 폰 확인.
 - 미확인: 실제 카톡 메시지·실제 캡처 5장 OCR 정확도(합성 이미지 5장으로 대체 측정), 라이트 모드 화면, 실기기(S25 Ultra).
 
+## 교외 출처 확대 (2026-11-26, feat/external-expand, D-059)
+
+- 링커리어 공모전·대외활동, 위비티 대외활동 어댑터 추가(`backend/collectors/linkareer`·`linkareer_contest`·`linkareer_activity`·`wevity_activity`), 중복 우선순위 확장, `scripts/run_batch.ps1` 교외 목록에 추가, 앱 출처 이름 3개 추가, SPEC 0.24. 명세 [external-source-expansion-spec.md](external-source-expansion-spec.md)
+- 씽굿(목록 JSON POST)·올콘(목록 폼 POST) 추가, 요청기에 POST 지원. 정기 배치 상한을 메뉴별 목록 5페이지·상세 50건으로 올리고(사이트 합 30건 상한 폐지), 수동 백필 `--backfill` 추가(로컬 사본만). 씽유는 약관 재확인 못 해 미구현(D-059)
+- 남은 일: 병합 뒤 `Gwittim-batch` 갱신, 첫 운영 배치 확인, 앱 APK 재빌드(출처 이름), 백필 실행 시점 결정(링커리어 대외활동은 약 55분), 씽유 약관 확인
+- PR #173
 
 ## 홈 마감 목록·공고 리포트 알아보기 쉽게 (2026-11-25, feat/home-report-clarity, D-055)
 
