@@ -624,8 +624,16 @@ class SharedNoticesSection extends StatelessWidget {
 
   String _meta(SharedNoticeItem item) {
     final d = item.notice.summary.applicationDeadline;
+    final event = sharedEventDay(item.notice);
     final at = item.createdAt.toLocal();
-    return '${d == null ? '마감일 없음' : '${shortDate(d)} 마감'} · ${at.month}월 ${at.day}일 넘김';
+    final head = d != null
+        ? '${shortDate(d)} 마감'
+        : isPastSharedEvent(item.notice)
+        ? '지난 행사'
+        : event != null
+        ? eventDayText(event)
+        : '마감일 없음';
+    return '$head · ${at.month}월 ${at.day}일 넘김';
   }
 }
 
