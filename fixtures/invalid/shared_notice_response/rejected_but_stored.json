@@ -1,0 +1,10 @@
+{
+  "_expect": {
+    "keyword": "oneOf",
+    "path": ""
+  },
+  "data": {
+    "stored": true,
+    "reason": "personal_notice"
+  }
+}

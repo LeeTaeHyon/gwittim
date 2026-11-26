@@ -14,6 +14,9 @@
   POST   /v1/external-search       request_external_search: 외부 공고 찾기 (웹 검색, 동의·크레딧 2개, 결과 없으면 환불, D-047)
   GET    /v1/credits               get_credits: 잔액·다음 충전·사용 내역
   POST   /v1/credits/demo-refill   시연용: 잔액을 5까지 채움. 서버 설정 GWITTIM_DEMO_CREDITS=1일 때만, 아니면 404
+  POST   /v1/shared-notices        카카오톡에서 넘긴 공고(가린 글)를 분석·저장 (D-058). 본인만 봄, 하루 30건, LLM·크레딧 없음
+  GET    /v1/shared-notices        내가 넘긴 공고 목록 (최근순)
+  DELETE /v1/shared-notices/{id}   삭제 (반복 요청 안전)
   POST   /v1/ingest/kakao          팀장 폰 수집기의 학교 채널 알림톡 올리기 (D-036). 수집 토큰(X-Ingest-Token)으로만.
                                    토큰이 설정되지 않은 서버에서는 없는 경로처럼 404
 """
@@ -33,6 +36,7 @@ from backend.collectors.mjc_kakao.inbox import InboxError, accept
 from backend.contracts import schema_errors
 from backend.dictionaries import codes, unknown_profile_codes, unlisted_with_major
 from backend.recommendation import recommend
+from backend.shared_notices import service as shared
 
 from .deps import Caller, Deps, delete_user_data
 
@@ -48,6 +52,7 @@ _STATUS = {
     "insufficient_credits": 402,
     "request_in_progress": 409,
     "consent_required": 403,
+    "rate_limited": 429,
 }
 _MESSAGES = {
     "unauthenticated": "다시 로그인해 주세요.",
@@ -58,6 +63,7 @@ _MESSAGES = {
     "insufficient_credits": "크레딧이 부족합니다.",
     "request_in_progress": "같은 요청을 처리하고 있습니다.",
     "consent_required": "AI 상세 분석 동의가 필요합니다.",
+    "rate_limited": "오늘 넘길 수 있는 공고 수를 넘었습니다. 내일 다시 시도해 주십시오.",
 }
 _SUMMARY_FIELDS = (
     "notice_id",
@@ -77,8 +83,8 @@ class ApiError(Exception):
         self.code = code
 
 
-def _error(code: str) -> JSONResponse:
-    return JSONResponse({"error": {"code": code, "message": _MESSAGES[code]}}, status_code=_STATUS[code])
+def _error(code: str, message: str | None = None) -> JSONResponse:
+    return JSONResponse({"error": {"code": code, "message": message or _MESSAGES[code]}}, status_code=_STATUS[code])
 
 
 def _summary(notice: dict) -> dict:
@@ -95,6 +101,11 @@ def create_app(deps: Deps) -> FastAPI:
     @app.exception_handler(agent.AgentError)
     async def _agent_error(_: Request, exc: agent.AgentError):
         return _error(exc.code)
+
+    @app.exception_handler(shared.ShareError)
+    async def _share_error(_: Request, exc: shared.ShareError):
+        # 넘긴 공고의 동의는 AI 상세 분석 동의와 따로라 문구를 다르게 쓴다
+        return _error(exc.code, "카카오톡 공고 넘기기 동의가 필요합니다." if exc.code == "consent_required" else None)
 
     @app.exception_handler(RequestValidationError)
     async def _bad_request(_: Request, __: RequestValidationError):
@@ -146,7 +157,9 @@ def create_app(deps: Deps) -> FastAPI:
 
     @app.delete("/v1/profile", status_code=204)
     def delete_account_data(uid: str = Depends(current_uid)):
-        delete_user_data(uid, saved=deps.saved, reports=deps.reports, credits=deps.credits, profiles=deps.profiles)
+        delete_user_data(
+            uid, saved=deps.saved, reports=deps.reports, credits=deps.credits, profiles=deps.profiles, shared=deps.shared
+        )
         return Response(status_code=204)
 
     @app.get("/v1/recommendations")
@@ -229,6 +242,19 @@ def create_app(deps: Deps) -> FastAPI:
         if not agent.demo_credits_enabled():
             raise ApiError("not_found")
         return agent.demo_refill_credits(caller.uid, deps, guest=caller.guest)
+
+    @app.post("/v1/shared-notices")
+    def submit_shared_notice(body: dict, uid: str = Depends(current_uid)):
+        return shared.submit(uid, body, deps)
+
+    @app.get("/v1/shared-notices")
+    def list_shared_notices(uid: str = Depends(current_uid)):
+        return shared.list_items(uid, deps)
+
+    @app.delete("/v1/shared-notices/{share_id}", status_code=204)
+    def delete_shared_notice(share_id: str, uid: str = Depends(current_uid)):
+        shared.delete_item(uid, share_id, deps)
+        return Response(status_code=204)
 
     @app.post("/v1/ingest/kakao")
     def ingest_kakao(body: dict, x_ingest_token: str | None = Header(default=None)):

@@ -640,3 +640,65 @@ class DictionaryItem {
   /// 학과 사전에서 학과가 속한 학교 코드. 다른 사전은 null.
   final String? universityId;
 }
+
+// ───────────────────────── 카카오톡에서 넘긴 공고 (D-058) ─────────────────────────
+
+/// 카카오톡 공고 넘기기 동의 문구 버전. 서버(backend/shared_notices/service.py)와 같아야 한다.
+const shareConsentVersion = '2026-11-26';
+
+/// 넘기는 방법 (shared_notice_request.input)
+enum ShareInput {
+  text('share_text'),
+  imageOcr('share_image_ocr'),
+  paste('paste');
+
+  const ShareInput(this.code);
+
+  final String code;
+
+  static ShareInput fromCode(String code) => values.firstWhere((v) => v.code == code, orElse: () => paste);
+}
+
+/// 내가 넘긴 공고 한 건 (shared_notice_response). 서버가 분석한 Notice와 내 프로필 기준 판정을 표시만 한다.
+class SharedNoticeItem {
+  const SharedNoticeItem({
+    required this.id,
+    required this.createdAt,
+    required this.input,
+    required this.notice,
+    required this.eligibilityStatus,
+    required this.conditionResults,
+  });
+
+  final String id;
+  final DateTime createdAt;
+  final ShareInput input;
+  final Notice notice;
+
+  /// met / not_met / needs_check
+  final String eligibilityStatus;
+  final List<ConditionResult> conditionResults;
+
+  factory SharedNoticeItem.fromJson(Map<String, dynamic> m) {
+    final e = m['eligibility'] as Map<String, dynamic>;
+    return SharedNoticeItem(
+      id: m['id'] as String,
+      createdAt: DateTime.parse(m['created_at'] as String),
+      input: ShareInput.fromCode(m['input'] as String),
+      notice: Notice.fromJson(m['notice'] as Map<String, dynamic>),
+      eligibilityStatus: e['eligibility_status'] as String,
+      conditionResults: [
+        for (final c in e['condition_results'] as List) ConditionResult.fromJson(c as Map<String, dynamic>),
+      ],
+    );
+  }
+
+  /// 리포트의 체크리스트·결론 카드가 쓰는 판정 모양. 추천 이유·점수는 없다.
+  Recommendation get asRecommendation => Recommendation(
+    noticeId: notice.summary.noticeId,
+    score: null,
+    eligibilityStatus: eligibilityStatus,
+    reasonCodes: const [],
+    conditionResults: conditionResults,
+  );
+}

@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import 'models.dart';
 import 'repository.dart';
+import 'shared_notices.dart';
 
 /// 로그인 토큰 공급자 (Firebase Auth ID 토큰). 로그인 전이면 null.
 /// [refresh]이면 받아 둔 토큰을 쓰지 않고 새로 받는다.
@@ -13,7 +14,7 @@ typedef TokenProvider = Future<String?> Function({bool refresh});
 
 /// 서버 API(backend/api, W13)를 쓰는 실제 Repository.
 /// 사용자 ID는 보내지 않는다. 서버가 토큰에서 정한다 (SPEC §5).
-class ApiNoticeRepository implements NoticeRepository {
+class ApiNoticeRepository implements NoticeRepository, SharedNoticeApi {
   ApiNoticeRepository({
     required this.baseUrl,
     required this.tokenProvider,
@@ -42,6 +43,7 @@ class ApiNoticeRepository implements NoticeRepository {
     'insufficient_credits': RepositoryErrorKind.insufficientCredits,
     'request_in_progress': RepositoryErrorKind.requestInProgress,
     'consent_required': RepositoryErrorKind.consentRequired,
+    'rate_limited': RepositoryErrorKind.rateLimited,
   };
 
   Future<http.Response> _send(String method, String path, {Map<String, dynamic>? body, Duration? wait}) async {
@@ -95,6 +97,7 @@ class ApiNoticeRepository implements NoticeRepository {
         400 => RepositoryErrorKind.invalidArgument,
         402 => RepositoryErrorKind.insufficientCredits,
         409 => RepositoryErrorKind.requestInProgress,
+        429 => RepositoryErrorKind.rateLimited,
         _ => RepositoryErrorKind.unavailable,
       };
     }
@@ -219,6 +222,30 @@ class ApiNoticeRepository implements NoticeRepository {
 
   @override
   Future<Credits> getCredits() async => Credits.fromJson(_json(await _send('GET', 'v1/credits')));
+
+  @override
+  Future<SubmitSharedResult> submitShared({required String text, required ShareInput input, bool? ocrEdited}) async {
+    final body = {
+      'text': text,
+      'input': input.code,
+      'ocr_edited': ?(input == ShareInput.imageOcr ? (ocrEdited ?? false) : null),
+      'consent_version': shareConsentVersion,
+    };
+    final json = _json(await _send('POST', 'v1/shared-notices', body: body));
+    if (json['stored'] == false) return const SubmitSharedResult(null);
+    return SubmitSharedResult(SharedNoticeItem.fromJson(json));
+  }
+
+  @override
+  Future<List<SharedNoticeItem>> listShared() async {
+    final data = _json(await _send('GET', 'v1/shared-notices'));
+    return [for (final i in data['items'] as List) SharedNoticeItem.fromJson(i as Map<String, dynamic>)];
+  }
+
+  @override
+  Future<void> deleteShared(String id) async {
+    await _send('DELETE', 'v1/shared-notices/${Uri.encodeComponent(id)}');
+  }
 
   @override
   Future<Credits> demoRefillCredits() async => Credits.fromJson(_json(await _send('POST', 'v1/credits/demo-refill')));

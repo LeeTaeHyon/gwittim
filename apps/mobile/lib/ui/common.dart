@@ -19,6 +19,7 @@ String errorMessage(Object error) {
       RepositoryErrorKind.insufficientCredits => '크레딧이 부족합니다.',
       RepositoryErrorKind.requestInProgress => '같은 분석이 진행 중입니다.',
       RepositoryErrorKind.consentRequired => 'AI 전송 동의가 필요합니다.',
+      RepositoryErrorKind.rateLimited => '오늘 넘길 수 있는 공고 수를 넘었습니다. 내일 다시 시도해 주세요.',
       _ => '잠시 후 다시 시도해 주세요.',
     };
   }
