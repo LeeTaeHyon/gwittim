@@ -1,6 +1,12 @@
 # 인수인계 (handoff)
 
-마지막 갱신: 2026-11-27 (서버 00020 배포 기록: #174 지원 대상 문구, #172·#173·#170 포함)
+마지막 갱신: 2026-11-27 (서버 00018·00019·00020 배포 기록, 카톡 후속 D-060, 카카오톡 공고 수동 전달 #172, 교외 출처 확대 #173)
+
+## 카톡 넘긴 공고 후속 수정 (2026-11-26, fix/kakao-share-followup, D-060)
+
+- 명세 [kakao-share-followup-spec.md](kakao-share-followup-spec.md) 1~5번을 로컬 작업 트리에 구현(커밋·PR·배포 전).
+- 가리기(`parser.mask`·`maskPersonal`): 계좌번호·예금주 추가, 골든 3건, 알림톡 665건 결과는 계좌 줄 말고 바뀌지 않음(0건 변경). 분석 `rule-0.15`(보낸 단체 소개 제외). 서버 같은 글 묶기. 앱 일정 '행사'·'행사일'·'지난 행사'. `shared_preferences_android` 2.5.5.
+- 남은 일: 팀장 확인 후 병합, 서버 재배포(가리기·묶기·rule-0.15 반영), 릴리스 APK `flutter clean` 뒤 폰 확인, 이미 저장된 글은 다시 가려지지 않음.
 
 ## 카카오톡 공고 수동 전달 (2026-11-26, feat/kakao-share, D-058)
 
@@ -702,5 +708,5 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 
 - 구현(로컬): 대상 문맥의 대학생·재학 중·일반인 읽기(`backend/analysis/target.py`), `unconfirmed_values`·`value_unconfirmed`, 판정기·LLM·외부 공고·앱 안내. `rule-0.14`
 - 반영(2026-11-26): PR #174 병합(9d123c8), 서버 `gwittim-api-00020-9z5`(main 전체라 #172 공유 API·#173·#170 포함). 되돌릴 곳 `gwittim-api-00019-c5d`. 기록은 deploy-runbook §9
-- 남은 것(팀장 지시 후): 앱 APK(휴학·졸업 안내 문구), 배치 폴더 `Gwittim-batch` 6930dde → 9d123c8, 정기 배치 + 범위 밖 게시분 일회성 재분석(`rule-0.14`). 서버가 먼저 나갔으므로 순서 조건(옛 판정기가 `unconfirmed_values`를 모름)은 충족
+- 남은 것(팀장 지시 후): 앱 APK(휴학·졸업 안내 문구), 배치 폴더 `Gwittim-batch` 6930dde → 그때 main(#174 포함. 11/27 #177 병합으로 main 분석은 `rule-0.15`), 정기 배치 + 범위 밖 게시분 일회성 재분석. 서버가 먼저 나갔으므로 순서 조건(옛 판정기가 `unconfirmed_values`를 모름)은 충족
 - 서버 `gwittim-api-00019-c5d`(11/26 20:14)는 main 6930dde(#172·#173) 배포로 확인(11/27, 빌드 소스 대조). deploy-runbook §9

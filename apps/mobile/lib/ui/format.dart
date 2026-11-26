@@ -36,6 +36,19 @@ String verdictDeadlineText(NoticeSummary n, DateTime today) {
   return days > 0 ? '$base · D-$days' : '$base · 마감 지남';
 }
 
+/// 카카오톡에서 넘긴 공고(user_share)의 행사일. 신청 마감이 없을 때 마감 자리에 보인다. 공용 공고는 null.
+DateInfo? sharedEventDay(Notice n) {
+  if (n.sourceId != 'user_share') return null;
+  return n.activityPeriod?.start ?? n.activityPeriod?.end;
+}
+
+/// '행사일 12월 14일'
+String eventDayText(DateInfo d) => '행사일 ${d.day.month}월 ${d.day.day}일';
+
+/// 넘긴 공고가 신청 마감 없이 행사일만 있고 그 날이 지나 끝난 경우 ('지난 행사')
+bool isPastSharedEvent(Notice n) =>
+    sharedEventDay(n) != null && n.summary.applicationDeadline == null && n.summary.lifecycleStatus == 'closed';
+
 /// 남은 날짜 표시. 날짜 단위로만 계산한다.
 String? daysLeftLabel(NoticeSummary n, DateTime today) {
   final d = n.applicationDeadline;

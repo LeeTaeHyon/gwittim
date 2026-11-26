@@ -56,6 +56,11 @@ def body(text=TEXT, input="paste", **extra):
     return {"text": text, "input": input, "consent_version": SHARE_CONSENT_VERSION, **extra}
 
 
+def variant(n):
+    """같은 글을 다시 넘기면 묶이므로, 여러 건이 필요한 시험은 본문을 달리한다."""
+    return TEXT + f"\n- 문의 번호: {n}번 창구"
+
+
 def post(client, payload, headers=ALICE):
     return client.post("/v1/shared-notices", headers=headers, json=payload)
 
@@ -144,13 +149,13 @@ def test_year_less_dates_follow_share_day(client, clock):
 
 
 def test_daily_limit_then_next_day(client, clock):
-    for _ in range(DAILY_LIMIT):
-        assert post(client, body()).status_code == 200
-    resp = post(client, body())
+    for n in range(DAILY_LIMIT):
+        assert post(client, body(variant(n))).status_code == 200
+    resp = post(client, body(variant(99)))
     assert resp.status_code == 429 and error_code(resp) == "rate_limited"
-    assert post(client, body(), BOB).status_code == 200  # 사람마다 센다
+    assert post(client, body(variant(99)), BOB).status_code == 200  # 사람마다 센다
     clock.moment += timedelta(days=1)
-    assert post(client, body()).status_code == 200
+    assert post(client, body(variant(99))).status_code == 200
 
 
 def test_guest_can_submit(client, deps):
@@ -195,9 +200,9 @@ def test_requires_login(client):
 
 
 def test_list_is_mine_only_newest_first(client, clock):
-    first = post(client, body()).json()["id"]
+    first = post(client, body(variant(1))).json()["id"]
     clock.moment += timedelta(minutes=1)
-    second = post(client, body()).json()["id"]
+    second = post(client, body(variant(2))).json()["id"]
     post(client, body(), BOB)
     mine = client.get("/v1/shared-notices", headers=ALICE).json()
     assert schema_errors("shared_notice_list_response", mine) == []
@@ -225,3 +230,32 @@ def test_not_mixed_into_public_recommendations(client):
     post(client, body())
     assert client.get("/v1/recommendations", headers=BOB).json()["items"] == []
     assert client.get("/v1/recommendations", headers=ALICE).json()["items"] == []
+
+
+def test_same_text_again_returns_existing_item(client, deps, clock):
+    first = post(client, body()).json()
+    clock.moment += timedelta(minutes=5)
+    spaced = "  " + TEXT.replace("\n", "\n\n").replace(" ", "  ") + "\n"
+    again = post(client, body(text=spaced)).json()  # 공백·줄 바꿈만 다름
+    assert again["id"] == first["id"] and again["created_at"] == first["created_at"]
+    assert schema_errors("shared_notice_response", again) == []
+    assert len(deps.shared.list("alice")) == 1
+    assert post(client, body(), BOB).json()["id"] != first["id"]  # 다른 사람은 따로 저장
+
+
+def test_duplicate_does_not_count_toward_daily_limit(client, deps):
+    for n in range(DAILY_LIMIT - 1):
+        assert post(client, body(variant(n))).status_code == 200
+    for _ in range(5):
+        assert post(client, body(variant(0))).status_code == 200  # 묶인 요청은 세지 않는다
+    assert post(client, body(variant(500))).status_code == 200  # 마지막 한 건은 아직 가능
+    assert post(client, body(variant(501))).status_code == 429
+
+
+def test_account_lines_are_masked_before_store(client, deps):
+    text = TEXT + "\n- 입금 계좌: 국민은행 123456-78-901234 (홍길동)\n- 참가비 30,000원"
+    resp = post(client, body(text=text))
+    stored = deps.shared.list("alice")[0]["text"]
+    assert "123456" not in stored and "홍길동" not in stored
+    assert "<계좌>" in stored and "30,000원" in stored
+    assert "123456" not in str(resp.json())

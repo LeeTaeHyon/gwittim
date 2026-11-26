@@ -536,7 +536,7 @@ class _ReportScreenState extends State<ReportScreen> {
                       runSpacing: 6,
                       children: [
                         Pill(_categories[n.category] ?? n.category, tone: PillTone.neutral),
-                        _statusPill(n, today),
+                        _statusPill(n, today, pastEvent: isPastSharedEvent(notice)),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -571,7 +571,14 @@ class _ReportScreenState extends State<ReportScreen> {
                   ],
                 ),
               ),
-              _Verdict(notice: n, recommendation: rec, rows: checks, today: today),
+              _Verdict(
+                notice: n,
+                recommendation: rec,
+                rows: checks,
+                today: today,
+                eventDay: sharedEventDay(notice),
+                pastEvent: isPastSharedEvent(notice),
+              ),
               if (cases != null && kase != null)
                 _CaseCard(
                   view: caseView(n, kase, now: today),
@@ -679,9 +686,9 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _statusPill(NoticeSummary n, DateTime today) {
+  Widget _statusPill(NoticeSummary n, DateTime today, {bool pastEvent = false}) {
     if (n.lifecycleStatus != 'open') {
-      return Pill(lifecycleLabel(n.lifecycleStatus), tone: PillTone.neutral);
+      return Pill(pastEvent ? '지난 행사' : lifecycleLabel(n.lifecycleStatus), tone: PillTone.neutral);
     }
     final left = daysLeft(n, today);
     if (left == null) return const Pill('모집 중');
@@ -697,9 +704,22 @@ const reportVerdictKey = ValueKey('report-verdict');
 /// 조건 판정은 서버 값 그대로이고, 개수·항목 이름은 체크리스트와 같은 줄에서 센다.
 /// 모집이 끝났거나(closed) 삭제된(removed) 공고는 마감 줄 하나에 상태만 보인다.
 class _Verdict extends StatelessWidget {
-  const _Verdict({required this.notice, required this.recommendation, required this.rows, required this.today});
+  const _Verdict({
+    required this.notice,
+    required this.recommendation,
+    required this.rows,
+    required this.today,
+    this.eventDay,
+    this.pastEvent = false,
+  });
 
   final NoticeSummary notice;
+
+  /// 넘긴 공고의 행사일. 신청 마감이 없을 때만 마감 칸에 보인다.
+  final DateInfo? eventDay;
+
+  /// 신청 마감 없이 행사일이 지난 넘긴 공고
+  final bool pastEvent;
   final Recommendation? recommendation;
   final List<CheckRow> rows;
   final DateTime today;
@@ -711,7 +731,7 @@ class _Verdict extends StatelessWidget {
     final rec = recommendation;
     final lines = <({IconData icon, String name, String value, Color color, String spoken})>[];
     if (n.lifecycleStatus == 'closed' || n.lifecycleStatus == 'removed') {
-      final label = lifecycleLabel(n.lifecycleStatus);
+      final label = pastEvent ? '지난 행사' : lifecycleLabel(n.lifecycleStatus);
       lines.add((icon: Icons.event_rounded, name: '마감', value: label, color: c.sub, spoken: '모집 상태 $label'));
     } else {
       if (rec != null) {
@@ -730,12 +750,13 @@ class _Verdict extends StatelessWidget {
           spoken: spoken.replaceAll(' · ', ' '),
         ));
       }
-      final deadline = verdictDeadlineText(n, today);
+      final event = n.applicationDeadline == null ? eventDay : null;
+      final deadline = event != null ? eventDayText(event) : verdictDeadlineText(n, today);
       final d = n.applicationDeadline;
       final days = d?.day.difference(DateTime(today.year, today.month, today.day)).inDays;
       final Color color;
       if (days == null) {
-        color = n.deadlineNote == null ? c.sub : c.ink;
+        color = n.deadlineNote == null && event == null ? c.sub : c.ink;
       } else if (days < 0) {
         color = c.sub;
       } else {
@@ -1534,6 +1555,7 @@ class _Schedule extends StatelessWidget {
     final deadline = n.applicationDeadline;
     final left = daysLeft(n, today);
     final c = context.gw;
+    final shared = notice.sourceId == 'user_share';
     final events = <(DateTime, _Event)>[
       if (n.published != null) (n.published!.day, _event(shortDate(n.published!), sub: notice.sourceId == 'user_share' ? '넘김' : '게시', dot: _Dot.past)),
       if (notice.applicationStart != null)
@@ -1553,8 +1575,10 @@ class _Schedule extends StatelessWidget {
             ],
           ),
         ),
-      if (notice.activityPeriod?.start case final s?) (s.day, _event(shortDate(s), sub: '활동 시작', dot: _Dot.past)),
-      if (notice.activityPeriod?.end case final e?) (e.day, _event(shortDate(e), sub: '활동 끝', dot: _Dot.past)),
+      // 넘긴 공고는 알림톡 글의 행사 날짜이므로 '행사'로 보인다. 공용 공고는 '활동 시작·끝' 그대로
+      if (notice.activityPeriod?.start case final s?)
+        (s.day, _event(shortDate(s), sub: shared ? (notice.activityPeriod?.end == null ? '행사' : '행사 시작') : '활동 시작', dot: _Dot.past)),
+      if (notice.activityPeriod?.end case final e?) (e.day, _event(shortDate(e), sub: shared ? '행사 끝' : '활동 끝', dot: _Dot.past)),
     ]..sort((a, b) => a.$1.compareTo(b.$1));
     final stale = staleNotice(notice.lastVerifiedAt, DateTime.now().toUtc());
     final verified = notice.lastVerifiedAt?.toLocal();

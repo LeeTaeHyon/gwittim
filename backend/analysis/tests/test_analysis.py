@@ -654,3 +654,19 @@ def test_poster_changes_publish_without_reanalysis(monkeypatch, fallback):
         assert public.pop("poster_url", None) == url
         assert public == {k: v for k, v in previous.items() if k != "poster_url"}
         previous = notice
+
+
+@pytest.mark.parametrize("body", [
+    "안녕하세요! 컴퓨터공학과 학생회입니다.\n연합종강총회를 엽니다.",
+    "컴퓨터공학과 학생회입니다. 종강총회 안내",
+    "안녕하세요. 컴퓨터공학과 학회입니다.\n세미나 안내",
+])
+def test_sender_intro_is_not_major_condition(body):
+    """보낸 단체 소개('○○학과 학생회입니다')를 학과 지원 조건으로 읽지 않는다 (D-060)."""
+    elig = RuleBasedAnalyzer().analyze(raw_notice(body), MJC)["eligibility"]
+    assert all(c["field"] != "major_id" for c in elig["conditions"])
+
+
+def test_major_student_condition_still_read():
+    elig = RuleBasedAnalyzer().analyze(raw_notice("대상: 컴퓨터공학과 학생\n컴퓨터공학과 학생회에서 안내합니다."), MJC)["eligibility"]
+    assert {c["field"]: c["value"] for c in elig["conditions"]}["major_id"] == "mjc.computer_engineering"
