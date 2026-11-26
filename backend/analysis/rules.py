@@ -454,6 +454,12 @@ def read_lines(lines: list[str]) -> list[_Info]:
 SITE_TARGET = re.compile(r"(?:응모|참가)\s*대상\s*[:：]")
 
 
+def _mask(text: str, phrases: list[str]) -> str:
+    for phrase in phrases:
+        text = text.replace(phrase, " ")
+    return text
+
+
 def status_condition(tr: target.Target, evidence: str) -> dict:
     """읽은 대상 낱말로 enrollment_status 조건을 만든다. 확인되지 않은 값이 없고 옛 낱말만 썼으면 옛 모양(eq/in)이다."""
     values = tr.values
@@ -914,7 +920,7 @@ class RuleBasedAnalyzer:
                         piece = piece.strip(_TRIM)
                         if piece and required_unresolved(piece):
                             unresolved.append((piece, None))
-                elif required_unresolved(line):
+                elif required_unresolved(_mask(line, tr.age_alt)):  # '또는'으로 나뉜 대안 나이는 직접 확인 단서가 아니다 (D-057)
                     unresolved.append((line, None))
 
         if site_status and not any(c["field"] == "enrollment_status" for c in conditions):

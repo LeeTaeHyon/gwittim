@@ -149,7 +149,33 @@ def test_non_student_alternative_leaves_graduate_unconfirmed(body):
 
 def test_age_modifier_does_not_widen_target():
     """'재학생(만 20~69세)'처럼 숫자 나이가 대상을 꾸미면 대상을 넓히지 않는다. '주민등록'의 주민은 대상이 아니다."""
-    elig, *_ = run("- 대상: 재학생 및 교직원(만20세~69세)")
+    elig, *_ = run("- 대상: 재학생(만20세~69세)")
     assert enrollment(elig) == ([E], [])
+    assert verdicts(elig) == (CHECK, NOT, NOT)  # 나이는 직접 확인으로 남는다
     elig, *_ = run("지원 대상: 오산시에 주민등록이 되어 있는 대학생")
     assert enrollment(elig) == ([E], [L])
+
+
+def test_staff_listed_separately_leaves_graduate_unconfirmed():
+    """교직원이 재학생과 별도 대상으로 열거되면 졸업생도 교직원일 수 있으니 미충족이 아니라 확인 필요다."""
+    elig, *_ = run("- 대상: 재학생 및 교직원")
+    assert enrollment(elig) == ([E], [L, G])
+    assert verdicts(elig) == (MET, CHECK, CHECK)
+
+
+def test_conditioned_anyone_is_not_unrestricted():
+    """'교사라면 누구나'처럼 조건이 붙은 '누구나'는 전체 제한 없음이 아니다. 해석할 수 없는 조건은 원문을 직접 확인으로 남긴다."""
+    elig, *_ = run("지원 대상: 교사라면 누구나")
+    assert elig["explicitly_unrestricted"] is False
+    assert checks(elig) == ["교사라면 누구나"]
+    assert verdicts(elig) == (CHECK, CHECK, CHECK)
+    elig, *_ = run("관심 있는 누구나 지원 가능")  # 조건 없는 '누구나'는 그대로 제한 없음
+    assert elig["explicitly_unrestricted"] is True
+
+
+def test_or_age_alternative_is_evaluated_separately():
+    """'대학생 또는 만 65세 이상인 자': 재학생은 대학생 자격만으로 충족하고, 졸업생은 나이로 지원할 수 있어 확인 필요다."""
+    elig, *_ = run("지원 대상: 대학생 또는 만 65세 이상인 자")
+    assert enrollment(elig) == ([E], [L, G])
+    assert checks(elig) == []
+    assert verdicts(elig) == (MET, CHECK, CHECK)

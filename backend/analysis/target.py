@@ -35,7 +35,7 @@ _PATTERNS = [
     ("UNIV", r"전문대학생|대학\(원\)생|대학교\s*학생|대학생", True),
     ("GRADSCHOOL", r"대학원생", True),
     # 학생이 아닌 대상: 함께 나열되면 다른 낱말로 확인되지 않은 학적은 미확인 (D-057). '주민등록'의 주민은 아니다
-    ("GENERAL", r"일반인|직장인|외국인|기타|지역\s*주민|주민(?!\s*등록)|시민|도민", True),
+    ("GENERAL", r"일반인|직장인|외국인|기타|지역\s*주민|주민(?!\s*등록)|시민|도민|교직원|교원", True),
     ("AGE", r"성인|청년|만?\s*\d+\s*세?\s*[~\-–]\s*\d+\s*세|만\s*\d+\s*세(?:\s*(?:이상|이하|미만))?|\d+\s*세\s*(?:이상|이하|미만)|해당자\s*[▶▷]", True),
     ("YOUNG", r"청소년|중\s*[·ㆍ,]\s*고등학생|중학생|고등학생|초등학생|유치원(?:생)?|어린이", True),
 ]
@@ -69,6 +69,8 @@ _QUAL = re.compile(
     r"대학(?:원)?생|대학원|전문대|학생|재학|휴학|졸업|청년|성인|청소년|국민|시민|주민|거주|국적|외국인|내국인"
     r"|\d+\s*세|연령|나이|본교|우리\s*대학|학과|전공|학년|재직|직장인|소속|출신|임직원|회원"
 )
+# '교사라면 누구나', '회원이면 누구나'처럼 조건을 붙인 '누구나'는 대상 전체가 아니다. 앞 조건을 해석할 수 없으면 원문을 직접 확인으로 남긴다
+_COND_QUAL = re.compile(r"(?:이)?라면|이면|인\s*경우")
 _NOT_QUAL = re.compile(r"(?:전|모든)\s*(?:국민|시민)|일반인|[가-힣·ㆍ,/\s]{0,20}(?:제한\s*없이?|무관)")
 _RESIDUAL = re.compile(r"\d+\s*세|연령|나이|성인|청년|청소년|국민|시민|주민|거주|국적|외국인|내국인|재직|직장인|임직원|회원|소속|출신|전공|학과|학년")
 _NO_LIMIT_ITEM = re.compile(r"(?:^|[,，;；])\s*(?:제한\s*없음|제한\s*없이|무관)\s*(?:[,，;；]|$)")
@@ -120,7 +122,7 @@ def scan_nugu(value: str) -> tuple[bool, list[tuple[int, int, str]]]:
     for m in re.finditer("누구나", value):
         a, b = _clause_at(value, m.start())
         prefix = value[a:m.start()]
-        if _QUAL.search(_NOT_QUAL.sub(" ", prefix)):
+        if _QUAL.search(_NOT_QUAL.sub(" ", prefix)) or _COND_QUAL.search(prefix):
             if (a, b) not in [(x, y) for x, y, _ in qualified]:
                 qualified.append((a, b, prefix))
         else:
@@ -153,6 +155,7 @@ class Target:
     univ: bool = False  # 대학생류 낱말이 있는가
     graduating: bool = False  # 졸업 예정 낱말
     age: bool = False  # 나이 낱말(한정 구절 밖)
+    age_alt: list[str] = field(default_factory=list)  # '또는'으로 나뉜 대안 나이 문구('만 65세 이상'). 직접 확인으로 남기지 않는다
     qualified: list[str] = field(default_factory=list)  # 학적으로 판정할 수 없는 한정어가 붙은 '누구나' 구절 (직접 확인)
     adj: bool = False  # 유효한 포함·제외를 썼는가
     masked: str = ""  # 유효한 포함·제외를 지운 문구(EXCLUDES 확인용)
@@ -168,6 +171,20 @@ class Target:
     @property
     def unconfirmed(self) -> list[str]:
         return [s for s in ORDER if s in self.unconf]
+
+
+_OR = re.compile(r"(?<![가-힣])(?:또는|혹은)(?![가-힣])")
+
+
+def _or_alternative(value: str, s: int, e: int, toks) -> bool:
+    """나이 낱말(s~e)이 학적 낱말과 '또는·혹은'으로 나뉜 대안인가 (같은 구절 안, 괄호 밖)."""
+    for name, ts, te, _ in toks:
+        if name not in _STATUS_KINDS:
+            continue
+        between = value[te:s] if te <= s else value[e:ts]
+        if _OR.search(between) and not re.search(r"[,，;；()（）]", between):
+            return True
+    return False
 
 
 def read(value: str, ctx: bool, school: str | None = None) -> Target:
@@ -209,6 +226,12 @@ def read(value: str, ctx: bool, school: str | None = None) -> Target:
         elif name == "GENERAL":
             general = True
         elif name == "AGE":
+            if _or_alternative(value, s, e, toks):
+                # '대학생 또는 만 65세 이상인 자': 나이는 학생 자격과 따로인 대안이다. 학생은 학적만으로 판정하고,
+                # 다른 학적은 나이로 지원할 수 있으니 미충족이 아니라 미확인이다
+                general = True
+                tr.age_alt.append(value[s:e])
+                continue
             tr.age = True
             # '성인'·'청년'·'해당자 ▶ (…)'이 대상 하나로 나열되면 학생이 아닌 사람도 대상이다. 졸업생도 성인일 수 있으니 미충족이 아니라 미확인.
             # '재학생(만 20~69세)'처럼 숫자 나이가 대상을 꾸미는 경우는 대상을 넓히지 않는다
