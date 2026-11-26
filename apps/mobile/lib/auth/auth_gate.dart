@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../data/api_repository.dart';
 import '../data/repository.dart';
 import '../main.dart';
+import '../share/share_services.dart';
 import '../ui/briefing_data.dart';
 import '../ui/common.dart';
 import '../ui/format.dart';
@@ -24,6 +25,7 @@ class AuthGate extends StatefulWidget {
     required this.openUrl,
     this.briefingStore,
     this.themeController,
+    this.share,
   });
 
   final AuthService auth;
@@ -37,6 +39,9 @@ class AuthGate extends StatefulWidget {
 
   /// 화면(테마) 설정. 로그인 화면도 같은 설정을 따른다.
   final ThemeController? themeController;
+
+  /// 카카오톡 공고 넘기기 (D-058). 로그인 전에 받은 공유는 로그인 뒤 이어서 처리한다.
+  final ShareServices? share;
 
   @override
   State<AuthGate> createState() => _AuthGateState();
@@ -91,6 +96,7 @@ class _AuthGateState extends State<AuthGate> {
             guest: widget.auth.isGuest,
             briefingStore: widget.briefingStore,
             themeController: _theme,
+            share: widget.share,
           );
         }
         return GwMaterialApp(

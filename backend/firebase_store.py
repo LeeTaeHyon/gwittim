@@ -198,6 +198,34 @@ class FirestoreReports(_Base):
         return removed
 
 
+SHARED_NOTICES = "shared_notices"  # users/{uid}/shared_notices/{id}. 클라이언트 접근은 보안 규칙의 기본값으로 막힌다 (D-058)
+
+
+class FirestoreSharedNotices(_Base):
+    """사용자가 카카오톡에서 넘긴 공고. 가린 본문·분석 결과를 본인 경로 아래에만 둔다."""
+
+    def _col(self, uid):
+        return self.db.collection(USERS).document(uid).collection(SHARED_NOTICES)
+
+    def put(self, uid, doc):
+        self._col(uid).document(doc["id"]).set(doc)
+
+    def list(self, uid):
+        query = self._col(uid).order_by("created_at", direction=firestore.Query.DESCENDING).limit(50)
+        return [d.to_dict() for d in query.stream()]
+
+    def count_since(self, uid, since_iso):
+        query = self._col(uid).where(filter=firestore.FieldFilter("created_at", ">=", since_iso))
+        return sum(1 for _ in query.stream())
+
+    def delete(self, uid, share_id):
+        self._col(uid).document(share_id).delete()
+
+    def delete_all(self, uid):
+        for doc in self._col(uid).list_documents():
+            doc.delete()
+
+
 SPEND_COLLECTION = "ops"  # ops/llm_spend_YYYY-MM. 사용자 데이터와 분리한 운영용 문서(보안 규칙 기본값으로 클라이언트 접근 차단)
 
 

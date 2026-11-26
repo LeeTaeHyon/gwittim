@@ -71,6 +71,22 @@ class ReportStore(Protocol):
         ...
 
 
+class SharedNoticeStore(Protocol):
+    """사용자가 카카오톡에서 넘긴 공고 (D-058). users/{uid}/shared_notices/{id}. 서버만 접근한다."""
+
+    def put(self, uid: str, doc: dict) -> None: ...
+    def list(self, uid: str) -> list[dict]:
+        """created_at 내림차순(최근순)."""
+        ...
+
+    def count_since(self, uid: str, since_iso: str) -> int:
+        """created_at이 since_iso(UTC 'Z' 형식) 이후인 항목 수."""
+        ...
+
+    def delete(self, uid: str, share_id: str) -> None: ...
+    def delete_all(self, uid: str) -> None: ...
+
+
 class SpendStore(Protocol):
     """LLM 비용 누적(원). 월 단위(KST 'YYYY-MM'). 사용자와 무관한 운영용 값이다 (D-039 월 상한)."""
 
@@ -238,11 +254,33 @@ class InMemoryReports:
         return removed
 
 
+@dataclass
+class InMemorySharedNotices:
+    docs: dict[str, dict[str, dict]] = field(default_factory=dict)  # uid -> id -> doc
+
+    def put(self, uid, doc):
+        self.docs.setdefault(uid, {})[doc["id"]] = doc
+
+    def list(self, uid):
+        return sorted(self.docs.get(uid, {}).values(), key=lambda d: d["created_at"], reverse=True)
+
+    def count_since(self, uid, since_iso):
+        return sum(1 for d in self.docs.get(uid, {}).values() if d["created_at"] >= since_iso)
+
+    def delete(self, uid, share_id):
+        self.docs.get(uid, {}).pop(share_id, None)
+
+    def delete_all(self, uid):
+        self.docs.pop(uid, None)
+
+
 def delete_user_data(uid: str, *, saved: SavedStore, reports: ReportStore, credits: CreditStore,
-                     profiles: ProfileStore) -> None:
-    """한 사용자의 서버 정보(저장·리포트·크레딧·프로필)를 지운다. DELETE /v1/profile과 게스트 정리 도구가 같이 쓴다."""
+                     profiles: ProfileStore, shared: SharedNoticeStore | None = None) -> None:
+    """한 사용자의 서버 정보(저장·리포트·넘긴 공고·크레딧·프로필)를 지운다. DELETE /v1/profile과 게스트 정리 도구가 같이 쓴다."""
     saved.delete_all(uid)
     reports.delete_all(uid)
+    if shared is not None:
+        shared.delete_all(uid)
     credits.delete(uid)
     profiles.delete(uid)
 
@@ -262,6 +300,8 @@ class Deps:
     reports: ReportStore = field(default_factory=InMemoryReports)
     llm: Any = None
     spend: SpendStore = field(default_factory=InMemorySpend)
+    # 카카오톡에서 넘긴 공고 (D-058)
+    shared: SharedNoticeStore = field(default_factory=InMemorySharedNotices)
 
     def today_kst(self) -> date:
         return self.clock.now().astimezone(KST).date()

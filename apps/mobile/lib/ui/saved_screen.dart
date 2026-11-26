@@ -4,6 +4,8 @@ import '../data/application_case.dart';
 import '../data/cached_repository.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
+import '../data/shared_notices.dart';
+import '../share/share_services.dart';
 import 'briefing_data.dart';
 import 'case_view.dart';
 import 'common.dart';
@@ -11,12 +13,13 @@ import 'components.dart';
 import 'format.dart';
 import 'icons.dart';
 import 'report_screen.dart';
+import 'share_flow.dart';
 import 'skeleton.dart';
 import 'theme.dart';
 
 /// 저장한 공고 (D-010). 마감 기준으로 묶고, 최신 공고 상태와 저장 이후 바뀐 마감을 함께 보인다 (SPEC §6).
 class SavedScreen extends StatefulWidget {
-  const SavedScreen({super.key, required this.repository, required this.openUrl, this.today, this.onBrowse});
+  const SavedScreen({super.key, required this.repository, required this.openUrl, this.today, this.onBrowse, this.share});
 
   final NoticeRepository repository;
   final OpenUrl openUrl;
@@ -24,6 +27,9 @@ class SavedScreen extends StatefulWidget {
 
   /// 빈 화면의 '공고 둘러보기'
   final VoidCallback? onBrowse;
+
+  /// 카톡 공고 넘기기(D-058). 없으면 진입·'카톡에서 넘긴 공고' 묶음이 보이지 않는다.
+  final ShareServices? share;
 
   @override
   State<SavedScreen> createState() => SavedScreenState();
@@ -107,6 +113,9 @@ class SavedScreenState extends State<SavedScreen> {
   Map<String, String> _categories = const {};
   Object? _error;
 
+  /// 카톡에서 넘긴 공고 (D-058). 불러오지 못해도 저장 목록은 보인다.
+  List<SharedNoticeItem> _shared = const [];
+
   /// 이 화면에서 저장을 끈 공고. 다시 켤 수 있게 다음 새로고침까지 목록에 남긴다.
   final Set<String> _unsaved = {};
   final Set<String> _busy = {};
@@ -135,10 +144,20 @@ class SavedScreenState extends State<SavedScreen> {
       } catch (_) {
         // 분류 이름만 코드로 보인다.
       }
+      var shared = _shared;
+      final api = widget.share == null ? null : sharedApiOf(widget.repository);
+      if (api != null) {
+        try {
+          shared = await api.listShared();
+        } catch (_) {
+          // 넘긴 공고만 못 받아도 저장 목록은 그대로 보인다
+        }
+      }
       if (!mounted) return;
       setState(() {
         _entries = entries;
         _categories = categories;
+        _shared = shared;
         _error = null;
         _unsaved.clear();
       });
@@ -208,6 +227,45 @@ class SavedScreenState extends State<SavedScreen> {
     reload();
   }
 
+  Future<void> _paste() async {
+    await runShareFlow(
+      context,
+      repository: widget.repository,
+      openUrl: widget.openUrl,
+      share: widget.share!,
+      today: widget.today,
+    );
+    if (mounted) reload();
+  }
+
+  Future<void> _openShared(SharedNoticeItem item) async {
+    await Navigator.of(context).push(
+      gwRoute(
+        context,
+        (_) => ReportScreen(
+          repository: widget.repository,
+          noticeId: item.notice.summary.noticeId,
+          openUrl: widget.openUrl,
+          today: widget.today,
+          shared: item,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteShared(SharedNoticeItem item) async {
+    final api = sharedApiOf(widget.repository);
+    if (api == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await api.deleteShared(item.id);
+      if (mounted) setState(() => _shared = [..._shared]..removeWhere((e) => e.id == item.id));
+      _say(messenger, '넘긴 공고가 삭제되었습니다.');
+    } catch (err) {
+      _say(messenger, errorMessage(err));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final entries = _entries;
@@ -234,6 +292,15 @@ class SavedScreenState extends State<SavedScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverToBoxAdapter(child: ScreenHeader('저장한 공고', trailing: entries.isEmpty ? null : '$count개')),
+          if (widget.share != null && sharedApiOf(widget.repository) != null)
+            SliverToBoxAdapter(
+              child: SharedNoticesSection(
+                items: _shared,
+                onPaste: _paste,
+                onOpen: _openShared,
+                onDelete: _deleteShared,
+              ),
+            ),
           if (changed.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(

@@ -22,7 +22,10 @@ import 'ui/icons.dart';
 import 'ui/intro.dart';
 import 'ui/notices_screen.dart';
 import 'ui/profile_screen.dart';
+import 'share/share_inbox.dart';
+import 'share/share_services.dart';
 import 'ui/saved_screen.dart';
+import 'ui/share_flow.dart';
 import 'ui/theme.dart';
 
 // 실행 설정 (--dart-define):
@@ -39,12 +42,17 @@ Future<void> main() async {
   registerAppLicenses();
   // 화면 설정을 먼저 읽어서 첫 화면부터 고른 테마로 그린다 (D-010).
   final theme = await ThemeController.load(PrefsThemeStore());
+  // 카카오톡 공유 받기 (D-058). 콜드 스타트로 받은 공유를 로그인 뒤 이어 처리하려고 먼저 가져온다
+  final inbox = ShareInbox();
+  await inbox.start();
+  final share = ShareServices(inbox: inbox);
   if (_apiBase.isEmpty) {
     _run(
       GwittimApp(
         repository: SampleNoticeRepository(today: DateTime.now()),
         openUrl: _openExternal,
         themeController: theme,
+        share: share,
       ),
       source: '샘플 자료',
     );
@@ -59,6 +67,7 @@ Future<void> main() async {
             CachedNoticeRepository(ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: tokenProvider)),
         openUrl: _openExternal,
         themeController: theme,
+        share: share,
       ),
       source: '로컬 게스트',
     );
@@ -70,6 +79,7 @@ Future<void> main() async {
         repository: CachedNoticeRepository(ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: ({refresh = false}) async => _devToken)),
         openUrl: _openExternal,
         themeController: theme,
+        share: share,
       ),
       source: '로컬 서버',
     );
@@ -84,6 +94,7 @@ Future<void> main() async {
           CachedNoticeRepository(ApiNoticeRepository(baseUrl: baseUrl, tokenProvider: tokenProvider)),
       openUrl: _openExternal,
       themeController: theme,
+      share: share,
     ),
   );
 }
@@ -159,6 +170,7 @@ class GwittimApp extends StatefulWidget {
     this.briefingStore,
     this.themeController,
     this.caseStore,
+    this.share,
   });
 
   final NoticeRepository repository;
@@ -183,6 +195,9 @@ class GwittimApp extends StatefulWidget {
 
   /// 지원 건 기록(D-052). 기본은 기기 저장소. 테스트는 기억만 하는 저장소를 넣는다.
   final ApplicationCaseStore? caseStore;
+
+  /// 카카오톡 공고 넘기기(D-058). 없으면 공유 받기·붙여넣기 진입이 없다.
+  final ShareServices? share;
 
   @override
   State<GwittimApp> createState() => _GwittimAppState();
@@ -215,6 +230,7 @@ class _GwittimAppState extends State<GwittimApp> {
   /// 로그아웃하면 이 기기의 지원 건 기록을 지운다(같은 기기의 다른 계정이 보지 않게).
   Future<void> _signOut() async {
     await _cases.clearAll();
+    await widget.share?.consent.clear(); // 같은 기기의 다른 계정이 동의 기록을 물려받지 않게
     await widget.onSignOut!();
   }
 
@@ -235,6 +251,7 @@ class _GwittimAppState extends State<GwittimApp> {
             onDeleteAccount: widget.onDeleteAccount,
             briefingStore: _briefingStore,
             themeController: _theme,
+            share: widget.share,
           ),
         ),
       ),
@@ -253,7 +270,11 @@ class HomeShell extends StatefulWidget {
     this.onSignOut,
     this.onDeleteAccount,
     this.clock = DateTime.now,
+    this.share,
   });
+
+  /// 카카오톡 공고 넘기기 (D-058)
+  final ShareServices? share;
 
   final Future<void> Function()? onSignOut;
   final Future<bool> Function()? onDeleteAccount;
@@ -385,6 +406,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     final cases = ApplicationCaseScope.read(context);
     final done = await widget.onDeleteAccount!();
     if (done) {
+      await widget.share?.consent.clear();
       await cases?.clearAll(); // 지원 건 기록(D-052)도 지운다. 기기 저장소를 못 써도 멈추지 않는다
       try {
         await store.saveMajorPicks(const MajorPickState());
@@ -425,7 +447,14 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     // 탭 화면에는 앱 바가 없어서 상태 표시줄 아이콘 색을 직접 맞춘다.
-    return AnnotatedRegion<SystemUiOverlayStyle>(
+    return ShareReceiver(
+      share: widget.share,
+      repository: widget.repository,
+      openUrl: widget.openUrl,
+      today: widget.today,
+      onReceive: () => _select(3),
+      onDone: () => _savedKey.currentState?.reload(),
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
       value: statusBarStyle(Theme.of(context).brightness),
       child: Scaffold(
         body: SafeArea(
@@ -472,6 +501,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                   openUrl: widget.openUrl,
                   today: widget.today,
                   onBrowse: () => _select(1),
+                  share: widget.share,
                 ),
               ),
             ],
@@ -488,6 +518,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
           ],
         ),
       ),
+    ),
     );
   }
 }

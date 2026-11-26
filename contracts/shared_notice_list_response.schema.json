@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/shared_notice_list_response.schema.json",
+  "title": "list_shared_notices 응답",
+  "description": "내가 넘긴 공고, 최근순 최대 50건. 본인 것만 돌려줌. 판정은 지금 프로필 기준. docs/kakao-manual-share-spec.md §5.1, D-058.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items", "next_cursor", "generated_at"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "maxItems": 50,
+      "items": { "$ref": "shared_notice_response.schema.json#/$defs/item" }
+    },
+    "next_cursor": { "$ref": "common.schema.json#/$defs/cursor" },
+    "generated_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" }
+  }
+}

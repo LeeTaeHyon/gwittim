@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/shared_notice_response.schema.json",
+  "title": "넘긴 공고 한 건 — submit_shared_notice 응답",
+  "description": "저장했으면 항목(id, created_at, input, notice, eligibility), 개인 알림·잡음이라 분석·저장하지 않았으면 {stored: false, reason: personal_notice}. notice는 Notice 모양이고 source_id는 user_share, source_url은 null, published.timezone은 null(사용자 입력 출처라 시간대 미상). 검증 문제가 있으면 publication_status는 review_pending이지만 본인에게는 보여 줌. eligibility는 recommendation_item의 판정과 같은 모양(내 프로필 기준, 프로필이 없으면 입력 안 된 값으로 계산). docs/kakao-manual-share-spec.md §5, D-058.",
+  "oneOf": [{ "$ref": "#/$defs/item" }, { "$ref": "#/$defs/rejected" }],
+  "$defs": {
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "created_at", "input", "notice", "eligibility"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "created_at": { "$ref": "common.schema.json#/$defs/utc_timestamp" },
+        "input": { "enum": ["share_text", "share_image_ocr", "paste"] },
+        "notice": { "$ref": "notice.schema.json" },
+        "eligibility": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["eligibility_status", "condition_results"],
+          "properties": {
+            "eligibility_status": { "enum": ["met", "not_met", "needs_check"] },
+            "condition_results": {
+              "type": "array",
+              "items": { "$ref": "recommendation_item.schema.json#/$defs/condition_result" }
+            }
+          }
+        }
+      }
+    },
+    "rejected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stored", "reason"],
+      "properties": {
+        "stored": { "const": false },
+        "reason": { "const": "personal_notice" }
+      }
+    }
+  }
+}

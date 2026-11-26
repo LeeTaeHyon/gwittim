@@ -28,6 +28,9 @@ _KAKAO_TIMEZONE_BASIS = "PC 카톡 대화 내보내기의 메시지 시각은 �
 # 그래서 시간대를 정하지 않는다(null). 시각이 있는 날짜는 시각만 남고 시간대는 미상으로 보존된다 (SPEC §5)
 _EXTERNAL_TIMEZONE_BASIS = None
 
+# D-058 사용자가 카카오톡에서 직접 넘긴 공고. 어느 학교·시간대인지 확인할 수 없어 둘 다 정하지 않는다(null)
+_USER_SHARE_TIMEZONE_BASIS = None
+
 SOURCES: dict[str, SourceConfig] = {
     s.source_id: s
     for s in [
@@ -44,6 +47,7 @@ SOURCES: dict[str, SourceConfig] = {
         SourceConfig("thinkgood_contest", "씽굿", None, None, _EXTERNAL_TIMEZONE_BASIS),
         SourceConfig("linkareer_contest", "링커리어", None, None, _EXTERNAL_TIMEZONE_BASIS),
         SourceConfig("linkareer_activity", "링커리어", None, None, _EXTERNAL_TIMEZONE_BASIS),
+        SourceConfig("user_share", "카카오톡에서 넘긴 공고", None, None, _USER_SHARE_TIMEZONE_BASIS),
     ]
 }
 

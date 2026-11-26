@@ -23,6 +23,7 @@
 | AI 전송 동의 기록 | `valid/user_profile/with_agent_consent`, `invalid/user_profile/agent_consent_without_agreed_at` |
 | 상세 분석 칩: 단독 선택(`none_yet`, 지역 `any`), 시기 하나만, 자유 입력 없음 | `valid/analysis_request/*`, `invalid/analysis_request/*` |
 | 리포트 4칸·저장본 여부 | `valid/analysis_response/*`, `invalid/analysis_response/*` |
+| 카톡에서 넘긴 공고: 입력 방법별 요청, 글 길이·OCR 수정 여부 규칙, 항목·저장 안 함 응답, 목록 50건 한도 (D-058) | `valid/shared_notice_request/*`, `valid/shared_notice_response/*`, `valid/shared_notice_list_response/*`, `invalid/shared_notice_*/*` |
 | 크레딧 잔액 0~5, 내역 종류·부호 | `valid/credits/*`, `invalid/credits/*` |
 
 실제 동작 검증이 아직 없는 사례: 재수집 중복 방지, 분석 실패·단일 403 처리, 기본 추천 제외 규칙, 평가 불가 요소의 분모 제외와 동점 정렬. 이 사례들은 수집기·파이프라인·추천기 구현 후 소비자 테스트로 확인합니다.
