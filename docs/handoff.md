@@ -703,4 +703,4 @@ un_batch.ps1 -DataDir <Gwittim>\data\local -Uv <uv.exe 경로>`
 - 구현(로컬): 대상 문맥의 대학생·재학 중·일반인 읽기(`backend/analysis/target.py`), `unconfirmed_values`·`value_unconfirmed`, 판정기·LLM·외부 공고·앱 안내. `rule-0.14`
 - 반영(2026-11-26): PR #174 병합(9d123c8), 서버 `gwittim-api-00020-9z5`(main 전체라 #172 공유 API·#173·#170 포함). 되돌릴 곳 `gwittim-api-00019-c5d`. 기록은 deploy-runbook §9
 - 남은 것(팀장 지시 후): 앱 APK(휴학·졸업 안내 문구), 배치 폴더 `Gwittim-batch` 6930dde → 9d123c8, 정기 배치 + 범위 밖 게시분 일회성 재분석(`rule-0.14`). 서버가 먼저 나갔으므로 순서 조건(옛 판정기가 `unconfirmed_values`를 모름)은 충족
-- 확인 필요: 서버 `gwittim-api-00019-c5d`(11/26 20:14) 배포 기록 없음. #172 배포로 추정
+- 서버 `gwittim-api-00019-c5d`(11/26 20:14)는 main 6930dde(#172·#173) 배포로 확인(11/27, 빌드 소스 대조). deploy-runbook §9
