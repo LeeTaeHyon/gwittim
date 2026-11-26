@@ -123,6 +123,14 @@ List<CheckRow> checklistRows(
           evidence: c.evidence,
           note: '프로필에 입력하면 자동으로 비교합니다.',
         ),
+        // 공고가 이 학적의 포함 여부를 말하지 않음 ('대학생'만 있을 때 휴학생, D-057). 프로필 재입력 안내는 하지 않는다
+        _ when c.unknownReason == 'value_unconfirmed' => CheckRow(
+          CheckState.check,
+          '직접 확인',
+          field: field,
+          evidence: c.evidence,
+          note: '${value == null ? '' : '$value생 '}포함 여부가 공고에 명시되지 않았습니다.',
+        ),
         _ => CheckRow(CheckState.check, '직접 확인', field: field, evidence: c.evidence),
       });
     }
