@@ -48,6 +48,8 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // ML Kit 글자 인식(D-058): 쓰지 않는 다른 문자 인식기 클래스 경고를 끈다
+            proguardFiles("proguard-rules.pro")
         }
     }
 }
@@ -56,6 +58,11 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+dependencies {
+    // google_mlkit_text_recognition은 한국어 인식기를 compileOnly로만 걸어 둔다. 앱이 직접 넣어야 한국어가 동작한다 (D-058)
+    implementation("com.google.mlkit:text-recognition-korean:16.0.1")
 }
 
 flutter {

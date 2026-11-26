@@ -24,6 +24,7 @@ const _sourceNames = {
   'mjc_www_job': '명지전문대 채용공지',
   'mjc_www_work': '명지전문대 근로게시판',
   'mjc_kakao': '명지전문대 카카오톡 알림톡', // D-019: 웹 원문 링크 없음
+  'user_share': '카카오톡에서 넘긴 공고', // D-058: 사용자가 직접 넘긴 글. 원문 링크 없음
   'sewu_www_notice': '숭의여대 공지사항',
   'wevity_contest': '위비티', // D-038 교외 공모전
   'contestkorea_contest': '콘테스트코리아',
@@ -217,6 +218,7 @@ class ReportScreen extends StatefulWidget {
     this.recommendation,
     this.today,
     this.agentStore,
+    this.shared,
   });
 
   final NoticeRepository repository;
@@ -230,12 +232,17 @@ class ReportScreen extends StatefulWidget {
   /// 상세 분석 질문의 '다음에도 이대로' 저장소. 없으면 기기 저장소를 쓴다.
   final AgentChipStore? agentStore;
 
+  /// 카카오톡에서 넘긴 공고(D-058). 있으면 서버에서 다시 받지 않고 이 값을 보이며, 저장·상세 분석·추천 이유·원문 링크는 없다.
+  final SharedNoticeItem? shared;
+
   @override
   State<ReportScreen> createState() => _ReportScreenState();
 }
 
 class _ReportScreenState extends State<ReportScreen> {
-  late Future<Notice?> _future = widget.repository.getNotice(widget.noticeId);
+  late Future<Notice?> _future = widget.shared != null
+      ? Future.value(widget.shared!.notice)
+      : widget.repository.getNotice(widget.noticeId);
   SavedEntry? _savedEntry;
   bool? _saved;
 
@@ -263,6 +270,7 @@ class _ReportScreenState extends State<ReportScreen> {
 
   /// 크레딧과 받은 분석을 다시 읽는다. 읽지 못하면 이전 값을 두고, 버튼은 서버가 확인하게 둔다.
   Future<void> _refreshAgent() async {
+    if (widget.shared != null) return; // 넘긴 공고는 상세 분석 대상이 아니다
     final repo = widget.repository;
     var credits = _credits;
     var analysis = _analysis;
@@ -328,6 +336,7 @@ class _ReportScreenState extends State<ReportScreen> {
 
   Future<void> _loadExtras() async {
     final repo = widget.repository;
+    if (widget.shared == null) {
     try {
       final saved = await repo.listSaved();
       final mine = saved.where((e) => e.notice.noticeId == widget.noticeId);
@@ -339,6 +348,7 @@ class _ReportScreenState extends State<ReportScreen> {
       }
     } catch (_) {
       // 저장 상태를 못 읽어도 리포트는 보여준다.
+    }
     }
     try {
       final profile = await repo.getProfile();
@@ -479,7 +489,7 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget _body(Notice notice) {
     final n = notice.summary;
     final today = widget.today ?? DateTime.now();
-    final rec = widget.recommendation;
+    final rec = widget.recommendation ?? widget.shared?.asRecommendation;
     final cases = ApplicationCaseScope.maybeOf(context);
     final kase = cases?[widget.noticeId];
     if (cases != null && kase != null) _recordSeen(cases, kase, n);
@@ -528,7 +538,7 @@ class _ReportScreenState extends State<ReportScreen> {
                               Icon(Icons.calendar_today_rounded, size: 14, color: c.muted),
                               const SizedBox(width: 4),
                               Text(
-                                '${shortDate(n.published!)} ${n.sourceUrl == null ? '발송' : '게시'}',
+                                '${shortDate(n.published!)} ${widget.shared != null ? '넘김' : n.sourceUrl == null ? '발송' : '게시'}',
                                 style: TextStyle(fontSize: 14, color: c.muted),
                               ),
                             ],
@@ -561,6 +571,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 status: rec?.eligibilityStatus,
                 notice: notice,
               ),
+              if (widget.shared == null)
               AnalysisAction(
                 loaded: _agentLoaded,
                 credits: _credits,
@@ -571,7 +582,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 onOpenCredits: _openCredits,
               ),
               _Schedule(notice: notice, today: today),
-              if (rec != null) _Reasons(recommendation: rec),
+              if (rec != null && widget.shared == null) _Reasons(recommendation: rec),
               if (notice.relatedNotices.isNotEmpty) _Related(notices: notice.relatedNotices, onOpen: _openRelated),
             ],
           ),
@@ -621,6 +632,11 @@ class _ReportScreenState extends State<ReportScreen> {
                         iconAlignment: IconAlignment.end,
                         icon: const Icon(Icons.open_in_new_rounded, size: 18),
                         label: const Text('신청 사이트 열기'),
+                      ),
+                      null when widget.shared != null => Text(
+                        keepAll('카카오톡에서 넘긴 공고라 원문 링크가 없습니다. 넘긴 글은 내 계정에만 저장됩니다.'),
+                        textAlign: TextAlign.center,
+                        style: captionStyle(context),
                       ),
                       // D-019: 알림톡은 열 수 있는 웹 원문이 없다. 받은 카톡 메시지가 원문이다
                       null => Text(
@@ -1496,7 +1512,7 @@ class _Schedule extends StatelessWidget {
     final left = daysLeft(n, today);
     final c = context.gw;
     final events = <(DateTime, _Event)>[
-      if (n.published != null) (n.published!.day, _event(shortDate(n.published!), sub: '게시', dot: _Dot.past)),
+      if (n.published != null) (n.published!.day, _event(shortDate(n.published!), sub: notice.sourceId == 'user_share' ? '넘김' : '게시', dot: _Dot.past)),
       if (notice.applicationStart != null)
         (notice.applicationStart!.day, _event(shortDate(notice.applicationStart!), sub: '신청 시작', dot: _Dot.past)),
       (day, _event('${shortDay(day)} · 오늘', dot: _Dot.today, color: c.accent)),

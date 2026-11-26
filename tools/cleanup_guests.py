@@ -85,7 +85,14 @@ def main(argv: list[str] | None = None) -> int:
     from firebase_admin import auth
 
     from backend.api.deps import delete_user_data
-    from backend.firebase_store import FirestoreCredits, FirestoreProfiles, FirestoreReports, FirestoreSaved, init_app
+    from backend.firebase_store import (
+        FirestoreCredits,
+        FirestoreProfiles,
+        FirestoreReports,
+        FirestoreSaved,
+        FirestoreSharedNotices,
+        init_app,
+    )
 
     app = init_app(args.project, name="cleanup-guests")
     stores = {
@@ -93,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         "reports": FirestoreReports(app),
         "credits": FirestoreCredits(app),
         "profiles": FirestoreProfiles(app),
+        "shared": FirestoreSharedNotices(app),
     }
     uids = select_targets(_firebase_accounts(app), datetime.now(timezone.utc))
     result = cleanup(

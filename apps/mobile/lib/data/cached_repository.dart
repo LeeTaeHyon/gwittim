@@ -8,11 +8,14 @@ import 'repository.dart';
 /// - 프로필을 고치면 프로필과 추천 목록을, 저장·저장 취소하면 저장 목록을 버린다.
 /// - 당겨서 새로 고침은 [forget]으로 모두 버리고 다시 받는다.
 /// - 실패한 응답은 남기지 않는다 (다음 요청이 다시 시도).
-class CachedNoticeRepository implements NoticeRepository {
+class CachedNoticeRepository implements NoticeRepository, WrappingRepository {
   CachedNoticeRepository(this._inner, {this.maxAge = const Duration(minutes: 5), DateTime Function()? now})
     : _now = now ?? DateTime.now;
 
   final NoticeRepository _inner;
+
+  @override
+  NoticeRepository get inner => _inner;
   final Duration maxAge;
   final DateTime Function() _now;
 

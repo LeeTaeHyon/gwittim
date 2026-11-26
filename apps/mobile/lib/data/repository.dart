@@ -108,6 +108,9 @@ enum RepositoryErrorKind {
   insufficientCredits,
   requestInProgress,
   consentRequired,
+
+  /// 카톡 공고 넘기기만: 하루 30건 초과
+  rateLimited,
 }
 
 class RepositoryException implements Exception {

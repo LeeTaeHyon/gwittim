@@ -27,6 +27,7 @@ beforeEach(async () => {
     await setDoc(doc(db, "pipeline_failures/f1"), { reason: "x" });
     await setDoc(doc(db, "users/alice"), { major_id: "mjc.computer_engineering" });
     await setDoc(doc(db, "users/alice/saved/n1"), { saved_notice_version: 1 });
+    await setDoc(doc(db, "users/alice/shared_notices/s1"), { text: "합성 가린 글" });
   });
 });
 
@@ -68,4 +69,12 @@ test("본인 프로필과 저장 목록만 읽는다", async () => {
 test("프로필·저장 쓰기는 서버 API만 (클라이언트 직접 쓰기 금지)", async () => {
   await assertFails(setDoc(doc(alice(), "users/alice"), { grade: 2 }));
   await assertFails(setDoc(doc(alice(), "users/alice/saved/n9"), { saved_notice_version: 1 }));
+});
+
+test("카톡에서 넘긴 공고(shared_notices)는 본인·타인 모두 클라이언트 접근 금지 (서버만, D-058)", async () => {
+  for (const db of [alice(), bob(), anon()]) {
+    await assertFails(getDoc(doc(db, "users/alice/shared_notices/s1")));
+    await assertFails(setDoc(doc(db, "users/alice/shared_notices/s2"), { text: "x" }));
+    await assertFails(deleteDoc(doc(db, "users/alice/shared_notices/s1")));
+  }
 });

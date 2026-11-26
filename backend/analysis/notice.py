@@ -42,7 +42,7 @@ CLOSED_TITLE = re.compile(r"[\[(]\s*(?:모집\s*)?(?:마감|완료)\s*[\])]|모�
 
 # 알림톡은 신청 마감 없이 특강·검사 날짜만 알리는 안내가 많다. 마감일이 없으면 활동 기간(본문의 마지막 날짜)이
 # 지났을 때 끝난 공고로 본다 (D-019). 게시판 공고에는 쓰지 않는다: 활동 기간이 길고 활동 중에도 안내가 유효한 경우가 많다.
-ACTIVITY_CLOSES = {"mjc_kakao"}
+ACTIVITY_CLOSES = {"mjc_kakao", "user_share"}  # user_share: 사용자가 넘긴 알림톡 글 (D-058)
 
 
 def lifecycle(deadline: dict | None, today: date, title: str = "", activity: dict | None = None) -> str:
