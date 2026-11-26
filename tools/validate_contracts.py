@@ -120,6 +120,19 @@ def check_eligibility_status(data) -> list[str]:
     return errors
 
 
+def check_unconfirmed_values(data) -> list[str]:
+    """SPEC §5 EligibilityCondition: unconfirmed_values는 value와 겹치지 않는다 (D-057). 스키마로는 두 배열을 견줄 수 없다."""
+    errors = []
+    for path, value in _walk(data):
+        if not (isinstance(value, dict) and "operator" in value and "unconfirmed_values" in value):
+            continue
+        confirmed = value.get("value") if isinstance(value.get("value"), list) else [value.get("value")]
+        overlap = [v for v in value["unconfirmed_values"] if v in confirmed]
+        if overlap:
+            errors.append(f"unconfirmed_values: {path} 가 value 와 겹침 {overlap}")
+    return errors
+
+
 def check_unlisted_profile(data) -> list[str]:
     """SPEC §5: university_id가 unlisted(목록에 없는 학교)이면 major_id는 null. 학교 이름은 받지 않는다."""
     if isinstance(data, dict) and data.get("university_id") == "unlisted" and data.get("major_id") is not None:
@@ -128,7 +141,7 @@ def check_unlisted_profile(data) -> list[str]:
 
 
 def semantic_errors(data, dicts) -> list[str]:
-    return check_dictionary_codes(data, dicts) + check_eligibility_status(data) + check_unlisted_profile(data)
+    return check_dictionary_codes(data, dicts) + check_eligibility_status(data) + check_unconfirmed_values(data) + check_unlisted_profile(data)
 
 
 def check_major_prior(data, dicts) -> list[str]:

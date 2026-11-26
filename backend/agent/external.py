@@ -31,6 +31,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
+from backend.analysis import target
+from backend.analysis.rules import status_condition
 from backend.contracts import schema_errors
 from backend.recommendation import evaluate
 
@@ -49,9 +51,9 @@ EXTERNAL_PROMPT = (HARNESS_DIR / "external_search.md").read_text(encoding="utf-8
 EXTERNAL_VERSION = (HARNESS_DIR / "EXTERNAL_VERSION").read_text(encoding="utf-8").strip()
 READ_PROMPT = (HARNESS_DIR / "external_read.md").read_text(encoding="utf-8").strip()
 STATUSES = ("enrolled", "on_leave", "graduated")
+ENROLLED = target.ENROLLED
 _GRADUATING = re.compile(r"졸업\s*예정")
-# 응모 대상이 '대학생'뿐이면 재학·휴학 대학생으로 본다(졸업생은 아님). 학적 칸이 비었을 때만 쓴다
-_UNIV_STUDENT = re.compile(r"대학생|대학\(원\)생|대학\s*재학생|대학교\s*재(?:학|·휴학)생|대학원생")
+# 응모 대상 문구의 학적 대응은 분석 규칙(backend.analysis.target)과 같다: 대학생은 재학만 확인됨, 휴학은 미확인 (D-057)
 _ANYONE = re.compile(r"누구나|제한\s*없음|자격\s*제한\s*없|무관")
 # 참가 형태(팀·공동 작품·인원)는 지원 자격 제한이 아니다. 지침에 적어도 모델이 넣는 경우가 있어(2026-11-23 실호출) 서버가 뺀다
 _TEAM_RULE = re.compile(r"팀|공동\s*(?:작품|응모|참여)|\d+\s*(?:인|명)\s*(?:이내|이하|까지|으로|로)|개인\s*(?:또는|및|/)")
@@ -175,7 +177,7 @@ def _value(entry: dict, key: str):
 def eligibility_from_page(entry: dict) -> dict:
     """원문에서 뽑은 칸 -> Notice.eligibility 모양. 근거 문장(quote)이 없는 값은 쓰지 않는다."""
     conditions, unresolved = [], []
-    target = _quote(entry, "target")
+    target_q = _quote(entry, "target")
     grades = _value(entry, "grades")
     gq = _quote(entry, "grades")
     if isinstance(grades, list) and gq:
@@ -184,21 +186,39 @@ def eligibility_from_page(entry: dict) -> dict:
             conditions.append({"field": "grade", "operator": "in", "value": values, "evidence": gq, "validation_status": "validated"})
     statuses = _value(entry, "statuses")
     sq = _quote(entry, "statuses")
+
+    def enrollment(text: str, model_values: list | None):
+        """대상 문구를 분석 규칙과 같은 대응표로 읽는다(D-057): 대학생은 재학만 확인됨이고 휴학은 미확인.
+        반환: (조건 또는 None, 직접 확인할 근거 또는 None, 읽은 낱말이 있는가)."""
+        tr = target.read(text, True)
+        if tr.graduating and ENROLLED not in tr.conf:
+            return None, text, True  # 졸업 예정자는 재학 상태로 판정할 수 없다 (D-046)
+        if tr.conf:
+            if model_values and not tr.univ:
+                tr.conf |= {v for v in model_values if v in STATUSES}  # 대학생 낱말이 없으면 모델이 읽은 값을 쓴다
+            if model_values is not None and len(tr.values) == len(STATUSES) and not tr.unconf:
+                return None, None, True
+            return status_condition(tr, text), None, True
+        if tr.found:
+            return None, text, True  # 대학원생·일반인 등 학적을 확인할 수 없는 대상
+        return None, None, False
+
     if isinstance(statuses, list) and sq:
         values = [v for v in STATUSES if v in statuses]
-        if _GRADUATING.search(sq) and not _UNIV_STUDENT.search(sq):
-            unresolved.append({"evidence": sq, "note": None})  # 졸업 예정자는 재학 상태로 판정할 수 없다 (D-046)
-        elif _GRADUATING.search(sq):
-            # '대학생, 졸업예정자'처럼 대학생과 함께 적힌 졸업 예정은 대상을 넓히는 말: 재학·휴학 대학생은 해당
-            conditions.append({"field": "enrollment_status", "operator": "in", "value": ["enrolled", "on_leave"],
-                               "evidence": sq, "validation_status": "validated"})
+        cond, check, found = enrollment(sq, values)
+        if cond:
+            conditions.append(cond)
+        elif check:
+            unresolved.append({"evidence": check, "note": None})
         elif values and len(values) < len(STATUSES):
             conditions.append({"field": "enrollment_status", "operator": "in", "value": values, "evidence": sq,
                                "validation_status": "validated"})
-    if target and not any(c["field"] == "enrollment_status" for c in conditions)             and not (_GRADUATING.search(target) and not _UNIV_STUDENT.search(target))             and not (isinstance(statuses, list) and statuses and _GRADUATING.search(sq or "") is None):
-        if _UNIV_STUDENT.search(target):
-            conditions.append({"field": "enrollment_status", "operator": "in", "value": ["enrolled", "on_leave"],
-                               "evidence": target, "validation_status": "validated"})
+    if target_q and not any(c["field"] == "enrollment_status" for c in conditions)             and not (isinstance(statuses, list) and statuses and _GRADUATING.search(sq or "") is None):
+        cond, check, found = enrollment(target_q, None)
+        if cond:
+            conditions.append(cond)
+        elif check and not _GRADUATING.search(target_q):
+            unresolved.append({"evidence": check, "note": None})
     school = _value(entry, "school_only")
     if isinstance(school, str) and school.strip():
         unresolved.append({"evidence": _quote(entry, "school_only") or f"{school.strip()[:40]} 학생만", "note": None})
@@ -207,14 +227,16 @@ def eligibility_from_page(entry: dict) -> dict:
         if isinstance(q, str) and q.strip() and not _TEAM_RULE.search(q):
             unresolved.append({"evidence": " ".join(q.split())[:QUOTE_MAX], "note": None})
     open_q = _quote(entry, "open_to_all")
-    if not open_q and target and _ANYONE.search(target) and not _UNIV_STUDENT.search(target):
-        open_q = target  # '누구나'만 적힌 응모 대상
-    unrestricted = (_value(entry, "open_to_all") is True or open_q == target) and bool(open_q) and not conditions         and not unresolved
+    if not open_q and target_q:
+        tt = target.read(target_q, True)
+        if tt.whole or (_ANYONE.search(target_q) and "누구나" not in target_q and not tt.conf):
+            open_q = target_q  # 신청 대상 전체를 수식하는 '누구나'만 적힌 응모 대상. '대학생이면 누구나'는 한정된 대상이다 (D-057)
+    unrestricted = (_value(entry, "open_to_all") is True or open_q == target_q) and bool(open_q) and not conditions         and not unresolved
     return {
         "conditions": conditions,
         "unresolved_conditions": unresolved,
         # 응모 대상 문장을 읽었으면 학년·학적·학교 칸은 그 문장에서 다 본 것으로 둔다. 못 읽었으면 불완전
-        "extraction_complete": bool(target) or unrestricted,
+        "extraction_complete": bool(target_q) or unrestricted,
         "explicitly_unrestricted": unrestricted,
         "unrestricted_evidence": open_q if unrestricted else None,
     }

@@ -224,7 +224,7 @@ class ConditionResult {
   final String status;
   final String evidence;
 
-  /// profile_missing / condition_unresolved / extraction_incomplete, 판정됐으면 null
+  /// profile_missing / condition_unresolved / extraction_incomplete / value_unconfirmed(D-057), 판정됐으면 null
   final String? unknownReason;
 
   factory ConditionResult.fromJson(Map<String, dynamic> m) => ConditionResult(

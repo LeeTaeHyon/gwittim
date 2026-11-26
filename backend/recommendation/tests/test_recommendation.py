@@ -86,6 +86,47 @@ def test_unresolved_condition_keeps_needs_check_even_if_all_met(notices, profile
     assert {r["status"] for r in results} == {"met"}
 
 
+# ---------- 확인되지 않은 값 (D-057) ----------
+
+def _status_elig(value=("enrolled",), unconfirmed=("on_leave",)):
+    cond = {"field": "enrollment_status", "operator": "in", "value": list(value), "evidence": "지원 대상: 대학생",
+            "validation_status": "validated"}
+    if unconfirmed is not None:
+        cond["unconfirmed_values"] = list(unconfirmed)
+    return {"conditions": [cond], "unresolved_conditions": [], "extraction_complete": True,
+            "explicitly_unrestricted": False, "unrestricted_evidence": None}
+
+
+@pytest.mark.parametrize("state,status,reason,verdict", [
+    ("enrolled", "met", None, "met"),
+    ("on_leave", "unknown", "value_unconfirmed", "needs_check"),
+    ("graduated", "not_met", None, "not_met"),
+])
+def test_unconfirmed_value_is_unknown_not_unmet(profile, state, status, reason, verdict):
+    got, results = evaluate(_status_elig(), dict(profile, enrollment_status=state))
+    assert got == verdict
+    assert [(r["status"], r["unknown_reason"]) for r in results] == [(status, reason)]
+
+
+def test_unconfirmed_values_missing_behaves_as_empty(profile):
+    """옛 데이터(필드 없음)는 빈 배열과 같고, 지금까지의 결과와 같다."""
+    for state, verdict in (("enrolled", "met"), ("on_leave", "not_met"), ("graduated", "not_met")):
+        old = _status_elig(unconfirmed=None)
+        assert evaluate(old, dict(profile, enrollment_status=state)) == evaluate(_status_elig(unconfirmed=()), dict(profile, enrollment_status=state))
+        assert evaluate(old, dict(profile, enrollment_status=state))[0] == verdict
+
+
+def test_missing_profile_wins_over_unconfirmed(profile):
+    got, results = evaluate(_status_elig(), dict(profile, enrollment_status=None))
+    assert got == "needs_check" and results[0]["unknown_reason"] == "profile_missing"
+
+
+def test_not_met_elsewhere_still_wins_over_unconfirmed(profile):
+    elig = _status_elig()
+    elig["conditions"].append({"field": "grade", "operator": "eq", "value": 3, "evidence": "3학년", "validation_status": "validated"})
+    assert evaluate(elig, dict(profile, enrollment_status="on_leave"))[0] == "not_met"
+
+
 # ---------- 점수 ----------
 
 @pytest.mark.parametrize(

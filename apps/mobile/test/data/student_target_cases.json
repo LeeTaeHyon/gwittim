@@ -1,0 +1,353 @@
+[
+ {
+  "id": "univ_only",
+  "enrollment_status": "enrolled",
+  "body": "응모대상: 대학생",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "in",
+     "value": [
+      "enrolled"
+     ],
+     "unconfirmed_values": [
+      "on_leave"
+     ],
+     "evidence": "응모대상: 대학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "met",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "met",
+    "evidence": "응모대상: 대학생",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "univ_only",
+  "enrollment_status": "on_leave",
+  "body": "응모대상: 대학생",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "in",
+     "value": [
+      "enrolled"
+     ],
+     "unconfirmed_values": [
+      "on_leave"
+     ],
+     "evidence": "응모대상: 대학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "unknown",
+    "evidence": "응모대상: 대학생",
+    "unknown_reason": "value_unconfirmed"
+   }
+  ]
+ },
+ {
+  "id": "univ_only",
+  "enrollment_status": "graduated",
+  "body": "응모대상: 대학생",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "in",
+     "value": [
+      "enrolled"
+     ],
+     "unconfirmed_values": [
+      "on_leave"
+     ],
+     "evidence": "응모대상: 대학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "not_met",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "not_met",
+    "evidence": "응모대상: 대학생",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "staff_and_students",
+  "enrollment_status": "enrolled",
+  "body": "신청자격\n우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "in",
+     "value": [
+      "enrolled",
+      "on_leave"
+     ],
+     "unconfirmed_values": [
+      "graduated"
+     ],
+     "evidence": "우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+     "validation_status": "validated"
+    },
+    {
+     "field": "university_id",
+     "operator": "eq",
+     "value": "mjc",
+     "evidence": "우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "met",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "met",
+    "evidence": "우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+    "unknown_reason": null
+   },
+   {
+    "field": "university_id",
+    "status": "met",
+    "evidence": "우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "staff_and_students",
+  "enrollment_status": "on_leave",
+  "body": "신청자격\n우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "in",
+     "value": [
+      "enrolled",
+      "on_leave"
+     ],
+     "unconfirmed_values": [
+      "graduated"
+     ],
+     "evidence": "우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+     "validation_status": "validated"
+    },
+    {
+     "field": "university_id",
+     "operator": "eq",
+     "value": "mjc",
+     "evidence": "우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "met",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "met",
+    "evidence": "우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+    "unknown_reason": null
+   },
+   {
+    "field": "university_id",
+    "status": "met",
+    "evidence": "우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "staff_and_students",
+  "enrollment_status": "graduated",
+  "body": "신청자격\n우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "in",
+     "value": [
+      "enrolled",
+      "on_leave"
+     ],
+     "unconfirmed_values": [
+      "graduated"
+     ],
+     "evidence": "우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+     "validation_status": "validated"
+    },
+    {
+     "field": "university_id",
+     "operator": "eq",
+     "value": "mjc",
+     "evidence": "우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "unknown",
+    "evidence": "우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+    "unknown_reason": "value_unconfirmed"
+   },
+   {
+    "field": "university_id",
+    "status": "met",
+    "evidence": "우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "general_univ",
+  "enrollment_status": "enrolled",
+  "body": "응모대상: 일반인, 대학생",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "in",
+     "value": [
+      "enrolled"
+     ],
+     "unconfirmed_values": [
+      "on_leave",
+      "graduated"
+     ],
+     "evidence": "응모대상: 일반인, 대학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "met",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "met",
+    "evidence": "응모대상: 일반인, 대학생",
+    "unknown_reason": null
+   }
+  ]
+ },
+ {
+  "id": "general_univ",
+  "enrollment_status": "on_leave",
+  "body": "응모대상: 일반인, 대학생",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "in",
+     "value": [
+      "enrolled"
+     ],
+     "unconfirmed_values": [
+      "on_leave",
+      "graduated"
+     ],
+     "evidence": "응모대상: 일반인, 대학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "unknown",
+    "evidence": "응모대상: 일반인, 대학생",
+    "unknown_reason": "value_unconfirmed"
+   }
+  ]
+ },
+ {
+  "id": "general_univ",
+  "enrollment_status": "graduated",
+  "body": "응모대상: 일반인, 대학생",
+  "eligibility": {
+   "conditions": [
+    {
+     "field": "enrollment_status",
+     "operator": "in",
+     "value": [
+      "enrolled"
+     ],
+     "unconfirmed_values": [
+      "on_leave",
+      "graduated"
+     ],
+     "evidence": "응모대상: 일반인, 대학생",
+     "validation_status": "validated"
+    }
+   ],
+   "unresolved_conditions": [],
+   "extraction_complete": true,
+   "explicitly_unrestricted": false,
+   "unrestricted_evidence": null
+  },
+  "status": "needs_check",
+  "results": [
+   {
+    "field": "enrollment_status",
+    "status": "unknown",
+    "evidence": "응모대상: 일반인, 대학생",
+    "unknown_reason": "value_unconfirmed"
+   }
+  ]
+ }
+]

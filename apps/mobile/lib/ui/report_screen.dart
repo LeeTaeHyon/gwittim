@@ -99,6 +99,16 @@ List<CheckRow> groupCheckRows(List<CheckRow> rows) {
   return out;
 }
 
+/// 학적이 미확인(value_unconfirmed)일 때 안내 (D-057).
+/// 휴학: '대학생'만 적혀 휴학생 포함 여부를 공고가 말하지 않음(팀장 지정 문구).
+/// 졸업·재학: 학생이 아닌 대상(교원·일반인·성인 등)이나 '등'이 함께 나열돼, 그 대상에 해당하면 지원할 수 있음.
+/// 공고가 대상을 명시했으므로 '명시되지 않았다'고 하지 않는다.
+String unconfirmedNote(String? status) => switch (status) {
+  '휴학' => '휴학생 포함 여부가 공고에 명시되지 않았습니다.',
+  null => '공고의 지원 대상에 해당하는지 원문에서 확인해 주세요.',
+  _ => '$status생은 함께 나열된 다른 대상에 해당하는지 원문에서 확인해 주세요.',
+};
+
 const notFoundLabel = '공고에서 지원 조건을 찾지 못했습니다';
 const notFoundOtherLabel = '그 밖의 지원 조건은 공고에서 찾지 못했습니다';
 
@@ -128,6 +138,14 @@ List<CheckRow> checklistRows(
           field: field,
           evidence: c.evidence,
           note: '프로필에 입력하면 자동으로 비교합니다.',
+        ),
+        // 원문으로 이 학적이 대상인지 확인되지 않음 (D-057). 프로필 재입력 안내는 하지 않는다
+        _ when c.unknownReason == 'value_unconfirmed' => CheckRow(
+          CheckState.check,
+          '직접 확인',
+          field: field,
+          evidence: c.evidence,
+          note: unconfirmedNote(value),
         ),
         _ => CheckRow(CheckState.check, '직접 확인', field: field, evidence: c.evidence),
       });
