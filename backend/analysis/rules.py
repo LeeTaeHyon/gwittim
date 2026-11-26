@@ -205,11 +205,11 @@ STUDENT_OR_GRADUATE = re.compile(r"(?<![재휴대])학생\s*(?:또는|혹은|및
 # 재학·휴학·졸업 밖의 학적 (같은 줄에 있으면 재학 상태 조건으로 만들지 않는다)
 # '졸업 예정자'는 재학생 중 일부라 프로필 재학 상태(재학·휴학·졸업)로 판정할 수 없다. '기졸업자 또는 졸업예정자'를
 # 졸업생만으로 읽으면 졸업 예정인 재학생이 미충족이 된다 (D-046). '재학생(졸업예정자 포함)'처럼 넓히는 말은 그대로 둔다
-OTHER_STATUS = re.compile(r"복학|입학\s*예정|편입|재입학|신입생|졸업\s*예정(?!자?\s*(?:도\s*)?포함)")
-OTHER_NOT_GRADUATING = re.compile(r"복학|입학\s*예정|편입|재입학|신입생")  # 졸업 예정은 같은 문구에 재학을 덮는 낱말이 있으면 값을 바꾸지 않는다 (D-057)
+OTHER_STATUS = re.compile(r"복학|입학\s*예정|재학\s*예정|편입|재입학|신입생|졸업\s*예정(?!자?\s*(?:도\s*)?포함)")
+OTHER_NOT_GRADUATING = re.compile(r"복학|입학\s*예정|재학\s*예정|편입|재입학|신입생")  # 졸업 예정은 같은 문구에 재학을 덮는 낱말이 있으면 값을 바꾸지 않는다 (D-057)
 # 학과·전공 낱말. 사전에 없는 학과 제한은 자동으로 비교하지 못하므로 직접 확인으로 남긴다 ('전 학과', '학과 무관'은 제외)
 DEPT_WORD = re.compile(r"학과|전공|학부")
-DEPT_OPEN = re.compile(r"(?:전|모든|각)\s*(?:학과|전공|학부)|(?:학과|전공|학부)\s*(?:불문|무관|제한\s*없)")
+DEPT_OPEN = re.compile(r"(?:전|모든|각)\s*(?:학과|전공|학부)|전공\s*심화|(?:학과|전공|학부)\s*(?:불문|무관|제한\s*없)")
 # 고졸 이상 학력: 대학생은 재학·휴학·졸업 모두 갖춘다 ('고등학교 졸업예정자'만은 해당 없음) (D-023)
 HIGH_SCHOOL_OR_MORE = re.compile(r"고등학교\s*졸업(?:자|\s*이상|\s*학력)|고졸\s*(?:이상|자|학력)")
 # 제출 서류 목록(성적증명서 등)과 '성적에 관계없이'는 지원 조건이 아니다. 혜택·출결·성적 조회 안내도 (D-023)
@@ -450,6 +450,10 @@ def read_lines(lines: list[str]) -> list[_Info]:
     return infos
 
 
+# 교외 사이트가 붙인 대상 칸 줄 (위비티 '응모대상', 콘테스트코리아 '참가대상')
+SITE_TARGET = re.compile(r"(?:응모|참가)\s*대상\s*[:：]")
+
+
 def status_condition(tr: target.Target, evidence: str) -> dict:
     """읽은 대상 낱말로 enrollment_status 조건을 만든다. 확인되지 않은 값이 없고 옛 낱말만 썼으면 옛 모양(eq/in)이다."""
     values = tr.values
@@ -472,7 +476,7 @@ def llm_enrollment(evidence: str, lines: list[str]) -> target.Target | None:
             ctx = _target_ctx(info, seg.text)
             tr = target.read(target.value_of(seg.text, lambda t: _ENUM.sub("", t)), ctx)
             if STUDENT_OR_GRADUATE.search(seg.text):
-                tr.conf.add("enrolled")
+                tr.add_confirmed("enrolled")
             blocked = OTHER_NOT_GRADUATING.search(seg.text) or (tr.graduating and "enrolled" not in tr.conf)
             if ctx and tr.conf and not tr.whole and not blocked and not EXCLUDES.search(tr.masked):
                 return tr
@@ -797,9 +801,10 @@ class RuleBasedAnalyzer:
 
         # 출처 학교 이름 바로 뒤에 재학생·졸업생이 오면 그 학교 조건 ('숭의여자대학교 재학생'). '○○대학교 학생 여러분' 같은 호칭은 아님
         school_name = next((u["name_ko"] for u in _dictionary("universities") if u["id"] == source.university_id), None)
-        school_status = re.compile(re.escape(school_name) + r"\s*(?:재학생|졸업생|재학\s*중|학생\s*(?:또는|혹은|및)\s*졸업)") if school_name else None
+        school_status = re.compile(re.escape(school_name) + r"\s*(?:재학생|졸업생|재학\s*중|학생\s*(?:또는|혹은|및)\s*졸업|학생\s*누구나)") if school_name else None
 
         unrestricted_line = None
+        site_status = None  # 사이트 대상 칸('응모대상: 일반인, 대학생')으로 읽은 학적. 본문에 대상 문구가 없을 때만 쓴다
         infos = read_lines(lines)
         for info in infos:
             if info.kind != "body":
@@ -829,9 +834,9 @@ class RuleBasedAnalyzer:
                     matched = True
 
                 ctx = _target_ctx(info, line)
-                tr = target.read(target.value_of(line, lambda t: _ENUM.sub("", t)), ctx)
+                tr = target.read(target.value_of(line, lambda t: _ENUM.sub("", t)), ctx, school_name)
                 if STUDENT_OR_GRADUATE.search(line) and "enrolled" not in tr.conf:
-                    tr.conf.add("enrolled")  # '학생 또는 졸업생'은 졸업생만이 아니다
+                    tr.add_confirmed("enrolled")  # '학생 또는 졸업생'은 졸업생만이 아니다
                 status_added = False
                 if HIGH_SCHOOL_OR_MORE.search(line) and not NOT_CONDITION.search(line):
                     add("enrollment_status", "in", ["enrolled", "on_leave", "graduated"], line)
@@ -848,6 +853,9 @@ class RuleBasedAnalyzer:
                         matched = True
                         if EXCLUDES.search(tr.masked):  # 누구를 빼는 줄은 자동 판정하지 않고 직접 확인으로 (D-023)
                             unresolved.append((line, None))
+                        elif SITE_TARGET.match(_ENUM.sub("", info.line).strip()):
+                            # 사이트가 붙인 대상 분류는 본문보다 거칠다. 본문에 '재학생 및 휴학생'처럼 더 자세한 대상 문구가 있으면 본문을 따른다 (D-057 원문 우선)
+                            site_status = site_status or status_condition(tr, line)
                         elif not any(c["field"] == "enrollment_status" for c in conditions):
                             conditions.append(status_condition(tr, line))
                             status_added = True
@@ -909,6 +917,8 @@ class RuleBasedAnalyzer:
                 elif required_unresolved(line):
                     unresolved.append((line, None))
 
+        if site_status and not any(c["field"] == "enrollment_status" for c in conditions):
+            conditions.append(site_status)
         unresolved = _dedupe(unresolved)
         # 우대·항목 제한 없음은 판정·완전성·명시적 제한 없음에서 뺀다 (D-056)
         real = [u for u in unresolved if u["note"] not in FLAG_NOTES]

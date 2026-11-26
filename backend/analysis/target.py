@@ -34,14 +34,17 @@ _PATTERNS = [
     ("E", r"재학\s*중(?:인)?", True),
     ("UNIV", r"전문대학생|대학\(원\)생|대학교\s*학생|대학생", True),
     ("GRADSCHOOL", r"대학원생", True),
-    ("GENERAL", r"일반인|직장인|외국인|기타", True),
-    ("AGE", r"성인|청년|만\s*\d+\s*세(?:\s*(?:이상|이하|미만))?|\d+\s*세\s*(?:이상|이하|미만)", True),
+    # 학생이 아닌 대상: 함께 나열되면 다른 낱말로 확인되지 않은 학적은 미확인 (D-057). '주민등록'의 주민은 아니다
+    ("GENERAL", r"일반인|직장인|외국인|기타|지역\s*주민|주민(?!\s*등록)|시민|도민", True),
+    ("AGE", r"성인|청년|만?\s*\d+\s*세?\s*[~\-–]\s*\d+\s*세|만\s*\d+\s*세(?:\s*(?:이상|이하|미만))?|\d+\s*세\s*(?:이상|이하|미만)|해당자\s*[▶▷]", True),
     ("YOUNG", r"청소년|중\s*[·ㆍ,]\s*고등학생|중학생|고등학생|초등학생|유치원(?:생)?|어린이", True),
 ]
 _COMPILED = [(name, re.compile(p), new) for name, p, new in _PATTERNS]
 _STATUS_KINDS = {"EL", "E", "L", "G", "UNIV"}
 # 나열 뒤에 범위를 넓히는 말: '대학생 등', '대학생 외', '및 그 밖에', '기타'
 _BROADEN = re.compile(r"(?<![가-힣])(?:등|외)(?![가-힣])|그\s*밖|그\s*외")
+_BROADEN_AFTER = re.compile(r"\s*(?:등|외)(?![가-힣])")  # 대상 낱말 바로 뒤
+_BROADEN_OTHER = re.compile(r"그\s*밖|그\s*외")
 
 # '휴학생 포함·제외', '졸업생 제외': 대상 문구에 붙은 괄호 안, 또는 '단,' 뒤에서만 학적을 좁힌다 (D-023의 예외)
 _ADJ = re.compile(
@@ -68,6 +71,7 @@ _QUAL = re.compile(
 )
 _NOT_QUAL = re.compile(r"(?:전|모든)\s*(?:국민|시민)|일반인|[가-힣·ㆍ,/\s]{0,20}(?:제한\s*없이?|무관)")
 _RESIDUAL = re.compile(r"\d+\s*세|연령|나이|성인|청년|청소년|국민|시민|주민|거주|국적|외국인|내국인|재직|직장인|임직원|회원|소속|출신|전공|학과|학년")
+_NO_LIMIT_ITEM = re.compile(r"(?:^|[,，;；])\s*(?:제한\s*없음|제한\s*없이|무관)\s*(?:[,，;；]|$)")
 _OPEN, _CLOSE = "([（［", ")]）］"
 
 
@@ -153,6 +157,10 @@ class Target:
     adj: bool = False  # 유효한 포함·제외를 썼는가
     masked: str = ""  # 유효한 포함·제외를 지운 문구(EXCLUDES 확인용)
 
+    def add_confirmed(self, state: str) -> None:
+        self.conf.add(state)
+        self.unconf.discard(state)
+
     @property
     def values(self) -> list[str]:
         return [s for s in ORDER if s in self.conf]
@@ -162,10 +170,12 @@ class Target:
         return [s for s in ORDER if s in self.unconf]
 
 
-def read(value: str, ctx: bool) -> Target:
+def read(value: str, ctx: bool, school: str | None = None) -> Target:
     """대상 문구(번호·항목 이름을 뗀 것)에서 학적 낱말을 읽는다. ctx가 거짓이면 옛 낱말(재학생·휴학생·졸업생)만 읽는다."""
     tr = Target(masked=value)
     whole, nugu = scan_nugu(value)
+    if ctx and not nugu and _NO_LIMIT_ITEM.search(value):
+        whole = True  # 대상 칸의 독립 항목 '제한없음'
     spans = [(a, b) for a, b, _ in nugu]
     inside = lambda pos: any(a <= pos < b for a, b in spans)  # noqa: E731
     for a, b, prefix in nugu:
@@ -173,7 +183,7 @@ def read(value: str, ctx: bool) -> Target:
         stripped = prefix
         for _, s, e, _ in toks:
             stripped = stripped[:s] + " " * (e - s) + stripped[e:]
-        covered = any(n in _STATUS_KINDS for n, *_ in toks) or bool(re.search(r"본교|우리\s*대학", prefix))
+        covered = any(n in _STATUS_KINDS for n, *_ in toks) or bool(re.search(r"본교|우리\s*대학", prefix))             or bool(school and school in prefix)
         if not covered or _RESIDUAL.search(stripped):
             tr.qualified.append(value[a:b].strip(_TRIM))
     toks = _scan(value, ctx)
@@ -200,6 +210,9 @@ def read(value: str, ctx: bool) -> Target:
             general = True
         elif name == "AGE":
             tr.age = True
+            # '성인'·'청년'·'해당자 ▶ (…)'이 대상 하나로 나열되면 학생이 아닌 사람도 대상이다. 졸업생도 성인일 수 있으니 미충족이 아니라 미확인.
+            # '재학생(만 20~69세)'처럼 숫자 나이가 대상을 꾸미는 경우는 대상을 넓히지 않는다
+            general |= bool(re.match(r"성인|청년|해당자", value[s:e]))
         elif name == "GRADUATING":
             tr.graduating = True
     if ctx and tr.graduating:
@@ -229,7 +242,9 @@ def read(value: str, ctx: bool) -> Target:
                 excluded |= states
             masked = masked[:m.start()] + " " * (m.end() - m.start()) + masked[m.end():]
         tr.masked = masked
-        if general or (tr.conf and _BROADEN.search(value)):
+        # '등'·'외'는 대상 낱말 바로 뒤에 붙을 때만 대상 범위를 넓힌다('대학생 등'). '컴퓨터공학 등 관련 학과'의 '등'은 학과 나열이다
+        broaden = any(_BROADEN_AFTER.match(value, e) for _, _, e, _ in toks) or bool(_BROADEN_OTHER.search(value))
+        if general or (tr.conf and broaden):
             tr.unconf |= set(ORDER)
             tr.new = True
         if whole:
