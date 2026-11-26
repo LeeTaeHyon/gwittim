@@ -173,3 +173,13 @@ def test_llm_does_not_bring_back_schedule_or_prize_lines(ollama):
     elig, *_ = llm_run(ollama, R7, {"unresolved": ["2026.11.25.(수) ~ 12. 25.(금)", "대상 (1편): USD 5,000", "월 1회 정기회의",
                                                   "개인 작업실(전용면적 14~16㎡ 규모) 지원"]})
     assert items(elig) == [("만 19세 이상 지역주민 및 대학생", None), ("AI 활용 콘텐츠 제작 경험자 우대", PREF)]
+
+
+def test_long_line_with_item_phrase_is_not_relabelled_as_no_limit(ollama):
+    """이미지 설명처럼 한 줄에 지원 대상과 '전공·학년 무관'이 함께 있으면, 줄 전체를 항목 제한 없음으로 바꾸지 않는다.
+    지원 대상(재학·휴학생, 졸업예정자)은 직접 확인으로 남고, 구절만 항목 제한 없음이다 (LLM 보강 뒤 정리 단계)."""
+    body = "인턴 모집 /지원 대상 /대학 재학·휴학생, 27년 2월 졸업예정자 /전공·학년 무관 /일정 /서류 발표 11.19"
+    elig, *_ = llm_run(ollama, body, {"unresolved": []})
+    no_limit = [e for e, n in items(elig) if n == ITEM]
+    assert no_limit == ["전공·학년 무관"]
+    assert any("졸업예정자" in e and n is None for e, n in items(elig))
