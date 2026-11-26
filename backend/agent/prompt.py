@@ -43,7 +43,8 @@ SYSTEM_PROMPT = load_harness()
 VERDICT_KO = {"met": "충족", "not_met": "미충족", "needs_check": "확인 필요", "unknown": "확인 필요"}
 FIELD_KO = {"university_id": "학교", "major_id": "학과", "grade": "학년", "enrollment_status": "학적 상태"}
 ENROLLMENT_KO = {"enrolled": "재학", "on_leave": "휴학", "graduated": "졸업·졸업 예정"}
-UNKNOWN_REASON_KO = {"condition_unresolved": "공고 조건을 자동으로 해석하지 못함", "profile_missing": "학생 정보 없음"}
+UNKNOWN_REASON_KO = {"condition_unresolved": "공고 조건을 자동으로 해석하지 못함", "profile_missing": "학생 정보 없음",
+                     "value_unconfirmed": "공고가 그 학적(휴학·졸업 등)을 포함하는지 밝히지 않음"}
 UNKNOWN = "미상"
 
 

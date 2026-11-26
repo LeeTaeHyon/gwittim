@@ -146,6 +146,8 @@ M1의 수동 검증 표본은 20건을 목표로 한다. 부족하면 실제 건
 
 P0 자동 비교 지원 필드는 university_id, major_id, grade, enrollment_status이며 연산자는 eq, in이다. 필수 조건은 AND로 평가한다. 복잡한 OR·예외·연령·소득·학점 등은 `unresolved_conditions`에 보존한다.
 
+선택 필드 `unconfirmed_values`(D-057)는 원문이 포함 여부를 말하지 않아 확인할 수 없는 값의 배열이다. `value`와 같은 값 영역이며 `value`와 겹치지 않는다. `operator: in`에만 쓰고 지금은 `enrollment_status`에서만 만든다. 예: '지원 대상: 대학생'은 `value: ["enrolled"]`, `unconfirmed_values: ["on_leave"]`이고 졸업은 해당 없음이다. 없으면 빈 배열로 본다(저장된 옛 데이터는 그대로 유효). `schema_version`은 올리지 않는다.
+
 `eligibility`에는 `conditions`, `unresolved_conditions`, `extraction_complete`, `explicitly_unrestricted`, `unrestricted_evidence`를 둔다. 모집 제한 없음이 원문에 명시된 경우에만 `explicitly_unrestricted`를 true로 하고 근거를 남기며, 이때 conditions는 비어 있어야 한다. 그 외의 빈 conditions는 조건을 찾지 못한 상태다. 첨부파일에 조건이 있으나 미처리했다면 extraction_complete는 false다. LLM의 자기 확신만으로 true를 확정하지 않는다.
 
 `unresolved_conditions`의 `note`는 두 값을 정해 두고 쓴다(D-056). 둘 다 필수 조건이 아니다.
@@ -175,7 +177,7 @@ university_id, major_id, grade, enrollment_status, interest_ids, target_role_ids
 notice_id, notice_version, score, eligibility_status, condition_results, reason_codes, generated_at, ranking_version.
 
 - eligibility_status: met / not_met / needs_check.
-- condition_results: 각 조건의 `field`, `status`(met / not_met / unknown), `evidence`, `unknown_reason`(profile_missing / condition_unresolved / extraction_incomplete, unknown일 때만).
+- condition_results: 각 조건의 `field`, `status`(met / not_met / unknown), `evidence`, `unknown_reason`(profile_missing / condition_unresolved / extraction_incomplete / value_unconfirmed, unknown일 때만).
 - score는 내부 순위용이며 합격 확률·지원 가능 확률이 아니다.
 - reason_codes(interest_match, role_match, major_match, major_prior_match, deadline_timing, eligibility_met, eligibility_needs_check)는 실제 점수 기여·판정 근거에서 생성한다. 앱은 공통 템플릿으로 표시한다.
 - 추천 목록 응답의 `mode`는 personalized 또는 latest다. latest(개인화 불가)이면 score는 null이고 게시일 내림차순이다. personalized에서도 관심사·직무·전공을 하나도 평가할 수 없는 공고는 score null로 점수 있는 공고 뒤에 둔다.
@@ -238,6 +240,8 @@ balance(0~5), next_refill_at(다음 충전 시각, 최대 보유면 `null`, 게�
 - 불충족이 없고 미입력·(우대·항목 제한 없음을 뺀) 미해석 조건 또는 불완전한 추출이 있으면 needs_check.
 - 전체 필수 조건 해석이 확인되고 모두 충족했을 때만 met.
 - 모집 대상이 명시적 제한 없음을 확인한 경우와 조건을 찾지 못한 경우를 구분한다.
+- 조건 하나의 판정: 프로필 값이 `value`에 있으면 met, `unconfirmed_values`에 있으면 unknown(`value_unconfirmed`), 프로필이 비었으면 unknown(`profile_missing`, 먼저 적용), 그 밖이면 not_met. `unconfirmed_values`가 없으면 빈 배열로 본다(D-057).
+- 지원 대상 낱말(대학생·재학 중·일반인 등)은 대상 문맥에서만 읽는다. 대학생은 재학만 확인됨이고 휴학은 미확인이며, '누구나'는 신청 대상 전체를 수식할 때만 명시적 제한 없음의 근거다(D-057).
 - 우대 사항과 항목 제한 없음 표시는 판정·`condition_results`·확인 필요 개수에 넣지 않는다. 필수 자격이 하나도 없고 명시적 제한 없음도 아니면(우대나 항목 제한 없음만 있으면) needs_check다(D-056).
 
 ### 추천
