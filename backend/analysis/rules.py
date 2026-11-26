@@ -15,9 +15,10 @@ from typing import Protocol
 from backend.contracts import CONTRACTS_DIR
 from backend.sources import SourceConfig
 
+from . import target
 from .dates import date_info, parse_line
 
-ANALYSIS_VERSION = "rule-0.12"  # 0.12(0.11은 되돌린 자체 모델 실험이 썼다): 필수·우대·모호를 원문 위치로 나눠 우대·항목 제한 없음은 판정·완전성에서 제외, 필수·혼합 제목은 아래 읽은 항목으로 완전성 판단(D-056). 0.10: 졸업 예정자 줄은 재학 상태 조건으로 만들지 않고 직접 확인(D-046). 0.9: 재학상태 여러 값·기간형 신청 끝날짜·신청자 조건 줄·행정 공지 조건 제외·학년 전체 나열 무시·카테고리 보강. 0.8: 미해석 조건이 남으면 제한 없음 아님, 제한 없음 줄은 '무관' 면제 없음. 0.7: LLM 미해석 조건은 신청자 본인 조건만(D-023). 0.6: 미해석 조건 정리·우대 사항 표시(D-015). 0.5: 근로·근무 기간은 마감 아님. 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
+ANALYSIS_VERSION = "rule-0.14"  # 0.14(0.13은 열린 PR #170이 쓴다): 지원 대상 낱말(대학생·재학 중·일반인)을 대상 문맥에서 읽고 확인되지 않은 학적은 unconfirmed_values로, 한정어가 붙은 '누구나'는 명시적 제한 없음이 아님(D-057). 0.12(0.11은 되돌린 자체 모델 실험이 썼다): 필수·우대·모호를 원문 위치로 나눠 우대·항목 제한 없음은 판정·완전성에서 제외, 필수·혼합 제목은 아래 읽은 항목으로 완전성 판단(D-056). 0.10: 졸업 예정자 줄은 재학 상태 조건으로 만들지 않고 직접 확인(D-046). 0.9: 재학상태 여러 값·기간형 신청 끝날짜·신청자 조건 줄·행정 공지 조건 제외·학년 전체 나열 무시·카테고리 보강. 0.8: 미해석 조건이 남으면 제한 없음 아님, 제한 없음 줄은 '무관' 면제 없음. 0.7: LLM 미해석 조건은 신청자 본인 조건만(D-023). 0.6: 미해석 조건 정리·우대 사항 표시(D-015). 0.5: 근로·근무 기간은 마감 아님. 0.4: 이미지 대체텍스트, 두 자리 연도(D-014). 0.3: 장학·채용·근로 게시판(D-013). 0.2: 부서명 오탐 제거, 직무·학과 키워드, admin_notice
 
 
 class Analyzer(Protocol):
@@ -188,6 +189,7 @@ _ITEM_WORD = r"(?:학년|학과|전공|학력)"
 UNRESTRICTED_ITEM = re.compile(rf"{_ITEM_WORD}(?:\s*(?:[·ㆍ,/]|및|과|와)\s*{_ITEM_WORD})*\s*(?:제한\s*없(?:음|이|습니다)?|무관)")
 # 항목 제한 없음 구절 바로 뒤에 붙은 예외: '(특정 모집 부문 제외)', ', 단, …'. 예외가 붙으면 구절 전체를 직접 확인으로 둔다 (D-056 3.4)
 _EXCEPTION = re.compile(r"\s*(?:[(（][^()（）]*(?:제외|단[,，\s])[^()（）]*[)）]|[,，]?\s*(?:단|다만)[,，\s][^,，.]*)")
+UNRESTRICTED_OTHER = re.compile(r"(?:자격|대상|지원|참여|신청)\s*제한\s*없|제한\s*없이\s*(?:지원|참여|신청)")  # '누구나'를 뺀 전체 제한 없음
 UNRESTRICTED = re.compile(UNRESTRICTED_ALL.pattern + "|" + UNRESTRICTED_ITEM.pattern)
 UNRESOLVED = re.compile(r"평점|학점|성적|소득|연령|나이|만\s*\d+\s*세|우대|요건|거주|주민등록|소재|출신|국적")
 # 신청자·작품이 갖춰야 하거나 피해야 하는 조건 줄: 성적 기준, 채플 출석 통과, 초과학기, 표절·기존 발표·수상작 응모 불가.
@@ -204,6 +206,10 @@ STUDENT_OR_GRADUATE = re.compile(r"(?<![재휴대])학생\s*(?:또는|혹은|및
 # '졸업 예정자'는 재학생 중 일부라 프로필 재학 상태(재학·휴학·졸업)로 판정할 수 없다. '기졸업자 또는 졸업예정자'를
 # 졸업생만으로 읽으면 졸업 예정인 재학생이 미충족이 된다 (D-046). '재학생(졸업예정자 포함)'처럼 넓히는 말은 그대로 둔다
 OTHER_STATUS = re.compile(r"복학|입학\s*예정|편입|재입학|신입생|졸업\s*예정(?!자?\s*(?:도\s*)?포함)")
+OTHER_NOT_GRADUATING = re.compile(r"복학|입학\s*예정|편입|재입학|신입생")  # 졸업 예정은 같은 문구에 재학을 덮는 낱말이 있으면 값을 바꾸지 않는다 (D-057)
+# 학과·전공 낱말. 사전에 없는 학과 제한은 자동으로 비교하지 못하므로 직접 확인으로 남긴다 ('전 학과', '학과 무관'은 제외)
+DEPT_WORD = re.compile(r"학과|전공|학부")
+DEPT_OPEN = re.compile(r"(?:전|모든|각)\s*(?:학과|전공|학부)|(?:학과|전공|학부)\s*(?:불문|무관|제한\s*없)")
 # 고졸 이상 학력: 대학생은 재학·휴학·졸업 모두 갖춘다 ('고등학교 졸업예정자'만은 해당 없음) (D-023)
 HIGH_SCHOOL_OR_MORE = re.compile(r"고등학교\s*졸업(?:자|\s*이상|\s*학력)|고졸\s*(?:이상|자|학력)")
 # 제출 서류 목록(성적증명서 등)과 '성적에 관계없이'는 지원 조건이 아니다. 혜택·출결·성적 조회 안내도 (D-023)
@@ -221,7 +227,7 @@ FLAG_NOTES = (PREFERRED_NOTE, NO_LIMIT_NOTE)
 
 _ENUM = re.compile(r"^\s*(?:#{1,6}\s*|\(?\d{1,2}[.)]\s*|[①-⑳]\s*|[○●◦•ㆍᆞ·\-*※□■▶▷◎◆◇./]\s*|[가-하][.)]\s+)+")
 _LABEL = re.compile(r"^([^\d/:：]{1,12}?)\s*(?:\s/\s|[:：])\s*(.+)$")  # '항목 이름 / 값', '항목 이름: 값'
-_HEADING_WORD = re.compile(r"(?:지원|응시|참가|신청|자격|요건|조건|대상|우대|사항|필수|공통|분야별|직무별|기타)+")
+_HEADING_WORD = re.compile(r"(?:지원|응시|참가|신청|모집|응모|참여|자격|요건|조건|대상|우대|사항|필수|공통|분야별|직무별|기타)+")
 _REQ_WORD = re.compile(r"자격|요건|조건|대상|공통|필수")
 # 필수 조건을 말하는 줄. 우대 구역이 여기서 끝나고, 이 줄은 우대 사항이 아니다
 _REQUIRED = re.compile(r"필수|(?:지원|응시)\s*자격\s*[:：]|자격\s*요건\s*[:：]")
@@ -256,6 +262,12 @@ def _heading_kind(head: str) -> str:
     return "mixed" if pref and req else "preferred" if pref else "required" if req else "neutral"
 
 
+def _direct_only(value: str) -> bool:
+    """대상 낱말은 읽었지만 학적을 하나도 확인하지 못한 문구인가."""
+    tr = target.read(value, True)
+    return tr.found and not tr.conf and not tr.whole and not tr.qualified
+
+
 def condition_text(line: str) -> tuple[str | None, bool]:
     """(번호·기호·항목 이름을 뗀 조건 문구, 항목 이름이 '우대'였는지). 제목만 있는 줄이면 문구는 None.
 
@@ -265,7 +277,10 @@ def condition_text(line: str) -> tuple[str | None, bool]:
     preferred = False
     if (m := _LABEL.match(text)) and _is_heading(m[1]):
         preferred = "우대" in m[1]
-        text = _ENUM.sub("", m[2]).strip()
+        value = _ENUM.sub("", m[2]).strip()
+        if not preferred and target.TARGET_NAME.fullmatch(m[1].strip()) and _direct_only(value):
+            return text, False  # '응모대상: 일반인': 학적을 확인할 수 없는 대상 문구는 항목 이름까지 근거로 남긴다 (D-057 3.5)
+        text = value
     if not text or _is_heading(text) or re.match(r"없음\b", text):  # '우대사항: 없음'
         return None, preferred
     return text, preferred
@@ -433,6 +448,44 @@ def read_lines(lines: list[str]) -> list[_Info]:
             info.segs = [_Seg(role, line if role == "required" and not info.split else t) for role, t in segs]
         infos.append(info)
     return infos
+
+
+def status_condition(tr: target.Target, evidence: str) -> dict:
+    """읽은 대상 낱말로 enrollment_status 조건을 만든다. 확인되지 않은 값이 없고 옛 낱말만 썼으면 옛 모양(eq/in)이다."""
+    values = tr.values
+    cond = {"field": "enrollment_status", "operator": "in", "value": values}
+    if not tr.new and not tr.unconf and len(values) == 1:
+        cond = {"field": "enrollment_status", "operator": "eq", "value": values[0]}
+    if tr.unconf:
+        cond["unconfirmed_values"] = tr.unconfirmed
+    return {**cond, "evidence": evidence, "validation_status": "validated"}
+
+
+def llm_enrollment(evidence: str, lines: list[str]) -> target.Target | None:
+    """LLM이 낸 학적 조건의 근거를 본문 줄에서 다시 읽는다 (D-057 5). 대상 문맥(제목·프로그램 이름·안내 문장 제외)에서
+    학적이 하나라도 확인되는 필수 구절일 때만 읽은 결과를 돌려주고, 아니면 None. 값은 LLM이 아니라 이 읽기가 정한다."""
+    key = _compact(evidence)
+    for info in read_lines(clean_lines(lines)):
+        for seg in info.segs:
+            if seg.role != "required" or key not in _compact(_span(info, seg)):
+                continue
+            ctx = _target_ctx(info, seg.text)
+            tr = target.read(target.value_of(seg.text, lambda t: _ENUM.sub("", t)), ctx)
+            if STUDENT_OR_GRADUATE.search(seg.text):
+                tr.conf.add("enrolled")
+            blocked = OTHER_NOT_GRADUATING.search(seg.text) or (tr.graduating and "enrolled" not in tr.conf)
+            if ctx and tr.conf and not tr.whole and not blocked and not EXCLUDES.search(tr.masked):
+                return tr
+    return None
+
+
+def _target_ctx(info: _Info, text: str) -> bool:
+    """이 구절이 대상 문맥인가 (D-057 2): 대상 항목 이름이 붙은 줄, 필수 독립 제목이 연 구역 안의 줄(안내 줄 제외), 대상 표지가 붙은 구절."""
+    if info.label_ctx == "required" or target.TARGET_BARE.match(_ENUM.sub("", info.line).strip() + " "):
+        return True
+    if info.sect in ("required", "mixed") and not is_notice(text):
+        return True
+    return target.has_marker(text)
 
 
 def _span(info: _Info, seg: _Seg) -> str:
@@ -775,18 +828,37 @@ class RuleBasedAnalyzer:
                     add("grade", "eq", int(m[1]), line)
                     matched = True
 
-                statuses = [s for s, p in (("enrolled", r"재학생|재\s*[·ㆍ･,/]\s*휴학생"), ("on_leave", r"휴학생"), ("graduated", r"졸업생|졸업자")) if re.search(p, line)]
-                if "enrolled" not in statuses and STUDENT_OR_GRADUATE.search(line):
-                    statuses.insert(0, "enrolled")  # '학생 또는 졸업생'은 졸업생만이 아니다
+                ctx = _target_ctx(info, line)
+                tr = target.read(target.value_of(line, lambda t: _ENUM.sub("", t)), ctx)
+                if STUDENT_OR_GRADUATE.search(line) and "enrolled" not in tr.conf:
+                    tr.conf.add("enrolled")  # '학생 또는 졸업생'은 졸업생만이 아니다
+                status_added = False
                 if HIGH_SCHOOL_OR_MORE.search(line) and not NOT_CONDITION.search(line):
                     add("enrollment_status", "in", ["enrolled", "on_leave", "graduated"], line)
                     matched = True
-                elif statuses and OTHER_STATUS.search(line):
-                    unresolved.append((line, None))  # 복학생·입학예정자 등은 프로필 재학 상태로 판정할 수 없다
-                    matched = True
-                elif statuses:
-                    matched = True
-                    add("enrollment_status", "eq" if len(statuses) == 1 else "in", statuses[0] if len(statuses) == 1 else statuses, line)
+                else:
+                    if ctx:  # 졸업 예정은 같은 문구에 재학을 덮는 낱말(재학생·대학생)이 있으면 값을 바꾸지 않는다 (D-046, D-057)
+                        other = OTHER_NOT_GRADUATING.search(line) or (tr.graduating and "enrolled" not in tr.conf)
+                    else:
+                        other = OTHER_STATUS.search(line)
+                    if tr.conf and other:
+                        unresolved.append((line, None))  # 복학생·입학예정자·졸업예정자 등은 프로필 재학 상태로 판정할 수 없다
+                        matched = True
+                    elif tr.conf:
+                        matched = True
+                        if EXCLUDES.search(tr.masked):  # 누구를 빼는 줄은 자동 판정하지 않고 직접 확인으로 (D-023)
+                            unresolved.append((line, None))
+                        elif not any(c["field"] == "enrollment_status" for c in conditions):
+                            conditions.append(status_condition(tr, line))
+                            status_added = True
+                    elif ctx and tr.found:
+                        unresolved.append((line, None))  # 학적을 확인할 수 없는 대상 문구('일반인')도 근거를 단 직접 확인 항목으로 남긴다
+                        matched = True
+                    if ctx and tr.conf and tr.age:
+                        unresolved.append((line, None))  # 나이 낱말은 학적으로 판정하지 않고 직접 확인
+                    for clause in tr.qualified:
+                        unresolved.append((clause, None))
+                        matched = True
 
                 if source.university_id and (UNIVERSITY.search(line) or (school_status and school_status.search(line))):
                     add("university_id", "eq", source.university_id, line)
@@ -796,6 +868,8 @@ class RuleBasedAnalyzer:
                 if named:
                     add("major_id", "eq" if len(named) == 1 else "in", named[0] if len(named) == 1 else named, line)
                     matched = True
+                elif status_added and ctx and DEPT_WORD.search(DEPT_OPEN.sub(" ", line)):
+                    unresolved.append((line, None))  # 사전에 없는 학과 제한은 자동으로 비교하지 못한다
 
                 def required_unresolved(piece: str, broad: bool = True) -> bool:
                     # 제한 없음 문구가 있는 줄은 '무관' 등으로 면제하지 않는다 ('학년 무관, 소득분위 3분위 이하')
@@ -812,8 +886,9 @@ class RuleBasedAnalyzer:
                         return keep_item(piece, section_ok=True)
                     return info.listy and bool(QUALIFIER_END.search(piece)) and keep_item(piece)
 
-                item = None if UNRESTRICTED_ALL.search(line) else UNRESTRICTED_ITEM.search(line)
-                if UNRESTRICTED_ALL.search(line):
+                whole = tr.whole or bool(UNRESTRICTED_OTHER.search(line))  # 한정어가 붙은 '누구나'는 전체 제한 없음이 아니다 (D-057 3.4)
+                item = None if whole or UNRESTRICTED_ALL.search(line) else UNRESTRICTED_ITEM.search(line)
+                if whole:
                     if unrestricted_line is None:
                         unrestricted_line = line  # 전체 제한 없음만 명시적 제한 없음의 근거다
                     if required_unresolved(line, broad=False):  # '누구나 …' 줄 자체는 단서가 아니다

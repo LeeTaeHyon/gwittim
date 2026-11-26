@@ -25,8 +25,10 @@ from .rules import (
     OTHER_STATUS,
     RuleBasedAnalyzer,
     has_required_location,
+    llm_enrollment,
     is_activity_line,
     is_llm_condition,
+    status_condition,
     tidy_unresolved,
 )
 
@@ -207,9 +209,18 @@ class OllamaAnalyzer:
             if not self._valid_value(c["field"], c["operator"], c.get("value")):
                 self.rejected.append(f"값 검증 실패: {c['field']}={c.get('value')!r}")
                 continue
-            elig["conditions"].append(
-                {"field": c["field"], "operator": c["operator"], "value": c["value"], "evidence": c["evidence"], "validation_status": "validated"}
-            )
+            if c["field"] == "enrollment_status":
+                # 값은 LLM 답이 아니라 원문 대상 문맥을 규칙으로 다시 읽어 정한다: '대학생'의 휴학은 미확인, '일반인'만이면 버림 (D-057)
+                tr = llm_enrollment(c["evidence"], raw["body_text"].splitlines())
+                claimed = set(c["value"] if c["operator"] == "in" else [c["value"]])
+                if tr is None or not claimed & (tr.conf | tr.unconf):
+                    self.rejected.append(f"대상 문맥에서 확인되지 않는 학적: {c['evidence'][:40]}")
+                    continue
+                elig["conditions"].append(status_condition(tr, c["evidence"]))
+            else:
+                elig["conditions"].append(
+                    {"field": c["field"], "operator": c["operator"], "value": c["value"], "evidence": c["evidence"], "validation_status": "validated"}
+                )
             have.add(c["field"])
         if elig["conditions"]:
             elig["explicitly_unrestricted"], elig["unrestricted_evidence"] = False, None
