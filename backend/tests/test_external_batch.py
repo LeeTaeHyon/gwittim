@@ -141,3 +141,25 @@ def test_batch_skips_and_unpublishes_duplicate_from_later_source():
     report = run_external([], source_id=contestkorea.SOURCE_ID, store=store, sink=sink, notices=notices, today=TODAY)
     assert report.duplicates == 1
     assert [n["source_id"] for n in sink.public.values()] == ["wevity_contest"]
+
+
+def test_same_notice_across_menus_and_sources_keeps_higher_priority():
+    """D-059: 위비티 > 콘테스트코리아 > 링커리어, 같은 출처는 공모전 메뉴가 대외활동 메뉴보다 앞."""
+    from backend.analysis.external_match import find_preferred_same
+
+    def n(source, title="[합성 샘플] 전국 대학생 영상 공모전", status="active"):
+        return {"source_id": source, "title": title, "application_deadline": {"date": "2026-12-31"}, "lifecycle_status": status}
+
+    ids = ("wevity_contest", "wevity_activity", "contestkorea_contest", "linkareer_contest", "linkareer_activity")
+    notices = {k: n(k) for k in ids}
+    assert find_preferred_same(notices["wevity_contest"], notices) is None
+    assert find_preferred_same(notices["wevity_activity"], notices) == "wevity_contest"
+    assert find_preferred_same(notices["contestkorea_contest"], notices) == "wevity_contest"
+    assert find_preferred_same(notices["linkareer_contest"], notices) is not None
+    lk = {k: v for k, v in notices.items() if k.startswith("linkareer")}
+    assert find_preferred_same(lk["linkareer_activity"], lk) == "linkareer_contest"
+    assert find_preferred_same(lk["linkareer_contest"], lk) is None
+    closed = {"wevity_contest": n("wevity_contest", status="closed"), "linkareer_contest": n("linkareer_contest")}
+    assert find_preferred_same(closed["linkareer_contest"], closed) is None  # 끝난 공고와는 짝짓지 않음
+    other = {"wevity_contest": n("wevity_contest", title="전혀 다른 제목의 공고입니다 안내"), "x": n("linkareer_contest")}
+    assert find_preferred_same(other["x"], other) is None

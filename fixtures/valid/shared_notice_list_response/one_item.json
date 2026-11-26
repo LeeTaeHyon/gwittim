@@ -1,0 +1,84 @@
+{
+  "items": [
+    {
+      "id": "synthetic-share-0001",
+      "created_at": "2026-11-26T03:05:00Z",
+      "input": "paste",
+      "notice": {
+        "schema_version": "1.0",
+        "notice_id": "n_synthetic_share_0001",
+        "source_id": "user_share",
+        "source_url": null,
+        "title": "[합성 샘플] 취업 역량 강화 특강 안내",
+        "summary": null,
+        "category": "education_program",
+        "interest_tags": [],
+        "related_majors": [],
+        "related_roles": [],
+        "published": {
+          "date": "2026-11-26",
+          "time": null,
+          "timezone": null,
+          "precision": "date",
+          "evidence": "카카오톡에서 넘긴 날 2026-11-26"
+        },
+        "application_start": null,
+        "application_deadline": {
+          "date": "2026-12-03",
+          "time": null,
+          "timezone": null,
+          "precision": "date",
+          "evidence": "- 신청 기간: 12월 3일(목)까지"
+        },
+        "deadline_note": null,
+        "activity_period": {
+          "start": {
+            "date": "2026-12-10",
+            "time": "14:00",
+            "timezone": null,
+            "precision": "minute",
+            "evidence": "- 특강 일시: 12월 10일(목) 14시"
+          },
+          "end": null,
+          "evidence": "- 특강 일시: 12월 10일(목) 14시"
+        },
+        "eligibility": {
+          "conditions": [
+            {
+              "field": "enrollment_status",
+              "operator": "eq",
+              "value": "enrolled",
+              "evidence": "- 대상: 재학생 누구나",
+              "validation_status": "validated"
+            }
+          ],
+          "unresolved_conditions": [],
+          "extraction_complete": true,
+          "explicitly_unrestricted": false,
+          "unrestricted_evidence": null
+        },
+        "lifecycle_status": "open",
+        "publication_status": "published",
+        "notice_version": 1,
+        "analysis_version": "rule-0.12+kakao-0.3+kdate-0.1+kmatch-0.1",
+        "last_collected_at": "2026-11-26T03:05:00Z",
+        "last_verified_at": "2026-11-26T03:05:00Z",
+        "changed_fields": [],
+        "apply_url": null
+      },
+      "eligibility": {
+        "eligibility_status": "needs_check",
+        "condition_results": [
+          {
+            "field": "enrollment_status",
+            "status": "unknown",
+            "evidence": "- 대상: 재학생 누구나",
+            "unknown_reason": "profile_missing"
+          }
+        ]
+      }
+    }
+  ],
+  "next_cursor": null,
+  "generated_at": "2026-11-26T03:06:00Z"
+}

@@ -1,0 +1,11 @@
+{
+  "_expect": {
+    "keyword": "minLength",
+    "path": "text"
+  },
+  "data": {
+    "text": "합성 짧은 글",
+    "input": "paste",
+    "consent_version": "2026-11-26"
+  }
+}

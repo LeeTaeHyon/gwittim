@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gwittim.invalid/contracts/api_error.schema.json",
   "title": "API 오류 응답",
-  "description": "message는 사용자 표시용. 스택 추적·내부 정보·비밀값을 넣지 않음. insufficient_credits(크레딧 부족), request_in_progress(같은 요청 id 진행 중), consent_required(AI 전송 동의 없음)는 상세 분석 경로에서 씀(docs/agent-privacy-spec.md §5·§10.3). SPEC §7, D-005 #10.",
+  "description": "message는 사용자 표시용. 스택 추적·내부 정보·비밀값을 넣지 않음. insufficient_credits(크레딧 부족), request_in_progress(같은 요청 id 진행 중), consent_required(AI 전송 동의 없음)는 상세 분석 경로에서 씀(docs/agent-privacy-spec.md §5·§10.3). consent_required는 카카오톡 공고 넘기기(동의 문구 버전 불일치)에서도 쓰고, rate_limited(하루 30건 초과)는 넘기기 경로에서만 씀(D-058). SPEC §7, D-005 #10.",
   "type": "object",
   "additionalProperties": false,
   "required": ["error"],
@@ -13,7 +13,7 @@
       "required": ["code", "message"],
       "properties": {
         "code": {
-          "enum": ["unauthenticated", "permission_denied", "invalid_argument", "not_found", "unavailable", "insufficient_credits", "request_in_progress", "consent_required"]
+          "enum": ["unauthenticated", "permission_denied", "invalid_argument", "not_found", "unavailable", "insufficient_credits", "request_in_progress", "consent_required", "rate_limited"]
         },
         "message": { "type": "string", "minLength": 1, "maxLength": 200 }
       }

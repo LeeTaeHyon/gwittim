@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gwittim.invalid/contracts/shared_notice_request.schema.json",
+  "title": "submit_shared_notice 요청 — 카카오톡에서 넘긴 공고",
+  "description": "앱이 기기에서 먼저 개인정보를 가린 글만 보냄(서버도 한 번 더 가림). 원문 이미지는 보내지 않음. ocr_edited는 input이 share_image_ocr일 때만 있고 필수(OCR 글자를 사용자가 고쳤는지). consent_version은 카카오톡 공고 넘기기 동의 문구 버전이며 서버의 현재 버전과 다르면 consent_required. 사용자 ID는 인증 정보에서 얻음. docs/kakao-manual-share-spec.md §3·§5.1, D-058.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["text", "input", "consent_version"],
+  "properties": {
+    "text": { "type": "string", "minLength": 20, "maxLength": 5000 },
+    "input": {
+      "description": "넘긴 방법: 공유 텍스트 / 캡처 공유(기기 안 OCR 뒤 사용자 확인) / 붙여넣기",
+      "enum": ["share_text", "share_image_ocr", "paste"]
+    },
+    "ocr_edited": { "type": "boolean" },
+    "consent_version": { "type": "string", "minLength": 1 }
+  },
+  "if": { "properties": { "input": { "const": "share_image_ocr" } } },
+  "then": { "required": ["ocr_edited"] },
+  "else": { "properties": { "ocr_edited": false } }
+}

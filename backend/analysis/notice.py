@@ -42,7 +42,7 @@ CLOSED_TITLE = re.compile(r"[\[(]\s*(?:모집\s*)?(?:마감|완료)\s*[\])]|모�
 
 # 알림톡은 신청 마감 없이 특강·검사 날짜만 알리는 안내가 많다. 마감일이 없으면 활동 기간(본문의 마지막 날짜)이
 # 지났을 때 끝난 공고로 본다 (D-019). 게시판 공고에는 쓰지 않는다: 활동 기간이 길고 활동 중에도 안내가 유효한 경우가 많다.
-ACTIVITY_CLOSES = {"mjc_kakao"}
+ACTIVITY_CLOSES = {"mjc_kakao", "user_share"}  # user_share: 사용자가 넘긴 알림톡 글 (D-058)
 
 
 def lifecycle(deadline: dict | None, today: date, title: str = "", activity: dict | None = None) -> str:
@@ -113,6 +113,15 @@ def validate(notice: dict, raw: dict) -> list[str]:
     return issues
 
 
+def _apply_category_hint(fields: dict, source_fields: dict) -> None:
+    """교외 출처의 메뉴별 기본 분류 (D-059). 어댑터가 source_fields에 category_hint(카테고리 사전의 기존 코드)와
+    category_hint_replaces(분석이 이 코드로 정했을 때만 바꿈)를 넘긴다. 예: 대외활동 메뉴의 서포터즈 공고가 본문 속 '대회'
+    같은 낱말 때문에 공모전으로 분류되는 것을 막는다. 규칙·LLM 분석 자체는 건드리지 않는다."""
+    hint = source_fields.get("category_hint")
+    if hint and fields.get("category") in (source_fields.get("category_hint_replaces") or []):
+        fields["category"] = hint
+
+
 def build_notice(
     record: RawRecord,
     *,
@@ -141,6 +150,7 @@ def build_notice(
         return reused, []
 
     fields = analyzer.analyze(raw, source_config(raw["source_id"]))
+    _apply_category_hint(fields, raw["source_fields"])
     # LLM 실패 시 분석기는 규칙 분석 결과와 그 버전을 돌려준다 (예전·다른 분석을 LLM 결과처럼 표시하지 않음)
     version = fields.pop("_analysis_version", analyzer.version)
     notice = {

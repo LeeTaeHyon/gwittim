@@ -2,7 +2,14 @@
 from datetime import datetime, timedelta, timezone
 
 from backend.agent.credits import signup
-from backend.api.deps import InMemoryCredits, InMemoryProfiles, InMemoryReports, InMemorySaved, delete_user_data
+from backend.api.deps import (
+    InMemoryCredits,
+    InMemoryProfiles,
+    InMemoryReports,
+    InMemorySaved,
+    InMemorySharedNotices,
+    delete_user_data,
+)
 from tools.cleanup_guests import Account, cleanup, select_targets
 
 NOW = datetime(2026, 12, 31, 12, 0, tzinfo=timezone.utc)
@@ -32,10 +39,12 @@ def test_apply_deletes_data_then_account_with_same_scope_as_profile_delete():
         "reports": InMemoryReports(),
         "credits": InMemoryCredits(),
         "profiles": InMemoryProfiles(),
+        "shared": InMemorySharedNotices(),
     }
     for uid in ("g1", "keep"):
         stores["profiles"].put(uid, {"major_id": None})
         stores["saved"].put(uid, {"notice_id": "n1"})
+        stores["shared"].put(uid, {"id": "s1", "created_at": "2026-12-01T00:00:00Z"})
         stores["credits"].update(uid, lambda s: (signup(NOW, guest=True), None))
         stores["reports"].put(uid, {"key": "k", "notice_id": "n1", "expires_at": NOW, "created_at": NOW})
     order = []
@@ -51,6 +60,7 @@ def test_apply_deletes_data_then_account_with_same_scope_as_profile_delete():
     assert stores["saved"].list("g1") == []
     assert "g1" not in stores["credits"].states
     assert "g1" not in stores["reports"].docs
+    assert "g1" not in stores["shared"].docs and "keep" in stores["shared"].docs
     assert stores["profiles"].get("keep") is not None  # 다른 사람은 그대로
 
 

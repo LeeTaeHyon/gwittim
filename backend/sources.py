@@ -24,9 +24,12 @@ _SEWU_TIMEZONE_BASIS = "서울 소재 학교 게시판이며 본문 시각을 �
 # D-019: 팀장 PC(한국 시각)의 카톡에서 내보낸 대화. 메시지 시각과 본문 속 날짜를 국내 시각으로 본다
 _KAKAO_TIMEZONE_BASIS = "PC 카톡 대화 내보내기의 메시지 시각은 내보낸 PC(한국 시각) 기준이고, 학교 채널 본문 시각도 국내 시각으로 표기"
 
-# D-038 교외 공모전 출처. 접수 기간은 날짜만 표기하고 본문 시각은 주최 측이 쓴 것이라(해외 주최 가능) 시간대를 확인할 수 없다.
+# D-038 교외 공모전·대외활동 출처 (D-059에서 링커리어·씽굿·위비티 대외활동 추가). 접수 기간은 날짜만 표기하고 본문 시각은 주최 측이 쓴 것이라(해외 주최 가능) 시간대를 확인할 수 없다.
 # 그래서 시간대를 정하지 않는다(null). 시각이 있는 날짜는 시각만 남고 시간대는 미상으로 보존된다 (SPEC §5)
 _EXTERNAL_TIMEZONE_BASIS = None
+
+# D-058 사용자가 카카오톡에서 직접 넘긴 공고. 어느 학교·시간대인지 확인할 수 없어 둘 다 정하지 않는다(null)
+_USER_SHARE_TIMEZONE_BASIS = None
 
 SOURCES: dict[str, SourceConfig] = {
     s.source_id: s
@@ -39,6 +42,12 @@ SOURCES: dict[str, SourceConfig] = {
         SourceConfig("sewu_www_notice", "숭의여대 공지", "sewu", "Asia/Seoul", _SEWU_TIMEZONE_BASIS),
         SourceConfig("wevity_contest", "위비티", None, None, _EXTERNAL_TIMEZONE_BASIS),
         SourceConfig("contestkorea_contest", "콘테스트코리아", None, None, _EXTERNAL_TIMEZONE_BASIS),
+        SourceConfig("wevity_activity", "위비티", None, None, _EXTERNAL_TIMEZONE_BASIS),
+        SourceConfig("allcon_contest", "올콘", None, None, _EXTERNAL_TIMEZONE_BASIS),
+        SourceConfig("thinkgood_contest", "씽굿", None, None, _EXTERNAL_TIMEZONE_BASIS),
+        SourceConfig("linkareer_contest", "링커리어", None, None, _EXTERNAL_TIMEZONE_BASIS),
+        SourceConfig("linkareer_activity", "링커리어", None, None, _EXTERNAL_TIMEZONE_BASIS),
+        SourceConfig("user_share", "카카오톡에서 넘긴 공고", None, None, _USER_SHARE_TIMEZONE_BASIS),
     ]
 }
 

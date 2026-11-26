@@ -15,8 +15,9 @@ SPEC §5·§7의 필드 의미를 JSON Schema(Draft 2020-12)로 고정합니다.
 | `analysis_response.schema.json` | 상세 분석 응답 (리포트 4칸) |
 | `external_search_request.schema.json` | 외부 공고 찾기 요청 (버튼 값 + 선택 한 줄 50자, D-047) |
 | `external_search_response.schema.json` | 외부 공고 찾기 응답 (검색 출처로 확인된 결과 최대 5개) |
+| `shared_notice_request.schema.json`, `shared_notice_response.schema.json`, `shared_notice_list_response.schema.json` | 카카오톡에서 넘긴 공고: 요청(가린 글·입력 방법·OCR 수정 여부·동의 버전), 항목 또는 저장하지 않음 응답, 목록 응답 (D-058) |
 | `credits.schema.json` | 크레딧 잔액·사용 내역 |
-| `api_error.schema.json` | API 오류 응답 |
+| `api_error.schema.json` | API 오류 응답 (`rate_limited` 추가, D-058) |
 | `dictionary.schema.json`, `dictionaries/*.json` | 공통 사전 (모두 `draft`). 칩 사전 `experience_chips`·`period_chips`·`region_chips` 포함 |
 
 ## 검증

@@ -233,3 +233,40 @@ def test_decode_body_uses_header_then_meta_charset():
     assert decode_body(text.encode("euc-kr"), "text/html; charset=EUC-KR") == text
     assert decode_body(b'<meta charset="euc-kr">' + text.encode("euc-kr"), "text/html").endswith(text)
     assert decode_body(text.encode("utf-8"), None) == text
+
+
+def test_json_post_goes_through_robots_interval_and_limits():
+    """D-059: 목록이 JSON POST인 사이트용. 본문은 JSON, 같은 robots·간격·멈춤 규칙."""
+    robots = "User-agent: *\nDisallow: /private/\n"
+    seen = {}
+
+    def net(request, timeout=None):
+        seen.setdefault("calls", []).append((request.get_method(), request.full_url, request.data, request.get_header("Content-type")))
+        if request.full_url.endswith("robots.txt"):
+            return FakeResponse(robots.encode())
+        return FakeResponse(b'{"status": 1}', "application/json; charset=UTF-8")
+
+    clock = Clock()
+    client = PoliteClient(opener=net, sleep=clock.sleep, clock=clock.now)
+    assert client.fetch(f"{SITE}/list.do", "list", json_body={"currentPageNo": 1, "k": "한글"}) == '{"status": 1}'
+    method, url, data, ctype = seen["calls"][1]
+    assert method == "POST" and ctype.startswith("application/json") and "한글".encode() in data
+    with pytest.raises(RobotsBlocked):
+        client.fetch(f"{SITE}/private/list.do", "list", json_body={})
+    assert [c[0] for c in seen["calls"]] == ["GET", "POST"]  # robots 읽기는 GET, 막힌 경로는 요청 안 함
+    assert min(clock.sleeps) >= 3.0
+
+
+def test_form_post_is_urlencoded():
+    seen = {}
+
+    def net(request, timeout=None):
+        seen["req"] = request
+        return FakeResponse(b"{}") if not request.full_url.endswith("robots.txt") else FakeResponse(b"")
+
+    clock = Clock()
+    client = PoliteClient(opener=net, sleep=clock.sleep, clock=clock.now)
+    client.fetch(f"{SITE}/list", "list", form_body={"page": "2", "t": "1"})
+    req = seen["req"]
+    assert req.get_method() == "POST" and req.data == b"page=2&t=1"
+    assert req.get_header("Content-type").startswith("application/x-www-form-urlencoded")
