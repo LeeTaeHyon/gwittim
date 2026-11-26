@@ -1,6 +1,13 @@
 # 인수인계 (handoff)
 
-마지막 갱신: 2026-11-25 (홈 마감 카드 펼치기·리포트 결론 카드)
+마지막 갱신: 2026-11-26 (교외 출처 확대 구현, 미병합)
+
+## 교외 출처 확대 (2026-11-26, feat/external-expand, D-059)
+
+- 링커리어 공모전·대외활동, 위비티 대외활동 어댑터 추가(`backend/collectors/linkareer`·`linkareer_contest`·`linkareer_activity`·`wevity_activity`), 중복 우선순위 확장, `scripts/run_batch.ps1` 교외 목록에 추가, 앱 출처 이름 3개 추가, SPEC 0.24. 명세 [external-source-expansion-spec.md](external-source-expansion-spec.md)
+- 씽굿(목록 JSON POST)·올콘(목록 폼 POST) 추가, 요청기에 POST 지원. 정기 배치 상한을 메뉴별 목록 5페이지·상세 50건으로 올리고(사이트 합 30건 상한 폐지), 수동 백필 `--backfill` 추가(로컬 사본만). 씽유는 약관 재확인 못 해 미구현(D-059)
+- 남은 일: 병합 뒤 `Gwittim-batch` 갱신, 첫 운영 배치 확인, 앱 APK 재빌드(출처 이름), 백필 실행 시점 결정(링커리어 대외활동은 약 55분), 씽유 약관 확인
+- 커밋·PR 안 함(작업 폴더 `.claude/worktrees/external-expand`)
 
 ## 홈 마감 목록·공고 리포트 알아보기 쉽게 (2026-11-25, feat/home-report-clarity, D-055)
 

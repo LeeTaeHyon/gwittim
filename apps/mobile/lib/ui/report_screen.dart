@@ -27,6 +27,11 @@ const _sourceNames = {
   'sewu_www_notice': '숭의여대 공지사항',
   'wevity_contest': '위비티', // D-038 교외 공모전
   'contestkorea_contest': '콘테스트코리아',
+  'wevity_activity': '위비티', // D-059 교외 대외활동
+  'linkareer_contest': '링커리어',
+  'linkareer_activity': '링커리어',
+  'thinkgood_contest': '씽굿',
+  'allcon_contest': '올콘',
 };
 
 /// 학교 게시판·알림톡에서 온 공고인가. 교외 공모전(위비티 등)이나 모르는 출처면 false.
