@@ -179,3 +179,39 @@ def test_or_age_alternative_is_evaluated_separately():
     assert enrollment(elig) == ([E], [L, G])
     assert checks(elig) == []
     assert verdicts(elig) == (MET, CHECK, CHECK)
+
+
+# 앱 위젯 테스트용 결과 파일: 실제 공고 문장(개인정보 없음) → 규칙 추출 → 판정기 (D-057 앱 안내)
+# 갱신: UPDATE_GOLDEN=1 uv run pytest backend/analysis/tests/test_student_target.py
+import json  # noqa: E402
+import os  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+APP_GOLDEN = Path(__file__).resolve().parents[3] / "apps/mobile/test/data/student_target_cases.json"
+APP_CASES = [
+    # 위비티 공모전 사이트 대상 칸 그대로: 휴학생 포함 여부를 말하지 않음
+    ("univ_only", "응모대상: 대학생"),
+    # 명지전문대 '2026학년도 교원 및 학생창업 신청 안내'의 신청자격: 학생이 아닌 대상(전임교원)이 함께 나열됨
+    ("staff_and_students", "신청자격\n우리대학에 재직하고 있는 전임교원 및 재학 또는 휴학 중에 있는 학생"),
+    # 위비티 공모전 사이트 대상 칸 그대로: 일반인이 함께 나열됨
+    ("general_univ", "응모대상: 일반인, 대학생"),
+]
+
+
+def app_golden_entries():
+    out = []
+    for case_id, body in APP_CASES:
+        for status_name, profile in PROFILES.items():
+            elig, *_ = run(body)
+            status, results = evaluate(elig, profile)
+            out.append({"id": case_id, "enrollment_status": status_name, "body": body,
+                        "eligibility": elig, "status": status, "results": results})
+    return out
+
+
+def test_app_golden_matches_backend():
+    entries = app_golden_entries()
+    if os.environ.get("UPDATE_GOLDEN"):
+        APP_GOLDEN.parent.mkdir(parents=True, exist_ok=True)
+        APP_GOLDEN.write_text(json.dumps(entries, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    assert json.loads(APP_GOLDEN.read_text(encoding="utf-8")) == entries
