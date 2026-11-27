@@ -686,6 +686,7 @@ class _DayRow extends StatelessWidget {
     final urgent = !item.dim && !item.start && (daysLeft(n, today) ?? 99) <= urgentDays;
     final status = item.view == null ? item.recommendation?.eligibilityStatus : null;
     final stateLabel = item.start ? '신청 시작' : item.view?.stateLabel;
+    final todoLeft = item.start ? null : todoLeftText(ApplicationCaseScope.maybeOf(context), n.noticeId, item.view);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -724,6 +725,8 @@ class _DayRow extends StatelessWidget {
                     ),
                     style: TextStyle(fontSize: 13, color: c.muted),
                   ),
+                  if (todoLeft != null)
+                    Text(todoLeft, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.accent)),
                 ],
               ),
             ),

@@ -190,14 +190,65 @@ String deadlineKey(DateInfo? d) => d == null ? '' : (d.hasTime ? '${d.date} ${d.
 String _dayKey(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+/// 상세 분석 '지원 전 할 일' 한 공고의 줄과 체크 (report-reminder-spec §5.1).
+/// 줄은 공백을 정리한 문장이고, 체크는 같은 문장에만 이어진다.
+class TodoState {
+  const TodoState({this.lines = const [], this.checked = const {}});
+
+  /// 리포트에서 받은 할 일 줄(고정 문장 제외). 비어 있으면 할 일이 없는 공고
+  final List<String> lines;
+
+  /// 체크한 줄(항상 [lines]의 부분 집합)
+  final Set<String> checked;
+
+  int get remaining => lines.where((l) => !checked.contains(l)).length;
+
+  Map<String, dynamic> toJson() => {'lines': lines, 'checked': checked.toList()};
+
+  static TodoState? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final lines = [for (final l in (json['lines'] as List?) ?? const []) if (l is String) l];
+    final checked = {for (final l in (json['checked'] as List?) ?? const []) if (l is String && lines.contains(l)) l};
+    return TodoState(lines: lines, checked: checked);
+  }
+}
+
+/// 상세 분석이 할 일이 없을 때 쓰는 고정 문장(backend/agent/prompt.py TODO_NONE). 체크 칸이 없다.
+const todoNone = '이번 모집은 지원 전에 할 일이 없습니다.';
+
+/// 할 일 줄의 열쇠: 공백을 하나로 정리한 문장.
+String todoKey(String line) => line.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+/// 할 일 체크를 기기에 읽고 쓰는 곳.
+abstract class TodoStorage {
+  Future<Map<String, TodoState>> loadTodos();
+  Future<void> saveTodos(Map<String, TodoState> todos);
+}
+
 /// 지원 건 기록을 기기에 읽고 쓰는 곳.
 abstract class CaseStorage {
   Future<Map<String, ApplicationCase>> load();
   Future<void> save(Map<String, ApplicationCase> cases);
 }
 
-class PrefsCaseStorage implements CaseStorage {
+class PrefsCaseStorage implements CaseStorage, TodoStorage {
   static const key = 'application_cases';
+  static const todoKeyName = 'todo_checks';
+
+  @override
+  Future<Map<String, TodoState>> loadTodos() async {
+    final raw = (await SharedPreferences.getInstance()).getString(todoKeyName);
+    if (raw == null) return {};
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return {};
+    return {
+      for (final e in decoded.entries) '${e.key}': ?TodoState.fromJson(e.value),
+    };
+  }
+
+  @override
+  Future<void> saveTodos(Map<String, TodoState> todos) async =>
+      (await SharedPreferences.getInstance()).setString(todoKeyName, jsonEncode({for (final e in todos.entries) e.key: e.value.toJson()}));
 
   @override
   Future<Map<String, ApplicationCase>> load() async {
@@ -220,11 +271,21 @@ class PrefsCaseStorage implements CaseStorage {
   );
 }
 
-class MemoryCaseStorage implements CaseStorage {
-  MemoryCaseStorage([Map<String, ApplicationCase>? initial]) : _cases = {...?initial};
+class MemoryCaseStorage implements CaseStorage, TodoStorage {
+  MemoryCaseStorage([Map<String, ApplicationCase>? initial, Map<String, TodoState>? todos])
+    : _cases = {...?initial},
+      _todos = {...?todos};
 
   Map<String, ApplicationCase> _cases;
+  Map<String, TodoState> _todos;
   Map<String, ApplicationCase> get saved => Map.unmodifiable(_cases);
+  Map<String, TodoState> get savedTodos => Map.unmodifiable(_todos);
+
+  @override
+  Future<Map<String, TodoState>> loadTodos() async => {..._todos};
+
+  @override
+  Future<void> saveTodos(Map<String, TodoState> todos) async => _todos = {...todos};
 
   @override
   Future<Map<String, ApplicationCase>> load() async => {..._cases};
@@ -238,11 +299,14 @@ class MemoryCaseStorage implements CaseStorage {
 /// 읽기·쓰기 실패는 앱을 멈추지 않는다: 읽기가 실패하면 빈 상태로 시작하고, 쓰기가 실패하면
 /// 이번 실행 동안만 기억한다(`major_picks`와 같은 방식).
 class ApplicationCaseStore extends ChangeNotifier {
-  ApplicationCaseStore({CaseStorage? storage, DateTime Function()? now})
+  ApplicationCaseStore({CaseStorage? storage, TodoStorage? todoStorage, DateTime Function()? now})
     : _storage = storage ?? PrefsCaseStorage(),
+      _todoStorage = todoStorage ?? (storage == null ? PrefsCaseStorage() : (storage is TodoStorage ? storage as TodoStorage : MemoryCaseStorage())),
       _now = now ?? DateTime.now;
 
   final CaseStorage _storage;
+  final TodoStorage _todoStorage;
+  Map<String, TodoState> _todos = {};
   final DateTime Function() _now;
   Map<String, ApplicationCase> _cases = {};
   Future<void>? _loading;
@@ -263,6 +327,15 @@ class ApplicationCaseStore extends ChangeNotifier {
       _cases = merged;
     } catch (_) {
       // 기기 저장소를 못 읽으면 빈 상태로 시작한다
+    }
+    try {
+      final loaded = await _todoStorage.loadTodos();
+      final merged = _clearedThisRun ? <String, TodoState>{} : {...loaded};
+      merged.addAll(_todos); // 이번 실행에서 바꾼 체크는 지금 값
+      merged.removeWhere((id, _) => _forgottenThisRun.contains(id) || !_cases.containsKey(id));
+      _todos = merged;
+    } catch (_) {
+      // 체크를 못 읽으면 빈 상태로 시작한다
     }
     if (!_disposed) notifyListeners();
   }
@@ -287,13 +360,17 @@ class ApplicationCaseStore extends ChangeNotifier {
 
   Future<void> _put(Map<String, ApplicationCase> next) async {
     _cases = next;
+    _todos = {
+      for (final e in _todos.entries)
+        if (next.containsKey(e.key)) e.key: e.value, // 지원 건이 사라지면 할 일 체크도 지운다
+    };
     if (!_disposed) notifyListeners();
     _write(next);
   }
 
   /// 기기 기록을 다 읽은 뒤, 그때의 최신 상태(읽은 기록과 합친 것)를 쓴다. 읽기 전에 쓰면 기기에 있던 기록을 덮는다.
   void _write(Map<String, ApplicationCase> _) {
-    _writes = _writes.then((_) => load()).then((_) => _storage.save({..._cases})).then<void>(
+    _writes = _writes.then((_) => load()).then((_) => _storage.save({..._cases})).then((_) => _todoStorage.saveTodos({..._todos})).then<void>(
       (_) {},
       onError: (Object _) {
         // 쓰기 실패: 이번 실행 동안만 기억한다
@@ -358,6 +435,55 @@ class ApplicationCaseStore extends ChangeNotifier {
     _touchedThisRun.add(noticeId);
     await _put({..._cases, noticeId: c.copyWith(state: to, previous: c.state, changedAt: _now())});
     return true;
+  }
+
+  // ───────── 할 일 체크 (report-reminder-spec §5.1) ─────────
+
+  /// 남은 할 일 수. 상세 분석을 받지 않았거나 할 일이 없으면 null(표시하지 않는다).
+  int? todoRemaining(String noticeId) {
+    final t = _todos[noticeId];
+    if (t == null || t.lines.isEmpty) return null;
+    return t.remaining;
+  }
+
+  bool isTodoChecked(String noticeId, String line) => _todos[noticeId]?.checked.contains(todoKey(line)) ?? false;
+
+  /// 이 공고의 할 일 줄을 기록한다. 지원 건이 아니면 하지 않는다. 줄이 바뀌면(재분석) 같은 문장의 체크만 이어진다.
+  Future<void> recordTodoLines(String noticeId, Iterable<String> lines) async {
+    if (!_cases.containsKey(noticeId)) return;
+    final keys = <String>[
+      for (final l in lines)
+        if (todoKey(l).isNotEmpty && todoKey(l) != todoNone) todoKey(l),
+    ];
+    final unique = [...{...keys}];
+    final old = _todos[noticeId];
+    if (old != null && _sameList(old.lines, unique)) return;
+    final checked = {...?old?.checked}..removeWhere((l) => !unique.contains(l));
+    _todos = {..._todos, noticeId: TodoState(lines: unique, checked: checked)};
+    if (!_disposed) notifyListeners();
+    _write(_cases);
+  }
+
+  static bool _sameList(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  /// 체크·해제를 바꾼다. 기록된 줄이 아니면 아무것도 안 함. 바뀐 뒤의 체크 여부를 돌려준다.
+  Future<bool> toggleTodo(String noticeId, String line) async {
+    final key = todoKey(line);
+    final t = _todos[noticeId];
+    if (t == null || !t.lines.contains(key)) return false;
+    final checked = {...t.checked};
+    final now = checked.add(key);
+    if (!now) checked.remove(key);
+    _todos = {..._todos, noticeId: TodoState(lines: t.lines, checked: checked)};
+    if (!_disposed) notifyListeners();
+    _write(_cases);
+    return now;
   }
 
   /// 리포트를 연 때의 마감을 기록한다(마감 변경 표시를 한 번만 보이기).
@@ -484,10 +610,14 @@ class ApplicationCaseStore extends ChangeNotifier {
 /// 화면은 이 저장소를 쓰기만 하면 되고, 지원 건 기록을 따로 고치지 않는다.
 /// - 저장할 때의 판정: 그 공고가 마지막으로 받은 추천 목록에 있으면 그 판정, 없으면 null
 class CaseTrackingRepository implements NoticeRepository, WrappingRepository {
-  CaseTrackingRepository(this._inner, this.cases);
+  CaseTrackingRepository(this._inner, this.cases, {this.onSavedList, this.afterSave});
 
   final NoticeRepository _inner;
   final ApplicationCaseStore cases;
+
+  /// 저장 목록을 받을 때·공고를 저장한 직후 부른다(기기 마감 알림 다시 맞추기, report-reminder-spec §5.2).
+  final void Function(List<SavedEntry> saved)? onSavedList;
+  final void Function()? afterSave;
   final _lastStatus = <String, String>{};
 
   @override
@@ -548,6 +678,7 @@ class CaseTrackingRepository implements NoticeRepository, WrappingRepository {
     await cases.pruneTo(ids);
     await cases.adopt(ids, statusOf: (id) => _lastStatus[id]);
     _refreshDetails(saved.map((s) => s.notice));
+    onSavedList?.call(saved);
     return saved;
   }
 
@@ -555,6 +686,7 @@ class CaseTrackingRepository implements NoticeRepository, WrappingRepository {
   Future<void> saveNotice(String noticeId) async {
     await _inner.saveNotice(noticeId);
     await cases.recordSaved(noticeId, eligibilityStatus: _lastStatus[noticeId]);
+    afterSave?.call(); // 처음 저장이면 알림 권한을 묻고 예약을 맞춘다
     fetchDetail(noticeId); // 저장 직후 뒤에서 상세를 받아 신청 시작·신청 사이트를 복사한다
   }
 

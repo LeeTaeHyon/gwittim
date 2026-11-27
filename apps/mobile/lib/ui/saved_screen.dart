@@ -351,6 +351,11 @@ class SavedScreenState extends State<SavedScreen> {
                           entry: e,
                           group: group,
                           view: caseView(e.notice, store == null ? null : cases[e.notice.noticeId], now: _today),
+                          todoLeft: todoLeftText(
+                            store,
+                            e.notice.noticeId,
+                            caseView(e.notice, store == null ? null : cases[e.notice.noticeId], now: _today),
+                          ),
                           changeSeen: changeSeen(e, cases[e.notice.noticeId]),
                           category: _categories[e.notice.category] ?? e.notice.category,
                           today: _today,
@@ -387,6 +392,7 @@ class _SavedRow extends StatelessWidget {
     required this.entry,
     required this.group,
     required this.view,
+    required this.todoLeft,
     required this.changeSeen,
     required this.category,
     required this.today,
@@ -401,6 +407,9 @@ class _SavedRow extends StatelessWidget {
 
   /// 지원 건 문구(상태 이름·다음 할 일·남은 날). 모든 화면이 같은 문자열을 쓴다(D-052).
   final CaseView view;
+
+  /// '남은 할 일 N개'. 없으면 null
+  final String? todoLeft;
 
   /// 리포트를 열어 이미 본 마감 변경이면 '마감일 바뀜'을 그리지 않는다.
   final bool changeSeen;
@@ -464,6 +473,11 @@ class _SavedRow extends StatelessWidget {
                         Pill(view.stateLabel!, tone: view.ended ? PillTone.neutral : PillTone.chip),
                         if (view.next != null)
                           Text(keepAll(view.next!.text), style: TextStyle(fontSize: 13, height: 1.5, color: c.body)),
+                        if (todoLeft != null)
+                          Text(
+                            todoLeft!,
+                            style: TextStyle(fontSize: 13, height: 1.5, fontWeight: FontWeight.w600, color: c.accent),
+                          ),
                       ],
                     ),
                   ],

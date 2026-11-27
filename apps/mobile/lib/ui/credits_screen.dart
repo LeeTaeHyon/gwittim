@@ -79,7 +79,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
         return;
       }
       await Navigator.of(context)
-          .push(gwRoute(context, (_) => AnalysisReportScreen(response: response, title: title, receivedAt: entry.at)));
+          .push(gwRoute(context, (_) => AnalysisReportScreen(response: response, title: title, receivedAt: entry.at, repository: widget.repository)));
     } catch (e) {
       messenger
         ..hideCurrentSnackBar()

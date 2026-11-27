@@ -621,6 +621,10 @@ class _SavedSoonBubble extends StatelessWidget {
               const SizedBox(height: 6),
               Text(keepAll('${view.stateLabel} · ${next.text}'), style: TextStyle(fontSize: 14, color: c.sub)),
             ],
+            if (todoLeftText(cases, n.noticeId, view) case final left?) ...[
+              const SizedBox(height: 4),
+              Text(left, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.accent)),
+            ],
           ] else ...[
             Text(left == 0 ? '오늘 신청 마감' : '신청 마감 D-$left', style: _title(c).copyWith(color: c.urgent)),
             const SizedBox(height: 6),

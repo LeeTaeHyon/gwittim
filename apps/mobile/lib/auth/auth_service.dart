@@ -20,6 +20,9 @@ abstract class AuthService {
   /// 지금 로그인한 계정이 게스트(익명 계정)인지. 로그인 전이면 false.
   bool get isGuest;
 
+  /// 로그인 계정의 표시 이름('OO님 기준' 표시용, 기기 안에서만 쓴다). 게스트·모르면 null.
+  String? get displayName;
+
   Future<void> signOut();
 
   /// 탈퇴 (D-024). 계정을 다시 확인한 뒤 [deleteData]로 서버 데이터를 지우고 로그인 계정을 지운다.
@@ -48,6 +51,9 @@ class FirebaseAuthService implements AuthService {
 
   @override
   bool get isGuest => _auth.currentUser?.isAnonymous ?? false;
+
+  @override
+  String? get displayName => isGuest ? null : _auth.currentUser?.displayName;
 
   @override
   Future<void> signInAsGuest() async {
@@ -121,6 +127,9 @@ class LocalGuestAuthService implements AuthService {
 
   @override
   bool get isGuest => _signedIn;
+
+  @override
+  String? get displayName => null;
 
   @override
   Future<String?> idToken({bool refresh = false}) async => _signedIn ? _token : null;

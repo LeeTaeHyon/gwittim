@@ -46,6 +46,14 @@ class CaseItem {
   String toString() => 'CaseItem($text)';
 }
 
+/// '남은 할 일 N개' (report-reminder-spec §5.1). 진행 중 지원 건이고 상세 분석에서 받은 할 일이 남았을 때만, 아니면 null.
+/// 저장함·달력·브리핑·리포트 '내 지원' 카드가 같은 문구를 쓴다.
+String? todoLeftText(ApplicationCaseStore? store, String noticeId, CaseView? view) {
+  if (store == null || view == null || view.ended || view.stateLabel == null) return null;
+  final left = store.todoRemaining(noticeId);
+  return left == null || left <= 0 ? null : '남은 할 일 $left개';
+}
+
 /// 리포트를 열어 지금 마감을 이미 본 마감 변경인가 (저장함·홈·브리핑 공통, D-052).
 bool changeSeenFor(SavedEntry e, ApplicationCase? kase) =>
     kase != null && kase.seenDeadline == deadlineKey(e.notice.applicationDeadline);

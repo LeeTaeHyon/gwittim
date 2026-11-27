@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../data/application_case.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 import 'agent_data.dart';
@@ -10,6 +11,7 @@ import 'components.dart';
 import 'credits_screen.dart';
 import 'format.dart';
 import 'guest_scope.dart';
+import 'report_marks.dart';
 import 'skeleton.dart';
 import 'theme.dart';
 
@@ -889,7 +891,8 @@ class _ReportSkeletons extends StatelessWidget {
 
 /// 상세 분석 리포트 (명세 §11.2): 나와 이 공고 → 지원 자격 → 지원 전 할 일 → 필요한 역량. 서버 판정이 미충족이면 지원 자격이 맨 위.
 /// 서버가 준 글을 그대로 보이고, 지원 자격을 앱이 다시 판정하지 않는다.
-class AnalysisReportScreen extends StatelessWidget {
+/// 날짜·고른 '해 본 것'·작은따옴표 인용은 형광펜으로, '지원 전 할 일' 줄은 눌러서 체크한다(report-reminder-spec §4·§5.1).
+class AnalysisReportScreen extends StatefulWidget {
   const AnalysisReportScreen({
     super.key,
     required this.response,
@@ -897,13 +900,22 @@ class AnalysisReportScreen extends StatelessWidget {
     this.receivedAt,
     this.skippedExperience = false,
     this.eligibilityStatus,
-    this.caseLine,
+    this.caseLineOf,
+    this.repository,
+    this.experienceNames = const [],
   });
 
   final AnalysisResponse response;
 
-  /// 저장한 공고(지원 건)면 '내 지원 · 상태 · 다음 할 일 · 남은 날' 한 줄. 리포트 카드와 같은 문구(D-052)
-  final String? caseLine;
+  /// 저장한 공고(지원 건)면 '내 지원 · 상태 · 다음 할 일 · 남은 날' 한 줄. 리포트 카드와 같은 문구(D-052).
+  /// 체크로 상태가 바뀌면 다시 읽도록 함수로 받는다.
+  final String? Function()? caseLineOf;
+
+  /// 첫 체크에서 저장하는 데 쓴다. 없으면 이미 지원 건인 공고만 체크할 수 있다.
+  final NoticeRepository? repository;
+
+  /// 이번 요청에서 학생이 고른 '해 본 것' 이름(앱이 아는 칩 이름). 형광펜 대상. 받은 분석을 다시 열면 비어 있다.
+  final List<String> experienceNames;
 
   /// 서버가 계산한 지원 자격 판정(met / not_met / needs_check). 추천 목록에서 들어온 공고만 있다.
   /// not_met일 때만 '지원 자격' 칸을 맨 위로 올린다. 리포트 글(LLM 문장)을 보고 순서를 정하지 않는다.
@@ -919,10 +931,74 @@ class AnalysisReportScreen extends StatelessWidget {
   final bool skippedExperience;
 
   @override
+  State<AnalysisReportScreen> createState() => _AnalysisReportScreenState();
+}
+
+class _AnalysisReportScreenState extends State<AnalysisReportScreen> {
+  bool _busy = false;
+
+  String get _noticeId => widget.response.noticeId;
+
+  @override
+  void initState() {
+    super.initState();
+    // 이미 지원 건인 공고면 할 일 줄을 기기에 적어 둬 저장함·달력·브리핑이 '남은 할 일'을 센다
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ApplicationCaseScope.read(context)?.recordTodoLines(_noticeId, reportLines(widget.response.report.todo));
+    });
+  }
+
+  /// 할 일 줄을 눌렀을 때. 체크하는 첫 순간 지원 건이 아니면 저장하고, 저장 상태면 '준비 중'으로 올린다(§5.1).
+  /// 신청함·이번엔 안 함이면 체크만 하고 상태는 그대로 둔다.
+  Future<void> _toggle(String line) async {
+    final cases = ApplicationCaseScope.read(context);
+    if (cases == null || _busy) return;
+    _busy = true;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final id = _noticeId;
+      final checking = !cases.isTodoChecked(id, line);
+      var started = false;
+      if (checking && cases[id] == null) {
+        final repo = widget.repository;
+        if (repo == null) return;
+        try {
+          await repo.saveNotice(id);
+        } catch (e) {
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(content: Text(keepAll(errorMessage(e)))));
+          return;
+        }
+        if (cases[id] == null) await cases.recordSaved(id); // 지원 건을 따로 기록하지 않는 저장소
+        started = true;
+      }
+      await cases.recordTodoLines(id, reportLines(widget.response.report.todo));
+      await cases.toggleTodo(id, line);
+      if (checking && cases[id]?.state == CaseState.saved) {
+        await cases.startPreparing(id);
+        started = true;
+      }
+      if (started) {
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(keepAll('준비 중으로 표시했습니다.'))));
+      }
+    } finally {
+      _busy = false;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = context.gw;
-    final r = response.report;
-    final eligibilityCard = _ReportCard(title: '지원 자격', text: r.eligibility, style: _BodyStyle.bullets);
+    final r = widget.response.report;
+    final title = widget.title;
+    final cases = ApplicationCaseScope.maybeOf(context); // 체크할 때마다 다시 그린다
+    final caseLine = widget.caseLineOf?.call();
+    final names = widget.experienceNames;
+    final eligibilityStatus = widget.eligibilityStatus;
+    final eligibilityCard = _ReportCard(title: '지원 자격', text: r.eligibility, style: _BodyStyle.bullets, names: names);
     return Scaffold(
       appBar: GwTopBar(title: title),
       body: ListView(
@@ -932,15 +1008,15 @@ class AnalysisReportScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
               child: Text(
-                keepTitle(title!),
+                keepTitle(title),
                 style: TextStyle(fontSize: 17, height: 1.45, fontWeight: FontWeight.w600, color: c.ink),
               ),
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 14),
             child: Text(
-              response.fromCache
-                  ? (receivedAt == null ? '받은 분석' : '받은 분석 · ${shortDateTime(receivedAt!)}')
+              widget.response.fromCache
+                  ? (widget.receivedAt == null ? '받은 분석' : '받은 분석 · ${shortDateTime(widget.receivedAt!)}')
                   : '내 기준 상세 분석',
               style: captionStyle(context),
             ),
@@ -951,11 +1027,11 @@ class AnalysisReportScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(color: c.summary, borderRadius: BorderRadius.circular(16)),
               child: Text(
-                keepAll(caseLine!),
+                keepAll(caseLine),
                 style: TextStyle(fontSize: 14, height: 1.5, fontWeight: FontWeight.w600, color: c.body),
               ),
             ),
-          if (skippedExperience)
+          if (widget.skippedExperience)
             Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -975,9 +1051,16 @@ class AnalysisReportScreen extends StatelessWidget {
             ),
           // 기본 순서: 나와 이 공고 → 지원 자격 → 지원 전 할 일 → 필요한 역량 (명세 §11.2)
           if (eligibilityStatus == 'not_met') eligibilityCard,
-          _ReportCard(title: '나와 이 공고', text: r.fit, style: _BodyStyle.bullets),
+          _ReportCard(title: '나와 이 공고', text: r.fit, style: _BodyStyle.bullets, names: names),
           if (eligibilityStatus != 'not_met') eligibilityCard,
-          _ReportCard(title: '지원 전 할 일', text: r.todo, style: _BodyStyle.todo),
+          _ReportCard(
+            title: '지원 전 할 일',
+            text: r.todo,
+            style: _BodyStyle.todo,
+            names: names,
+            isChecked: cases == null ? null : (line) => cases.isTodoChecked(_noticeId, line),
+            onCheck: cases == null ? null : _toggle,
+          ),
           _ReportCard(title: '필요한 역량', text: r.skills, style: _BodyStyle.chips),
           Padding(
             padding: const EdgeInsets.fromLTRB(2, 4, 2, 0),
@@ -1022,11 +1105,25 @@ const skillsUnknown = '요구 역량을 확인하기 어렵습니다';
 }
 
 class _ReportCard extends StatelessWidget {
-  const _ReportCard({required this.title, required this.text, required this.style});
+  const _ReportCard({
+    required this.title,
+    required this.text,
+    required this.style,
+    this.names = const [],
+    this.isChecked,
+    this.onCheck,
+  });
 
   final String title;
   final String text;
   final _BodyStyle style;
+
+  /// 형광펜으로 칠할 '해 본 것' 이름. 역량 칩 칸은 칠하지 않는다.
+  final List<String> names;
+
+  /// 할 일 줄을 눌러 체크하는 카드에서만. 없으면 체크 칸은 구분 표시일 뿐이다.
+  final bool Function(String line)? isChecked;
+  final void Function(String line)? onCheck;
 
   @override
   Widget build(BuildContext context) {
@@ -1055,8 +1152,23 @@ class _ReportCard extends StatelessWidget {
             ),
         ],
       );
+    } else if (style == _BodyStyle.todo && onCheck != null && lines.isNotEmpty && !lines.every((l) => todoKey(l) == todoNone)) {
+      // 눌러서 체크하는 할 일 줄. 고정 문장('할 일이 없습니다')에는 체크 칸이 없다
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final l in lines)
+            _TodoLine(
+              line: l,
+              style: body,
+              names: names,
+              checked: isChecked?.call(l) ?? false,
+              onTap: todoKey(l) == todoNone ? null : () => onCheck!(l),
+            ),
+        ],
+      );
     } else if (lines.length <= 1) {
-      content = _TaggedLine(line: lines.firstOrNull ?? '', style: body);
+      content = _TaggedLine(line: lines.firstOrNull ?? '', style: body, names: names);
     } else {
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1089,7 +1201,7 @@ class _ReportCard extends StatelessWidget {
                         decoration: BoxDecoration(color: c.muted, shape: BoxShape.circle),
                       ),
                     ),
-                  Expanded(child: _TaggedLine(line: l, style: body)),
+                  Expanded(child: _TaggedLine(line: l, style: body, names: names)),
                 ],
               ),
             ),
@@ -1122,16 +1234,19 @@ class _ReportCard extends StatelessWidget {
 /// 리포트 한 줄. '맞음:' 같은 꼬리표가 있으면 작은 색 꼬리표 + 나머지 글로 보인다.
 /// 지원 자격 첫 줄은 '미충족: …'처럼 판정 낱말이 꼬리표가 된다. 예전 저장본의 '판정: …'과 '불충족'도 같은 꼬리표로 보인다(ui-style: 충족·미충족·확인 필요).
 class _TaggedLine extends StatelessWidget {
-  const _TaggedLine({required this.line, required this.style});
+  const _TaggedLine({required this.line, required this.style, this.names = const []});
 
   final String line;
   final TextStyle style;
+
+  /// 형광펜으로 칠할 '해 본 것' 이름
+  final List<String> names;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gw;
     var (tag, rest) = splitLineTag(line);
-    if (tag == null) return Text(keepAll(line), style: style);
+    if (tag == null) return _marked(line);
     if (tag == '판정') {
       // '판정: 확인 필요' → 꼬리표 '확인 필요', 뒤 글은 남은 말만
       final verdict = rest.trim();
@@ -1155,12 +1270,78 @@ class _TaggedLine extends StatelessWidget {
       child: Text(tag, style: TextStyle(fontSize: 13, height: 1.5, fontWeight: FontWeight.w700, color: fg)),
     );
     if (rest.trim().isEmpty) return Align(alignment: Alignment.centerLeft, child: pill);
+    // 꼬리표는 칠하지 않고, 나머지 글에서만 찾는다
+    final text = rest.trim();
     return Text.rich(
       TextSpan(children: [
         WidgetSpan(alignment: PlaceholderAlignment.middle, child: pill),
-        TextSpan(text: keepAll(rest.trim())),
+        ...(markedSpans(text, style, names: names) ?? [TextSpan(text: keepAll(text))]),
       ]),
       style: style,
+    );
+  }
+
+  Widget _marked(String text) {
+    final spans = markedSpans(text, style, names: names);
+    if (spans == null) return Text(keepAll(text), style: style);
+    return Text.rich(TextSpan(children: spans), style: style);
+  }
+}
+
+/// 눌러서 체크하는 '지원 전 할 일' 한 줄 (report-reminder-spec §5.1). 줄 전체가 누르는 영역(높이 48 이상)이다.
+class _TodoLine extends StatelessWidget {
+  const _TodoLine({
+    required this.line,
+    required this.style,
+    required this.names,
+    required this.checked,
+    required this.onTap,
+  });
+
+  final String line;
+  final TextStyle style;
+  final List<String> names;
+  final bool checked;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final text = checked ? style.copyWith(color: c.muted) : style;
+    return Semantics(
+      container: true,
+      checked: checked,
+      onTap: onTap,
+      label: splitLineTag(line).$2,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  width: 22,
+                  height: 22,
+                  margin: const EdgeInsets.only(top: 3, right: 10),
+                  decoration: BoxDecoration(
+                    color: checked ? c.point : null,
+                    borderRadius: BorderRadius.circular(7),
+                    border: Border.all(color: checked ? c.point : c.faint, width: 1.5),
+                  ),
+                  child: checked ? Icon(Icons.check_rounded, size: 16, color: c.onPoint) : null,
+                ),
+                Expanded(child: _TaggedLine(line: line, style: text, names: names)),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
