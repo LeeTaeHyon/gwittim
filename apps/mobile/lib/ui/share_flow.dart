@@ -27,6 +27,7 @@ Future<void> runShareFlow(
   required OpenUrl openUrl,
   required ShareServices share,
   SharedPayload? payload,
+  String initialPasteText = '',
   DateTime? today,
 }) async {
   if (sharedApiOf(repository) == null) {
@@ -46,7 +47,7 @@ Future<void> runShareFlow(
         repository: repository,
         openUrl: openUrl,
         share: share,
-        initialText: payload is SharedText ? payload.text : '',
+        initialText: payload is SharedText ? payload.text : initialPasteText,
         imagePath: payload is SharedImage ? payload.path : null,
         input: switch (payload) {
           SharedText() => ShareInput.text,
@@ -56,6 +57,49 @@ Future<void> runShareFlow(
         today: today,
       ),
     ),
+  );
+}
+
+/// 캡처 이미지를 앱 안에서 골라 확인 화면으로 연다. 선택을 취소하면 아무것도 하지 않는다.
+Future<void> runShareImagePick(
+  BuildContext context, {
+  required NoticeRepository repository,
+  required OpenUrl openUrl,
+  required ShareServices share,
+  DateTime? today,
+}) async {
+  if (sharedApiOf(repository) == null) {
+    return runShareFlow(
+      context,
+      repository: repository,
+      openUrl: openUrl,
+      share: share,
+    );
+  }
+  String? path;
+  try {
+    path = await share.picker.pick();
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(keepAll('이미지를 가져오지 못했습니다.'))),
+        );
+    }
+    return;
+  }
+  if (path == null || !context.mounted) {
+    if (path != null) await deleteShareFile(path);
+    return;
+  }
+  await runShareFlow(
+    context,
+    repository: repository,
+    openUrl: openUrl,
+    share: share,
+    payload: SharedImage(path),
+    today: today,
   );
 }
 
@@ -516,18 +560,127 @@ class ShareConsentScreen extends StatelessWidget {
   }
 }
 
-/// 저장 탭 위쪽: '카톡 공고 넘기기' 진입(붙여넣기 + 공유 방법 안내 한 줄)과 '카톡에서 넘긴 공고' 묶음(삭제).
+/// '카톡 공고 넘기기' 진입 카드: [캡처 고르기] [붙여넣기]. 홈·저장함이 같이 쓴다.
+/// [clipPreview]가 있으면(홈, 복사한 글 제안) 위쪽에 '복사한 알림톡' 한 줄과 [불러오기] [닫기]가 같은 카드 안에 붙는다.
+class ShareEntryCard extends StatelessWidget {
+  const ShareEntryCard({
+    super.key,
+    required this.onPaste,
+    required this.onPickImage,
+    this.clipPreview,
+    this.onLoadClip,
+    this.onCloseClip,
+  });
+
+  final VoidCallback onPaste;
+  final VoidCallback onPickImage;
+  final String? clipPreview;
+  final VoidCallback? onLoadClip;
+  final VoidCallback? onCloseClip;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final clip = clipPreview;
+    return GwCard(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '카톡 공고 넘기기',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: c.ink,
+            ),
+          ),
+          if (clip != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              '복사한 알림톡',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: c.muted,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              clip,
+              key: const ValueKey('clip-preview'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 15, height: 1.5, color: c.body),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                SoftButton(
+                  key: const ValueKey('clip-load'),
+                  label: '불러오기',
+                  icon: null,
+                  onPressed: onLoadClip ?? () {},
+                ),
+                SoftButton(
+                  key: const ValueKey('clip-close'),
+                  label: '닫기',
+                  icon: null,
+                  onPressed: onCloseClip ?? () {},
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Divider(height: 1, color: c.line),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            keepAll(
+              "알림톡은 화면을 캡처한 뒤 '캡처 고르기'로, 일반 메시지는 복사해 '붙여넣기'로 넘깁니다.",
+            ),
+            style: captionStyle(context),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              SoftButton(
+                key: const ValueKey('share-pick-image'),
+                label: '캡처 고르기',
+                icon: Icons.image_outlined,
+                onPressed: onPickImage,
+              ),
+              SoftButton(
+                key: const ValueKey('share-paste'),
+                label: '붙여넣기',
+                icon: Icons.content_paste_rounded,
+                onPressed: onPaste,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 저장 탭 위쪽: '카톡 공고 넘기기' 진입(붙여넣기·캡처 이미지 고르기 + 공유 방법 안내 한 줄)과 '카톡에서 넘긴 공고' 묶음(삭제).
 class SharedNoticesSection extends StatelessWidget {
   const SharedNoticesSection({
     super.key,
     required this.items,
     required this.onPaste,
+    required this.onPickImage,
     required this.onOpen,
     required this.onDelete,
   });
 
   final List<SharedNoticeItem> items;
   final VoidCallback onPaste;
+  final VoidCallback onPickImage;
   final void Function(SharedNoticeItem) onOpen;
   final void Function(SharedNoticeItem) onDelete;
 
@@ -539,11 +692,7 @@ class SharedNoticesSection extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-          child: TipBubble(
-            title: '카톡 공고 넘기기',
-            detail: '카카오톡 메시지를 길게 눌러 공유에서 귀띔을 고르거나, 복사한 글을 붙여넣습니다.',
-            onTap: onPaste,
-          ),
+          child: ShareEntryCard(onPaste: onPaste, onPickImage: onPickImage),
         ),
         if (items.isNotEmpty)
           Container(

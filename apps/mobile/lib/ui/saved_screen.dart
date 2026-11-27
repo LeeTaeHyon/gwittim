@@ -238,6 +238,17 @@ class SavedScreenState extends State<SavedScreen> {
     if (mounted) reload();
   }
 
+  Future<void> _pickImage() async {
+    await runShareImagePick(
+      context,
+      repository: widget.repository,
+      openUrl: widget.openUrl,
+      share: widget.share!,
+      today: widget.today,
+    );
+    if (mounted) reload();
+  }
+
   Future<void> _openShared(SharedNoticeItem item) async {
     await Navigator.of(context).push(
       gwRoute(
@@ -297,6 +308,7 @@ class SavedScreenState extends State<SavedScreen> {
               child: SharedNoticesSection(
                 items: _shared,
                 onPaste: _paste,
+                onPickImage: _pickImage,
                 onOpen: _openShared,
                 onDelete: _deleteShared,
               ),

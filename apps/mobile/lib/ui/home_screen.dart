@@ -4,6 +4,9 @@ import '../data/application_case.dart';
 import '../data/cached_repository.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
+import '../data/shared_notices.dart';
+import '../share/clipboard_suggest.dart';
+import '../share/share_services.dart';
 import 'briefing_data.dart';
 import 'briefing_screen.dart';
 import 'common.dart';
@@ -13,6 +16,7 @@ import 'home_sections.dart';
 import 'icons.dart';
 import 'notices_screen.dart';
 import 'report_screen.dart';
+import 'share_flow.dart';
 import 'skeleton.dart';
 import 'theme.dart';
 
@@ -50,6 +54,8 @@ class HomeScreen extends StatefulWidget {
     this.onOpenProfile,
     this.onSetupProfile,
     this.onShowAll,
+    this.share,
+    this.onShareDone,
   });
 
   final NoticeRepository repository;
@@ -66,11 +72,17 @@ class HomeScreen extends StatefulWidget {
   /// '마감이 먼 맞춤 공고' 전체 보기 (공고 탭)
   final VoidCallback? onShowAll;
 
+  /// 카톡 공고 넘기기 도구(D-058). 없거나 저장소가 지원하지 않으면(샘플 자료) 진입 카드가 없다.
+  final ShareServices? share;
+
+  /// 넘기기 화면을 모두 닫은 뒤 불린다(저장함이 넘긴 공고를 다시 받는다)
+  final VoidCallback? onShareDone;
+
   @override
   State<HomeScreen> createState() => HomeScreenState();
 }
 
-class HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   HomeData? _data;
   Object? _error;
   bool _briefingChecked = false;
@@ -84,10 +96,71 @@ class HomeScreenState extends State<HomeScreen> {
 
   DateTime get _today => widget.today ?? DateTime.now();
 
+  /// 복사한 글 제안 (D-061). 앱을 열 때·다시 앞으로 올 때 한 번만 본다.
+  ClipSuggestion? _clip;
+  bool _clipBusy = false;
+
+  bool get _canShare => widget.share != null && sharedApiOf(widget.repository) != null;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     reload();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkClip());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkClip(delay: true);
+  }
+
+  Future<void> _checkClip({bool delay = false}) async {
+    if (!_canShare || _clipBusy || _clip != null) return;
+    _clipBusy = true;
+    try {
+      // 다시 앞으로 온 직후에는 창 포커스가 없어 클립보드를 못 읽을 수 있다
+      if (delay) await Future<void>.delayed(const Duration(milliseconds: 400));
+      final s = await widget.share!.suggester.check();
+      if (mounted && s != null) setState(() => _clip = s);
+    } finally {
+      _clipBusy = false;
+    }
+  }
+
+  Future<void> _closeClip() async {
+    final c = _clip;
+    if (c == null) return;
+    setState(() => _clip = null);
+    await widget.share!.suggester.remember(c.hash);
+  }
+
+  Future<void> _loadClip() async {
+    final c = _clip;
+    if (c == null) return;
+    setState(() => _clip = null);
+    _clipBusy = true; // 확인 화면에서 돌아올 때 다시 읽지 않는다
+    try {
+      await widget.share!.suggester.remember(c.hash);
+      if (!mounted) return;
+      await runShareFlow(
+        context,
+        repository: widget.repository,
+        openUrl: widget.openUrl,
+        share: widget.share!,
+        initialPasteText: c.text,
+        today: widget.today,
+      );
+      widget.onShareDone?.call();
+    } finally {
+      _clipBusy = false;
+    }
   }
 
   Future<HomeData> _load() async {
@@ -265,6 +338,28 @@ class HomeScreenState extends State<HomeScreen> {
     reload();
   }
 
+  Future<void> _paste() async {
+    await runShareFlow(
+      context,
+      repository: widget.repository,
+      openUrl: widget.openUrl,
+      share: widget.share!,
+      today: widget.today,
+    );
+    widget.onShareDone?.call();
+  }
+
+  Future<void> _pickImage() async {
+    await runShareImagePick(
+      context,
+      repository: widget.repository,
+      openUrl: widget.openUrl,
+      share: widget.share!,
+      today: widget.today,
+    );
+    widget.onShareDone?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = _data;
@@ -329,6 +424,16 @@ class HomeScreenState extends State<HomeScreen> {
       children: [
         _Header(profile: data.profile, majors: data.majors, today: _today, onOpenProfile: widget.onOpenProfile),
         const SizedBox(height: 16),
+        if (_canShare) ...[
+          ShareEntryCard(
+            onPaste: _paste,
+            onPickImage: _pickImage,
+            clipPreview: _clip?.firstLine,
+            onLoadClip: _loadClip,
+            onCloseClip: _closeClip,
+          ),
+          const SizedBox(height: 12),
+        ],
         if (!list.personalized) ...[_ProfilePrompt(onOpenProfile: widget.onOpenProfile), const SizedBox(height: 12)],
         // 학교를 고르지 않으면 서버가 교외 공고만 준다 (rank-0.8, D-043)
         if (data.profile?.universityId == null) ...[const SchoolHint(), const SizedBox(height: 12)],
