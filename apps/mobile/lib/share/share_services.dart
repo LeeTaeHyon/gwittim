@@ -1,13 +1,24 @@
+import 'clipboard_suggest.dart';
+import 'image_pick.dart';
 import 'share_inbox.dart';
 import 'text_ocr.dart';
 
 /// 카카오톡 공고 넘기기에 필요한 것들 (D-058). 없으면(샘플 자료 등) 공유 받기·붙여넣기 진입이 보이지 않는다.
 class ShareServices {
-  ShareServices({required this.inbox, TextOcr? ocr, ShareConsentStore? consent})
-    : ocr = ocr ?? MlkitTextOcr(),
-      consent = consent ?? PrefsShareConsentStore();
+  ShareServices({
+    required this.inbox,
+    TextOcr? ocr,
+    ShareConsentStore? consent,
+    ShareImagePicker? picker,
+    ClipboardSuggester? suggester,
+  }) : ocr = ocr ?? MlkitTextOcr(),
+       consent = consent ?? PrefsShareConsentStore(),
+       picker = picker ?? GalleryShareImagePicker(),
+       suggester = suggester ?? ClipboardSuggester();
 
   final ShareInbox inbox;
   final TextOcr ocr;
   final ShareConsentStore consent;
+  final ShareImagePicker picker;
+  final ClipboardSuggester suggester;
 }

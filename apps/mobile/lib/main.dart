@@ -473,6 +473,8 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                   // 샘플·개발 토큰 모드에서는 자동으로 띄우지 않는다.
                   onSetupProfile: widget.onSignOut == null ? null : _setupProfile,
                   onShowAll: () => _select(1),
+                  share: widget.share,
+                  onShareDone: () => _savedKey.currentState?.reload(),
                 ),
               ),
               _page(
