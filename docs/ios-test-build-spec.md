@@ -121,3 +121,14 @@
 
 - AGENTS §5 형식: 변경 파일, 실행한 검증과 결과, 남은 문제, 다음 제안
 - 상태가 바뀌면 `docs/handoff.md` 갱신
+
+## 9. 카톡 공고 넘기기 iOS 대응 (2026-11-28 추가, feat/share-image-picker)
+
+이 브랜치가 main에 들어간 뒤 iOS 빌드를 하면 아래를 함께 한다.
+
+- `ios/Runner/Info.plist`에 사진 접근 사유: `NSPhotoLibraryUsageDescription` = "카톡 공고 캡처를 골라 글자를 읽는 데 씁니다. 이미지는 기기 밖으로 보내지 않습니다."
+- 최소 iOS 버전: ML Kit 글자 인식(`google_mlkit_text_recognition`)이 iOS 15.5 이상을 요구한다. Podfile `platform :ios, '15.5'`, Runner 배포 대상도 같게. SE 2세대(iOS 18)는 영향 없음
+- 첫 `pod install`은 ML Kit 한국어 모델 때문에 오래 걸리고 앱 크기가 커진다(Android 기준 +12.8MiB)
+- 복사한 글 제안: iOS는 앱을 열 때 클립보드가 있는지만 보고 내용은 읽지 않는다(iOS 16+ '붙여넣기 허용' 창 방지). 홈 카드에 '복사한 글이 있습니다'만 보이고 [불러오기]를 누를 때 읽는다. 이때 시스템 창이 한 번 뜨는 것은 정상
+- 카톡 '공유하기'로 받기: Android 전용(`MainActivity.kt`). iOS는 공유 확장이 없어 공유 시트에 귀띔이 안 나온다. 캡처 고르기·붙여넣기로 넘긴다. 공유 확장(Share Extension)은 보류(2026-11-28 팀장 결정: 공식 알림톡은 공유 메뉴가 없어 효과 대비 작업이 큼, 12/3 미팅 뒤 재검토)
+- 확인: 캡처 고르기 → 확인 화면 제목, 복사한 글 제안 → [불러오기]. 아이폰 캡처는 화면 비율이 달라 OCR 위·아래 제외 비율(`ocr_cleanup.dart` topRatio·bottomRatio)이 맞는지 같이 본다

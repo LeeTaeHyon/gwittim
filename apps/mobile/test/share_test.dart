@@ -456,6 +456,21 @@ void main() {
       }
     });
 
+    test('iOS 방식(readOnCheck: false)은 열 때 내용을 읽지 않고, 불러올 때 읽는다', () async {
+      final fake = _FakeClip('[시험] 겨울방학 SW 캠프 참가자 모집 안내. 신청 기간: 12월 10일(수)까지');
+      final s = ClipboardSuggester(clipboard: fake, memory: MemorySuggestMemory(), readOnCheck: false);
+      final got = await s.check();
+      expect(got, isNotNull);
+      expect(got!.unread, isTrue);
+      expect(got.firstLine, isNull);
+      expect(fake.reads, 0); // '붙여넣기 허용' 창을 띄우지 않는다
+      expect(await s.readFor(got), contains('12월 10일'));
+      expect(fake.reads, 1);
+
+      final empty = ClipboardSuggester(clipboard: _FakeClip(null), memory: MemorySuggestMemory(), readOnCheck: false);
+      expect(await empty.check(), isNull);
+    });
+
     test('가린 본문 해시는 공백이 달라도 같고, 20개까지만 남긴다', () async {
       expect(clipHash('가 나\n다'), clipHash('가  나 다'));
       final memory = MemorySuggestMemory();

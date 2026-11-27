@@ -11,6 +11,7 @@ OcrLine _l(String t, double top, {double left = 60, double right = 900}) =>
 void main() {
   realCaptureTests();
   emojiAndSenderTests();
+  phoneVariantTests();
   final lines = [
     _l('8:54 ALIR)', 40, right: 300),
     _l('← 명지전문대학 공지사항', 150, right: 700),
@@ -224,3 +225,38 @@ void emojiAndSenderTests() {
 
 OcrLine _lineAt(String t, double top) =>
     OcrLine(t, left: 289, top: top, right: 289 + t.length * 30.0, bottom: top + 40);
+
+// 실기기(S25 Ultra, 0.10.13)에서 같은 캡처가 다르게 읽힌 경우: 채널 이름 '명자전문대학', 보낸 이름 '멍시선분내악'
+void phoneVariantTests() {
+  group('기기마다 다르게 읽힌 보낸 이름 줄', () {
+    List<OcrLine> capture(String header) => [
+      OcrLine('8:54 ALIR)', left: 54, top: 30, right: 211, bottom: 80),
+      OcrLine(header, left: 53, top: 196, right: 639, bottom: 251),
+      OcrLine('Ch+ 채널 추가', left: 260, top: 379, right: 503, bottom: 419),
+      _lineAt('멍시선분내악', 478),
+      // 실제 캡처 좌표: 제목 528~584, '안내' 608~660 (줄 간격 24, 줄 높이 56)
+      OcrLine('2026학년도 동계방학 어학아카데미', left: 225, top: 528, right: 1104, bottom: 584),
+      OcrLine('안내', left: 225, top: 608, right: 329, bottom: 660),
+      _lineAt('안녕하세요 글로벌교육팀입니다.', 754),
+      _lineAt('12월 18일(금)까지 선착순 모집', 920),
+    ];
+
+    for (final header in ['← 명자전문대학 공지사항', '명자전문대학 공지사항', '← 명지전문대학 공지사항']) {
+      test('채널 줄이 "$header"여도 보낸 이름 줄을 뺀다', () {
+        final text = cleanOcrLines(capture(header), imageHeight: 3120);
+        expect(text.split('\n').first, '2026학년도 동계방학 어학아카데미 안내');
+        expect(text, isNot(contains('멍시선분내악')));
+        expect(text, contains('12월 18일(금)까지 선착순 모집'));
+      });
+    }
+
+    test('정상 제목은 채널 이름과 비교해도 지우지 않는다', () {
+      final text = cleanOcrLines([
+        OcrLine('← 명지전문대학 공지사항', left: 53, top: 196, right: 639, bottom: 251),
+        _lineAt('장학금신청안내', 528),
+        _lineAt('12월 18일(금)까지', 600),
+      ], imageHeight: 3120);
+      expect(text.split('\n').first, '장학금신청안내');
+    });
+  });
+}

@@ -6,6 +6,7 @@ import '../data/models.dart';
 import '../data/repository.dart';
 import '../data/shared_notices.dart';
 import '../share/clipboard_suggest.dart';
+import '../share/share_prepare.dart';
 import '../share/share_services.dart';
 import 'briefing_data.dart';
 import 'briefing_screen.dart';
@@ -96,9 +97,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   DateTime get _today => widget.today ?? DateTime.now();
 
-  /// 복사한 글 제안 (D-061). 앱을 열 때·다시 앞으로 올 때 한 번만 본다.
+  /// 복사한 글 제안 (D-062). 앱을 열 때·다시 앞으로 올 때 한 번만 본다.
   ClipSuggestion? _clip;
   bool _clipBusy = false;
+  // iOS: 내용을 읽지 않은 제안을 닫으면 같은 글인지 알 수 없어, 앱을 다시 시작할 때까지 묻지 않는다
+  bool _unreadClosed = false;
 
   bool get _canShare => widget.share != null && sharedApiOf(widget.repository) != null;
 
@@ -122,7 +125,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _checkClip({bool delay = false}) async {
-    if (!_canShare || _clipBusy || _clip != null) return;
+    if (!_canShare || _clipBusy || _clip != null || _unreadClosed) return;
     _clipBusy = true;
     try {
       // 다시 앞으로 온 직후에는 창 포커스가 없어 클립보드를 못 읽을 수 있다
@@ -138,7 +141,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final c = _clip;
     if (c == null) return;
     setState(() => _clip = null);
-    await widget.share!.suggester.remember(c.hash);
+    final hash = c.hash;
+    if (hash == null) {
+      _unreadClosed = true;
+      return;
+    }
+    await widget.share!.suggester.remember(hash);
   }
 
   Future<void> _loadClip() async {
@@ -147,14 +155,17 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() => _clip = null);
     _clipBusy = true; // 확인 화면에서 돌아올 때 다시 읽지 않는다
     try {
-      await widget.share!.suggester.remember(c.hash);
+      final suggester = widget.share!.suggester;
+      final text = await suggester.readFor(c);
+      if (text == null) return;
+      await suggester.remember(c.hash ?? clipHash(prepareShare(text).masked));
       if (!mounted) return;
       await runShareFlow(
         context,
         repository: widget.repository,
         openUrl: widget.openUrl,
         share: widget.share!,
-        initialPasteText: c.text,
+        initialPasteText: text,
         today: widget.today,
       );
       widget.onShareDone?.call();
@@ -428,7 +439,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ShareEntryCard(
             onPaste: _paste,
             onPickImage: _pickImage,
-            clipPreview: _clip?.firstLine,
+            clipPreview: _clip == null ? null : (_clip!.firstLine ?? '복사한 글이 있습니다'),
             onLoadClip: _loadClip,
             onCloseClip: _closeClip,
           ),

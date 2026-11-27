@@ -150,31 +150,54 @@ double jamoSimilarity(String a, String b) {
 }
 
 /// 상단 채널 이름 줄('← 명지전문대학 공지사항')에서 이름 후보를 뽑는다(화살표·기호 뺀 단어들).
-List<String> _channelNames(List<OcrLine> all) {
+/// 기기마다 화살표가 따로 읽히거나 빠지므로, 화살표 줄이 없으면 '공지사항'·'채널'이 든 줄이나
+/// 위쪽 제외 영역([topLimit] 위)의 한글 줄에서도 찾는다.
+List<String> _channelNames(List<OcrLine> all, {double? topLimit}) {
+  List<String> words(String t) => t
+      .replaceFirst(_backBar, '')
+      .split(RegExp(r'\s+'))
+      .where((w) => w.length >= 3 && _hangul.hasMatch(w))
+      .toList();
   for (final l in all) {
     final t = l.text.trim();
     if (!_backBar.hasMatch(t)) continue;
-    final names = t
-        .replaceFirst(_backBar, '')
-        .split(RegExp(r'\s+'))
-        .where((w) => w.length >= 3 && _hangul.hasMatch(w))
-        .toList();
+    final names = words(t);
     if (names.isNotEmpty) return names;
   }
-  return const [];
+  final names = <String>[];
+  for (final l in all) {
+    final t = l.text.trim();
+    final top = topLimit != null && l.centerY < topLimit;
+    if ((top || t.contains('공지사항')) && !_isChrome(t)) names.addAll(words(t));
+  }
+  return names;
+}
+
+/// 줄 글자들의 평균 신뢰도. 모르면 null
+double? _lineConfidence(OcrLine l) {
+  final cs = [
+    for (final w in l.words)
+      for (final s in w.symbols)
+        if (s.confidence != null) s.confidence!,
+  ];
+  if (cs.isEmpty) return null;
+  return cs.reduce((a, b) => a + b) / cs.length;
 }
 
 /// 채널 이름과 자모가 비슷한 공백 없는 짧은 한글 줄이면 가려진 보낸 이름 줄이다.
-bool _looksLikeSenderName(String text, List<String> names) {
-  final t = text.trim();
+/// 반쯤 가려진 줄은 기기마다 다르게 읽힌다('명시선문내악', '멍시선분내악'). 채널 이름도 '명자전문대학'처럼
+/// 틀릴 수 있어 기준을 0.5로 둔다. 이름을 못 찾았으면 글자 신뢰도가 낮은(0.5 미만) 줄만 뺀다.
+bool _looksLikeSenderName(OcrLine line, List<String> names) {
+  final t = line.text.trim();
   if (t.length < 3 || t.length > 14 || RegExp(r'[\s\d]').hasMatch(t)) {
     return false;
   }
   if (_hangul.allMatches(t).length != t.length) return false;
   for (final n in names) {
-    if (jamoSimilarity(t, n) >= 0.6) return true;
+    if (jamoSimilarity(t, n) >= 0.5) return true;
   }
-  return false;
+  final c = _lineConfidence(line);
+  return names.isEmpty && c != null && c < 0.5;
 }
 
 // ── 이모지 자리 글자 ──
@@ -236,7 +259,10 @@ String cleanOcrLines(
 }) {
   final sorted = [...lines]..sort((a, b) => a.top.compareTo(b.top));
   // 채널 이름은 위쪽 제외 영역의 줄에서도 비교용으로 쓴다
-  final names = _channelNames(sorted);
+  final names = _channelNames(
+    sorted,
+    topLimit: imageHeight != null && imageHeight > 0 ? imageHeight * topRatio : null,
+  );
   final kept = <OcrLine>[];
   for (final l in sorted) {
     if (imageHeight != null && imageHeight > 0) {
@@ -247,7 +273,7 @@ String cleanOcrLines(
     kept.add(_stripLeadingJunk(l.copyWith(text: l.text.trim())));
   }
   // 정리 뒤 첫 줄이 가려진 보낸 이름이면 뺀다
-  if (kept.isNotEmpty && _looksLikeSenderName(kept.first.text, names)) {
+  if (kept.isNotEmpty && _looksLikeSenderName(kept.first, names)) {
     kept.removeAt(0);
   }
   if (kept.isEmpty) return '';

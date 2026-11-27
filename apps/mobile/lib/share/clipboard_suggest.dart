@@ -1,9 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'share_prepare.dart';
 
-// 복사한 글 자동 제안 (D-061). 클립보드 내용은 기기에서만 다루고, 사용자가 [불러오기]를 누르기 전에는 서버로 보내지 않는다.
+// 복사한 글 자동 제안 (D-062). 클립보드 내용은 기기에서만 다루고, 사용자가 [불러오기]를 누르기 전에는 서버로 보내지 않는다.
 
 /// 클립보드 읽기. Android 12+는 내용을 읽을 때 시스템 '붙여넣음' 알림이 뜨므로 있는지(hasStrings)부터 본다.
 abstract class ClipboardSource {
@@ -53,12 +54,17 @@ class MemorySuggestMemory implements SuggestMemory {
 class ClipSuggestion {
   const ClipSuggestion({required this.text, required this.hash});
 
-  final String text;
-  final String hash;
+  /// 내용을 아직 읽지 않은 제안(iOS). [불러오기]를 누를 때 읽는다.
+  const ClipSuggestion.unread() : text = null, hash = null;
 
-  /// 카드에 보일 첫 줄(비어 있지 않은 첫 줄)
-  String get firstLine => text
-      .split('\n')
+  final String? text;
+  final String? hash;
+
+  bool get unread => text == null;
+
+  /// 카드에 보일 첫 줄(비어 있지 않은 첫 줄). 아직 읽지 않았으면 null
+  String? get firstLine => text
+      ?.split('\n')
       .map((e) => e.trim())
       .firstWhere((e) => e.isNotEmpty, orElse: () => '');
 }
@@ -87,18 +93,24 @@ String clipHash(String masked) {
 }
 
 class ClipboardSuggester {
-  ClipboardSuggester({ClipboardSource? clipboard, SuggestMemory? memory})
+  ClipboardSuggester({ClipboardSource? clipboard, SuggestMemory? memory, bool? readOnCheck})
     : clipboard = clipboard ?? SystemClipboardSource(),
-      memory = memory ?? PrefsSuggestMemory();
+      memory = memory ?? PrefsSuggestMemory(),
+      readOnCheck = readOnCheck ?? defaultTargetPlatform != TargetPlatform.iOS;
 
   final ClipboardSource clipboard;
   final SuggestMemory memory;
+
+  /// 앱을 열 때 내용까지 읽을지. iOS 16+는 다른 앱이 복사한 글을 읽을 때마다 '붙여넣기 허용' 창을 띄우므로
+  /// iOS에서는 있는지(hasStrings, 창 없음)만 보고, 내용은 사용자가 [불러오기]를 누를 때 읽는다.
+  final bool readOnCheck;
   static const limit = 20;
 
   /// 제안할 글이 있으면 돌려준다. 내용은 hasStrings가 true일 때만 읽는다.
   Future<ClipSuggestion?> check() async {
     try {
       if (!await clipboard.hasStrings()) return null;
+      if (!readOnCheck) return const ClipSuggestion.unread();
       final text = await clipboard.readText();
       if (text == null || !looksLikeNotice(text)) return null;
       final hash = clipHash(prepareShare(text).masked);
@@ -106,6 +118,17 @@ class ClipboardSuggester {
       return ClipSuggestion(text: text, hash: hash);
     } catch (_) {
       return null; // 읽지 못하면 제안하지 않는다
+    }
+  }
+
+  /// [불러오기] 때 내용을 읽는다(아직 읽지 않은 제안이면 여기서 처음 읽는다). 비었으면 null
+  Future<String?> readFor(ClipSuggestion s) async {
+    if (!s.unread) return s.text;
+    try {
+      final text = await clipboard.readText();
+      return text == null || text.trim().isEmpty ? null : text;
+    } catch (_) {
+      return null;
     }
   }
 
