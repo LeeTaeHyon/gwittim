@@ -263,6 +263,7 @@ def split_long_lines(report: dict) -> tuple[dict, int]:
 # ---------- 근거 맞추기 (역량·할 일) ----------
 
 SKILLS_UNKNOWN = "제공된 공고 정보에서 요구 역량을 확인하기 어렵습니다."
+FIT_UNKNOWN = "확인 필요: 공고 자료만으로는 해 본 것과 이어지는 점을 확인하기 어렵습니다."
 TODO_NONE = "이번 모집은 지원 전에 할 일이 없습니다."
 PREFERRED_NOTE = "우대 사항"  # unresolved_condition.note (backend.analysis.rules.PREFERRED_NOTE와 같은 값)
 NO_LIMIT_NOTE = "항목 제한 없음"  # 한 항목에만 제한이 없다는 문구. 확인할 조건이 아니다 (rules.NO_LIMIT_NOTE와 같은 값, D-056)
@@ -300,14 +301,54 @@ def _best_evidence(line: str, evidence: list[dict], preferred: bool = False) -> 
     return best if score >= SKILL_MATCH else None
 
 
-def ground_report(report: dict, notice: dict, status: str, today: date) -> tuple[dict, dict]:
-    """받은 리포트의 역량·할 일을 공고 자료에 맞춘다. (리포트, 바꾼 내용 {'skills_dropped': n, 'todo': 사유}).
+_QUOTE = re.compile(r"['‘’]([^'‘’]+)['‘’]")
+
+
+def ground_fit_links(report: dict, notice: dict, payload: dict) -> tuple[dict, int]:
+    """'fit' 줄 중 작은따옴표 인용('…')이 있는 줄을 근거로 걸러 낸다. (리포트, 뺀 줄 수). 경험·우대 조건 잇기(report-reminder-spec §3.2).
+
+    남기는 조건: 인용이 이 공고의 '우대 사항' 원문에 있고(공백·기호를 뺀 뒤 문자열로),
+    줄에 학생이 이번에 고른 '해 본 것' 이름이 있어야 한다. 아니면 그 줄을 뺀다. 인용이 없는 줄은 건드리지 않는다.
+    줄이 모두 빠지면 칸이 비므로 원문 확인이 필요하다는 고정 문장을 둔다.
+    """
+    text = report.get("fit")
+    if not isinstance(text, str):
+        return report, 0
+    unresolved = (notice.get("eligibility") or {}).get("unresolved_conditions") or []
+    preferred = [_NOT_TEXT.sub("", u.get("evidence") or "") for u in unresolved if u.get("note") == PREFERRED_NOTE]
+    chips = [_NOT_TEXT.sub("", EXPERIENCE_CHIPS[c]) for c in (payload or {}).get("experience") or [] if c in EXPERIENCE_CHIPS]
+    kept, dropped = [], 0
+    for line in text.split(BR):
+        quotes = _QUOTE.findall(line) if "우대" in line else []  # 우대 연결 줄만 검사. 다른 인용은 건드리지 않음
+        if quotes:
+            flat = _NOT_TEXT.sub("", line)
+            cited = [_NOT_TEXT.sub("", q) for q in quotes]
+            grounded = all(q and any(q in ev for ev in preferred) for q in cited)
+            if not (grounded and any(chip and chip in flat for chip in chips)):
+                dropped += 1
+                continue
+        kept.append(line)
+    if not dropped:
+        return report, 0
+    out = dict(report)
+    out["fit"] = BR.join(kept) if any(k.strip() for k in kept) else FIT_UNKNOWN
+    return out, dropped
+
+
+def ground_report(report: dict, notice: dict, status: str, today: date, payload: dict | None = None) -> tuple[dict, dict]:
+    """받은 리포트의 역량·할 일을 공고 자료에 맞춘다. (리포트, 바꾼 내용 {'skills_dropped': n, 'todo': 사유, 'fit_link_dropped': n}).
+
+    - 경험 잇기: payload(학생이 고른 칩)를 주면 'fit'의 따옴표 인용 줄을 ground_fit_links로 거른다.
 
     - 역량: 공고의 '원문에서 확인할 조건' 원문에 근거가 있는 줄만 남긴다. '(우대)'는 모델 표시가 아니라 원문 구분으로 붙인다.
       남는 줄이 없으면 '확인하기 어렵습니다' 문장.
     - 할 일: 마감이 지났으면 고정 문장. 미충족이면 지원서·근거 없는 일정 줄을 빼고, 남는 줄이 없으면 고정 문장.
     """
     out, changes = dict(report), {}
+    if payload is not None:
+        out, fit_dropped = ground_fit_links(out, notice, payload)
+        if fit_dropped:
+            changes["fit_link_dropped"] = fit_dropped
     evidence = (notice.get("eligibility") or {}).get("unresolved_conditions") or []
 
     skills = [ln.strip() for ln in str(report.get("skills", "")).split(BR) if ln.strip()]

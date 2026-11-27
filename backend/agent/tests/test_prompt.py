@@ -226,3 +226,53 @@ def test_material_marks_deadline_passed():
     }
     _, user = build_messages(notice, {}, ("met", []), _TODAY)
     assert "마감 지남" in user
+
+
+# ---------- 경험·우대 조건 잇기 (fit 인용 줄) ----------
+
+_PAY = {"experience": ["app_dev", "contest"]}
+_PREF_NOTICE = _notice([("앱 개발 프로젝트 경험이 있는 분", "우대 사항"), ("토익 750점 이상", None)])
+
+
+def _fit(*lines):
+    r = _report(SKILLS_UNKNOWN)
+    r["fit"] = "\n".join(lines)
+    return r
+
+
+def test_fit_link_kept_when_quote_in_preferred_and_chip_named():
+    line = "맞음: 우대 조건 '앱 개발 프로젝트 경험'에 앱 개발 경험이 이어집니다."
+    out, ch = ground_report(_fit(line, "확인 필요: 일정은 공고에 나와 있지 않습니다."), _PREF_NOTICE, "met", _TODAY, _PAY)
+    assert out["fit"].split("\n")[0] == line and "fit_link_dropped" not in ch
+
+
+def test_fit_link_dropped_without_source_chip_or_preferred_note():
+    keep = "확인 필요: 일정은 공고에 나와 있지 않습니다."
+    # 인용이 원문에 없음
+    out, ch = ground_report(_fit("맞음: 우대 조건 '해외 봉사 경험'에 앱 개발 경험이 이어집니다.", keep), _PREF_NOTICE, "met", _TODAY, _PAY)
+    assert out["fit"] == keep and ch["fit_link_dropped"] == 1
+    # 학생이 고르지 않은 경험
+    out, ch = ground_report(_fit("맞음: 우대 조건 '영상 제작 경험'에 영상 편집 경험이 이어집니다.", keep),
+                           _notice([("영상 제작 경험이 있는 분", "우대 사항")]), "met", _TODAY, _PAY)
+    assert out["fit"] == keep and ch["fit_link_dropped"] == 1
+    # 우대 사항이 아닌 원문(필수 조건)
+    out, ch = ground_report(_fit("맞음: 우대 조건 '토익 750점'에 앱 개발 경험이 이어집니다.", keep), _PREF_NOTICE, "met", _TODAY, _PAY)
+    assert out["fit"] == keep and ch["fit_link_dropped"] == 1
+
+
+def test_fit_without_quote_untouched_and_all_dropped_gives_fixed_sentence():
+    r = _fit("맞음: 이번 공모전은 앱 시제품을 제출하므로 앱 개발 경험을 활용할 수 있습니다.")
+    out, ch = ground_report(r, _PREF_NOTICE, "met", _TODAY, _PAY)
+    assert out["fit"] == r["fit"] and ch == {}
+    out, ch = ground_report(_fit("맞음: 우대 조건 '없는 구절'에 앱 개발 경험이 이어집니다."), _PREF_NOTICE, "met", _TODAY, _PAY)
+    assert out["fit"].startswith("확인 필요:") and ch == {"fit_link_dropped": 1}
+    # 학생 정보(payload)를 주지 않으면 이 검사는 하지 않는다(기존 호출과 호환)
+    out, _ = ground_report(_fit("맞음: 우대 조건 '없는 구절'에 앱 개발 경험이 이어집니다."), _PREF_NOTICE, "met", _TODAY)
+    assert "없는 구절" in out["fit"]
+
+
+def test_ordinary_quote_without_preferred_word_is_kept():
+    """'우대'가 없는 줄의 인용(학생 선택값 등)은 우대 연결 검사 대상이 아니다."""
+    line = "맞음: 가능한 시기 '방학'과 활동 기간이 겹칩니다."
+    out, ch = ground_report(_fit(line), _PREF_NOTICE, "met", _TODAY, _PAY)
+    assert out["fit"] == line and ch == {}

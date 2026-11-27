@@ -130,7 +130,7 @@ def request_analysis(uid: str, body: dict, deps: Deps, guest: bool = False) -> d
         report, scrubbed = scrub_codes(result.report)  # 지시문을 어기고 새어 나온 내부 코드를 한국어로
         report, split = split_long_lines(report)  # 한 문단으로 온 칸은 문장 끝에서 줄로 나눔(화면은 줄 = 항목)
         # 역량은 원문 근거가 있는 줄만, 마감 지남·미충족 할 일은 판단을 바꿀 행동만
-        report, grounded = ground_report(report, notice, verdict[0], deps.today_kst())
+        report, grounded = ground_report(report, notice, verdict[0], deps.today_kst(), payload)
         if grounded:
             log.info("report grounded notice_id=%s %s", notice_id,
                      " ".join(f"{k}={v}" for k, v in sorted(grounded.items())))
