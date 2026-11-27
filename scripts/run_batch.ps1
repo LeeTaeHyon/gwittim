@@ -6,7 +6,8 @@
 #   팀장 폰 수집기 받은편지함(Firestore kakao_inbox). 폴더가 없으면 알림톡은 건너뛴다
 # - 알림톡 앞에서 PC 카톡의 학교 채널을 <KakaoDir>\auto 로 자동 내보낸다 (D-041, scripts\export_kakao.ps1).
 #   폰 알림은 200자에서 잘리므로 전문은 내보내기로 채운다. 방마다 가장 새 파일만 읽는다. -NoKakaoExport 로 끈다
-# - 게시판 다음, 알림톡 앞에 교외 공모전·대외활동(D-038, D-059: 위비티·콘테스트코리아·링커리어)을 차례로 돈다. 같은 data\local을 쓰므로 직렬로만.
+# - 게시판 다음, 알림톡 앞에 교외 공모전·대외활동(D-038, D-059: 위비티·콘테스트코리아·링커리어)을 돈다: 출처별 수집(--collect-only) 뒤 분석 단계 1회.
+#   같은 data\local을 쓰므로 직렬로만.
 #   robots·3초 간격·실행당 상한은 수집기가 지킨다. 실패해도 배치는 이어간다(종료 코드에 넣지 않음). -NoExternal 로 끈다
 # - 명지 게시판 다음, 교외 앞에 숭의여대 공지(D-045, 학교 팩)를 돈다. 교외와 같은 규칙(실패해도 이어감). -NoSewu 로 끈다
 # Windows 알림(WinRT)이 필요하므로 Windows PowerShell 5.1로 실행한다. 이 파일은 UTF-8 BOM으로 저장한다(5.1의 한글 처리).
@@ -81,28 +82,36 @@ if ($exit -eq 0 -and -not $NoSewu) {
     }
 }
 
-# 교외 공모전·대외활동 (D-038, D-059): 게시판 다음, 알림톡 앞. 출처마다 따로 돌리고 한 곳이 실패해도 다음으로 넘어간다
-# 정기 배치 상한(D-059, 팀장 2026-11-26 '최대한 많이'): 출처·메뉴마다 목록 5페이지·새 공고 상세 50건. 사이트 합 30건 상한은 폐지했다.
-# 외부 단계 전체 실행 시간은 30분이다. 넘으면 남은 출처는 건너뛰고(다음 배치에서 새 공고로 이어짐) 로그에 남긴다.
-# 순서(새 공고가 많은 곳이 시간 상한에 밀리지 않게): 모수·새 공고량이 큰 순서. 2026-11-26 실측 링커리어 대외활동 약 1,400건·공모전 약 400건으로
-# 가장 크고(첫 시험에서 두 메뉴 모두 상세 30건 상한까지 새 공고), 위비티 공모전·대외활동, 콘테스트코리아(첫 배치 21건)·씽굿(목록 JSON에 본문이 들어 있어 요청이 가장 적음)·올콘(목록 약 100건)이 그 뒤다.
-# 출처당 상세 50건 x 3초 + 목록 5쪽 = 약 3분이라 6곳을 모두 돌아도 약 20분이므로 보통은 시간 상한에 걸리지 않는다.
+# 교외 공모전·대외활동 (D-038, D-059): 게시판 다음, 알림톡 앞. 수집과 Gemma 분석을 나눈다(2026-11-28).
+# ① 7개 출처 수집만(--collect-only): 저장하고 새·바뀐 공고를 분석 대기열(<DataDir>nalysis_queue.json)에 넣는다. 출처마다 따로 돌리고 한 곳이 실패해도 다음으로 넘어간다.
+# ② 분석 단계 1회(analyze_queue): 모든 출처의 대기열을 D-048 출처 우선순위·오래 기다린 순으로 Gemma 분석 → 검증 → 게시. 상한에 닿으면 남은 건은 대기열에 두고 다음 배치가 이어받는다.
+# 이유: 예전에는 출처마다 수집+분석을 한 상한(30분) 안에서 해서 앞 출처의 분석이 뒤 출처의 수집 시간을 먹었다(2026-11-27 콘테스트코리아·씽굿·올콘 건너뜀, 18:00 올콘 중단).
+# 정기 배치 상한(D-059): 출처·메뉴마다 목록 5페이지·새 공고 상세 50건. 수집 상한은 변함없고, 분석이 빠지므로 수집만 보면 출처당 최대 약 3분(상세 50건 x 3초 + 목록 5쪽).
+# 시간 상한(전체 배치 1시간 안): 수집 전체 20분 + 분석 최대 30분. 분석은 '전체 60분 - 지금까지 걸린 시간 - 알림톡 단계 여유 10분' 이내로 줄이되 최소 5분은 준다.
+#   2026-11-27 배치 로그 실측: 게시판 약 3~15분, 숭의 0.5~7.5분, 알림톡 내보내기 최대 10분 대기. 평소(게시판 3분+숭의 1분+수집 5분)에는 분석에 30분이 남고,
+#   게시판·숭의가 길어진 날(백필 직후 등)에는 분석이 줄어 남은 건이 대기열에 이월된다. 이월이 여러 회차 연속 늘면 로그의 remaining·oldest_wait_minutes로 확인한다.
 $externalSources = @("linkareer_activity", "linkareer_contest", "wevity", "wevity_activity", "contestkorea", "thinkgood_contest", "allcon_contest")
-$externalBudgetSeconds = 30 * 60
+$collectBudgetSeconds = 20 * 60
+$analysisMaxSeconds = 30 * 60
+$analysisMinSeconds = 5 * 60
+$batchBudgetSeconds = 60 * 60
+$kakaoReserveSeconds = 10 * 60
 $externalClock = [System.Diagnostics.Stopwatch]::StartNew()
 $externalPublished = 0
+$externalQueued = 0
+$externalRemaining = $null
 $externalNote = ""
 if ($exit -eq 0 -and -not $NoExternal) {
     foreach ($src in $externalSources) {
-        $remaining = [int]($externalBudgetSeconds - $externalClock.Elapsed.TotalSeconds)
+        $remaining = [int]($collectBudgetSeconds - $externalClock.Elapsed.TotalSeconds)
         if ($remaining -lt 60) {
-            Write-Log "교외 $src 건너뜀: 외부 단계 30분 상한 소진 (다음 배치로 넘김)"
+            Write-Log "교외 $src 수집 건너뜀: 수집 단계 20분 상한 소진 (다음 배치로 넘김)"
             $externalNote += " ($src 시간상한으로 다음 배치)"
             continue
         }
         Push-Location $code
         try {
-            $xlines = & $Uv run --frozen python -m "backend.collectors.$src" --data-dir $DataDir --pages 5 --max-items 50 --max-seconds $remaining 2>&1 | ForEach-Object { "$_" }
+            $xlines = & $Uv run --frozen python -m "backend.collectors.$src" --data-dir $DataDir --collect-only --pages 5 --max-items 50 --max-seconds $remaining 2>&1 | ForEach-Object { "$_" }
             $xexit = $LASTEXITCODE
         } finally {
             Pop-Location
@@ -111,11 +120,32 @@ if ($exit -eq 0 -and -not $NoExternal) {
         $xline = $xlines | Where-Object { $_ -like '{*' } | Select-Object -Last 1
         if ($xexit -eq 0 -and $xline) {
             $x = $xline | ConvertFrom-Json
-            $externalPublished += [int]$x.published
+            $externalQueued += [int]$x.queued + [int]$x.recovered
+            $externalRemaining = [int]$x.queue_size
             if ($x.stopped) { $externalNote += " ($src 멈춤)" }
         } else {
-            $externalNote += " ($src 실패)"
+            $externalNote += " ($src 수집 실패)"
         }
+    }
+
+    # 분석 단계 한 번: 대기열이 비어도 돌린다(이번에 안 보인 기존 공고의 날짜 재판정이 여기서 일어남)
+    $analysisSeconds = [int][math]::Min($analysisMaxSeconds, [math]::Max($analysisMinSeconds, $batchBudgetSeconds - ((Get-Date) - $started).TotalSeconds - $kakaoReserveSeconds))
+    Push-Location $code
+    try {
+        $alines = & $Uv run --frozen python -m backend.collectors.common.analyze_queue --data-dir $DataDir --max-seconds $analysisSeconds 2>&1 | ForEach-Object { "$_" }
+        $aexit = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    foreach ($line in $alines) { Write-Log $line }
+    $aline = $alines | Where-Object { $_ -like '{*' } | Select-Object -Last 1
+    if ($aexit -eq 0 -and $aline) {
+        $a = $aline | ConvertFrom-Json
+        $externalPublished = [int]$a.published
+        $externalRemaining = [int]$a.remaining
+        if ($a.stopped) { $externalNote += " (분석 시간상한)" }
+    } else {
+        $externalNote += " (분석 실패)"
     }
 }
 
@@ -168,7 +198,10 @@ if ($exit -eq 0 -and $summaryLine) {
     $sewu = ""
     if (-not $NoSewu) { $sewu = " | 숭의 게시 $sewuPublished$sewuNote" }
     $external = ""
-    if (-not $NoExternal) { $external = " | 교외 게시 $externalPublished$externalNote" }
+    if (-not $NoExternal) {
+        $pending = if ($null -ne $externalRemaining) { " (분석 대기 $externalRemaining)" } else { "" }
+        $external = " | 교외 게시 $externalPublished$pending$externalNote"
+    }
     Show-Toast "귀띔 수집 완료 ($minutes분)" "새 $($o.new) · 변경 $($o.changed) · 그대로 $($o.unchanged) | $gpu$sewu$external$kakao"
 } else {
     Show-Toast "귀띔 수집 실패" "batch.log를 확인해 주세요. (종료 코드 $exit)"
