@@ -11,6 +11,7 @@ import 'common.dart';
 import 'components.dart';
 import 'credits_screen.dart';
 import 'format.dart';
+import 'guest_scope.dart';
 import 'home_sections.dart' show homeReason;
 import 'icons.dart';
 import 'notice_poster.dart';
@@ -315,6 +316,14 @@ class _ReportScreenState extends State<ReportScreen> {
       _analysis = analysis;
       _agentLoaded = true;
     });
+    _recordTodoLines();
+  }
+
+  /// 받은 분석의 할 일 줄을 지원 건 옆에 적어 둔다('남은 할 일 N개'를 저장함·달력·브리핑이 센다). 지원 건이 아니면 하지 않는다.
+  void _recordTodoLines() {
+    final a = _analysis;
+    if (a == null) return;
+    ApplicationCaseScope.read(context)?.recordTodoLines(widget.noticeId, reportLines(a.report.todo));
   }
 
   Future<void> _startAnalysis(Notice notice) async {
@@ -330,20 +339,45 @@ class _ReportScreenState extends State<ReportScreen> {
       );
       await _refreshAgent();
       if (done == null || !mounted) return;
-      await _openAnalysis(notice, done.response, skippedExperience: done.chips.experience.isEmpty);
+      await _openAnalysis(
+        notice,
+        done.response,
+        skippedExperience: done.chips.experience.isEmpty,
+        experienceNames: await _experienceNames(done.chips),
+      );
     } finally {
       _agentBusy = false;
     }
   }
 
-  Future<void> _openAnalysis(Notice notice, AnalysisResponse response, {bool skippedExperience = false}) =>
-      Navigator.of(context).push(
+  /// 이번 요청에서 학생이 고른 '해 본 것'의 칩 이름(형광펜 대상). 사전을 못 읽으면 칠하지 않는다.
+  Future<List<String>> _experienceNames(AnalysisChips chips) async {
+    if (chips.experience.isEmpty) return const [];
+    try {
+      final items = await widget.repository.dictionary('experience_chips');
+      return [
+        for (final id in chips.experience)
+          ?items.where((i) => i.id == id).firstOrNull?.name,
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> _openAnalysis(
+    Notice notice,
+    AnalysisResponse response, {
+    bool skippedExperience = false,
+    List<String> experienceNames = const [],
+  }) => Navigator.of(context).push(
         gwRoute(
           context,
           (_) => AnalysisReportScreen(
             response: response,
             title: notice.summary.title,
-            caseLine: _caseLine(notice.summary),
+            repository: widget.repository,
+            experienceNames: experienceNames,
+            caseLineOf: () => _caseLine(notice.summary),
             receivedAt: _credits?.analysisReceivedAt(widget.noticeId),
             skippedExperience: skippedExperience,
             // 추천 목록에서 들어온 공고만 서버 판정이 있다. 없으면 리포트는 기본 순서
@@ -419,6 +453,7 @@ class _ReportScreenState extends State<ReportScreen> {
       }
       if (!mounted) return;
       setState(() => _saved = !wasSaved);
+      if (!wasSaved) _recordTodoLines(); // 분석을 받은 공고를 저장하면 남은 할 일도 센다
       messenger.showSnackBar(SnackBar(content: Text(wasSaved ? '저장이 취소되었습니다.' : '공고가 저장되었습니다.')));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(errorMessage(e))));
@@ -582,6 +617,7 @@ class _ReportScreenState extends State<ReportScreen> {
               if (cases != null && kase != null)
                 _CaseCard(
                   view: caseView(n, kase, now: today),
+                  todoLeft: todoLeftText(cases, widget.noticeId, caseView(n, kase, now: today)),
                   kase: kase,
                   onStart: () => _caseAction(cases.startPreparing),
                   onApplied: () => _caseAction(cases.markApplied, done: '신청함으로 표시했습니다.'),
@@ -700,6 +736,9 @@ class _ReportScreenState extends State<ReportScreen> {
 /// 결론 카드를 찾는 키 (테스트용)
 const reportVerdictKey = ValueKey('report-verdict');
 
+/// 결론 카드 머리 'OO님 기준' 글을 찾는 키 (테스트용)
+const reportVerdictNameKey = ValueKey('report-verdict-name');
+
 /// 결론 카드 (home-report-clarity-spec B1): 제목·출처 바로 아래에 조건 → 마감 → 추천을 한 줄씩.
 /// 조건 판정은 서버 값 그대로이고, 개수·항목 이름은 체크리스트와 같은 줄에서 센다.
 /// 모집이 끝났거나(closed) 삭제된(removed) 공고는 마감 줄 하나에 상태만 보인다.
@@ -783,10 +822,13 @@ class _Verdict extends StatelessWidget {
     // 값 첫 줄 높이(15 × 줄 간격 1.4, 글자 배율 반영). 아이콘·이름표를 이 높이 안에서 가운데 맞춘다.
     final scaler = MediaQuery.textScalerOf(context);
     final firstLine = scaler.scale(15) * 1.4;
+    // 'OO님 기준': 내 정보로 낸 결론이라는 표시. 로그인 표시 이름이 있고 내 정보로 정한 결과가 있을 때만(게스트는 없음).
+    // 이름은 화면에서만 쓰고 서버·AI로 보내지 않는다(report-reminder-spec §4.2).
+    final name = rec != null ? GuestScope.nameOf(context) : null;
     return Semantics(
       key: reportVerdictKey,
       container: true,
-      label: [for (final l in lines) l.spoken].join(', '),
+      label: [if (name != null) '$name님 기준', for (final l in lines) l.spoken].join(', '),
       excludeSemantics: true,
       child: Container(
         margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
@@ -799,6 +841,17 @@ class _Verdict extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (name != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '$name님 기준',
+                  key: reportVerdictNameKey,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.muted),
+                ),
+              ),
             for (final (i, l) in lines.indexed) ...[
               if (i > 0) const SizedBox(height: 10),
               Row(
@@ -844,6 +897,7 @@ class _Verdict extends StatelessWidget {
 class _CaseCard extends StatelessWidget {
   const _CaseCard({
     required this.view,
+    required this.todoLeft,
     required this.kase,
     required this.onStart,
     required this.onApplied,
@@ -853,6 +907,9 @@ class _CaseCard extends StatelessWidget {
   });
 
   final CaseView view;
+
+  /// '남은 할 일 N개'(상세 분석에서 받은 할 일이 남았을 때). 없으면 null
+  final String? todoLeft;
   final ApplicationCase kase;
   final VoidCallback onStart;
   final VoidCallback onApplied;
@@ -959,6 +1016,13 @@ class _CaseCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ],
+          if (todoLeft != null) ...[
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.only(left: 26),
+              child: Text(todoLeft!, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.accent)),
             ),
           ],
           if (buttons.isNotEmpty) ...[

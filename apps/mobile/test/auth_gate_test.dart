@@ -61,6 +61,9 @@ class FakeAuth implements AuthService {
   bool get isGuest => _signedIn && _guest;
 
   @override
+  String? get displayName => null;
+
+  @override
   Future<void> signInAsGuest() async {
     guestSignInCalls++;
     if (guestFailsWith != null) throw guestFailsWith!;

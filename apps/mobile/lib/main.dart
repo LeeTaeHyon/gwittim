@@ -10,6 +10,8 @@ import 'auth/auth_service.dart';
 import 'data/api_repository.dart';
 import 'data/application_case.dart';
 import 'data/cached_repository.dart';
+import 'data/local_notifier.dart';
+import 'data/reminders.dart';
 import 'data/repository.dart';
 import 'ui/app_info.dart';
 import 'ui/briefing_data.dart';
@@ -22,6 +24,7 @@ import 'ui/icons.dart';
 import 'ui/intro.dart';
 import 'ui/notices_screen.dart';
 import 'ui/profile_screen.dart';
+import 'ui/report_screen.dart';
 import 'share/share_inbox.dart';
 import 'share/share_services.dart';
 import 'ui/saved_screen.dart';
@@ -46,6 +49,10 @@ Future<void> main() async {
   final inbox = ShareInbox();
   await inbox.start();
   final share = ShareServices(inbox: inbox);
+  // 기기 마감 알림(D-061). 준비만 하고 권한은 처음 저장할 때 묻는다
+  final notifier = LocalNotifier();
+  await notifier.init();
+  final reminders = ReminderService(notifier: notifier);
   if (_apiBase.isEmpty) {
     _run(
       GwittimApp(
@@ -53,6 +60,7 @@ Future<void> main() async {
         openUrl: _openExternal,
         themeController: theme,
         share: share,
+        reminders: reminders,
       ),
       source: '샘플 자료',
     );
@@ -68,6 +76,7 @@ Future<void> main() async {
         openUrl: _openExternal,
         themeController: theme,
         share: share,
+        reminders: reminders,
       ),
       source: '로컬 게스트',
     );
@@ -80,6 +89,7 @@ Future<void> main() async {
         openUrl: _openExternal,
         themeController: theme,
         share: share,
+        reminders: reminders,
       ),
       source: '로컬 서버',
     );
@@ -95,6 +105,7 @@ Future<void> main() async {
       openUrl: _openExternal,
       themeController: theme,
       share: share,
+      reminders: reminders,
     ),
   );
 }
@@ -167,15 +178,20 @@ class GwittimApp extends StatefulWidget {
     this.onSignOut,
     this.onDeleteAccount,
     this.guest = false,
+    this.displayName,
     this.briefingStore,
     this.themeController,
     this.caseStore,
     this.share,
+    this.reminders,
   });
 
   final NoticeRepository repository;
   final OpenUrl openUrl;
   final DateTime? today;
+
+  /// 기기 마감 알림 예약(D-061). 없으면(샘플·시험) 알림 기능이 없다.
+  final ReminderService? reminders;
 
   /// 로그인 모드일 때만 있다.
   final Future<void> Function()? onSignOut;
@@ -186,6 +202,9 @@ class GwittimApp extends StatefulWidget {
 
   /// 게스트(익명 계정, D-054)로 들어왔는지. 내 정보 계정 칸과 크레딧 안내가 달라진다.
   final bool guest;
+
+  /// 로그인 표시 이름('OO님 기준'). 화면에서만 쓰고 서버로 보내지 않는다. 게스트·샘플이면 null.
+  final String? displayName;
 
   /// 하루 첫 실행 기록. 기본은 기기 저장소 (D-009).
   final BriefingStore? briefingStore;
@@ -210,7 +229,12 @@ class _GwittimAppState extends State<GwittimApp> {
   late final ApplicationCaseStore _cases = widget.caseStore ?? (_ownCases = ApplicationCaseStore());
 
   /// 저장·저장 취소·추천 목록·프로필 변경을 지원 건 기록에 한 곳에서 반영한다(care-loop-impl-spec §2).
-  late final NoticeRepository _repository = CaseTrackingRepository(widget.repository, _cases);
+  late final NoticeRepository _repository = CaseTrackingRepository(
+    widget.repository,
+    _cases,
+    onSavedList: (saved) => widget.reminders?.onSavedList(saved),
+    afterSave: () => widget.reminders?.afterSave(),
+  );
 
   ThemeController get _theme => widget.themeController ?? (_ownTheme ??= ThemeController());
 
@@ -218,6 +242,12 @@ class _GwittimAppState extends State<GwittimApp> {
   void initState() {
     super.initState();
     _cases.load();
+    final reminders = widget.reminders;
+    if (reminders != null) {
+      reminders.attach(_cases);
+      reminders.savedLoader = _repository.listSaved;
+      reminders.load().then((_) => reminders.refresh()); // 앱을 열 때 다시 맞춘다
+    }
   }
 
   @override
@@ -237,10 +267,13 @@ class _GwittimAppState extends State<GwittimApp> {
   @override
   Widget build(BuildContext context) {
     // 리포트 등 새로 여는 화면도 지원 건을 찾도록 앱 전체(MaterialApp) 위에 둔다
+    final reminders = widget.reminders;
+    Widget wrap(Widget child) => reminders == null ? child : ReminderScope(notifier: reminders, child: child);
     return ApplicationCaseScope(
       notifier: _cases,
-      child: GuestScope(
+      child: wrap(GuestScope(
         guest: widget.guest,
+        displayName: widget.displayName,
         child: GwMaterialApp(
           themeController: _theme,
           home: HomeShell(
@@ -254,7 +287,7 @@ class _GwittimAppState extends State<GwittimApp> {
             share: widget.share,
           ),
         ),
-      ),
+      )),
     );
   }
 }
@@ -300,6 +333,27 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   final _calendarKey = GlobalKey<CalendarScreenState>();
   final _savedKey = GlobalKey<SavedScreenState>();
   int _tab = 0;
+  StreamSubscription<String>? _notificationTaps;
+
+  /// 알림을 누르면: 한 공고 알림은 그 공고 리포트, 묶음 알림은 저장함 (report-reminder-spec §5.2)
+  void _openFromNotification(String payload) {
+    if (!mounted) return;
+    if (payload.isEmpty) {
+      _select(3);
+      return;
+    }
+    Navigator.of(context).push(
+      gwRoute(
+        context,
+        (_) => ReportScreen(
+          repository: widget.repository,
+          noticeId: payload,
+          openUrl: widget.openUrl,
+          today: widget.today,
+        ),
+      ),
+    );
+  }
 
   /// 앱이 뒤로 간 시각. 돌아올 때 날짜가 바뀌었으면 D-day·달력 '오늘'이 어제에 머물지 않게 다시 받는다.
   DateTime? _leftAt;
@@ -332,11 +386,20 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _scheduleMidnight();
+    final reminders = ReminderScope.read(context);
+    if (reminders != null) {
+      _notificationTaps = reminders.taps.listen(_openFromNotification);
+      // 알림을 눌러 앱이 새로 열린 경우
+      reminders.launchPayload().then((p) {
+        if (p != null) WidgetsBinding.instance.addPostFrameCallback((_) => _openFromNotification(p));
+      }).catchError((Object _) {});
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _notificationTaps?.cancel();
     _midnight?.cancel();
     _switch.dispose();
     super.dispose();
@@ -352,6 +415,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     }
     if (state != AppLifecycleState.resumed) return;
     _scheduleMidnight();
+    ReminderScope.read(context)?.refresh(); // 앞으로 나올 때 마감 알림 예약을 다시 맞춘다
     final left = _leftAt;
     _leftAt = null;
     if (left == null) return;

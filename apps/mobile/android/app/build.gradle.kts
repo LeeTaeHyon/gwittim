@@ -17,6 +17,8 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // flutter_local_notifications(마감 알림, D-061)가 요구한다
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -61,6 +63,7 @@ kotlin {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     // google_mlkit_text_recognition은 한국어 인식기를 compileOnly로만 걸어 둔다. 앱이 직접 넣어야 한국어가 동작한다 (D-058)
     implementation("com.google.mlkit:text-recognition-korean:16.0.1")
 }

@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../data/api_repository.dart';
+import '../data/reminders.dart';
 import '../data/repository.dart';
 import '../main.dart';
 import '../share/share_services.dart';
@@ -26,9 +27,13 @@ class AuthGate extends StatefulWidget {
     this.briefingStore,
     this.themeController,
     this.share,
+    this.reminders,
   });
 
   final AuthService auth;
+
+  /// 기기 마감 알림 예약(D-061)
+  final ReminderService? reminders;
 
   /// 로그인된 사용자의 토큰 공급자로 실제 Repository를 만든다.
   final NoticeRepository Function(TokenProvider tokenProvider) repositoryFor;
@@ -94,9 +99,11 @@ class _AuthGateState extends State<AuthGate> {
             onSignOut: widget.auth.signOut,
             onDeleteAccount: () => _deleteAccount(repository),
             guest: widget.auth.isGuest,
+            displayName: widget.auth.displayName,
             briefingStore: widget.briefingStore,
             themeController: _theme,
             share: widget.share,
+            reminders: widget.reminders,
           );
         }
         return GwMaterialApp(

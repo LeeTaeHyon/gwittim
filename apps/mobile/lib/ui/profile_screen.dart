@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/models.dart';
+import '../data/reminders.dart';
 import '../data/repository.dart';
 import 'app_info.dart';
 import 'common.dart';
@@ -369,6 +370,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(keepAll('시스템 설정을 선택하면 기기 화면 모드를 따릅니다.'), style: caption),
+                if (ReminderScope.maybeOf(context) case final reminders?) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    child: Divider(height: 1, color: c.line),
+                  ),
+                  _ReminderRow(service: reminders),
+                ],
                 if (widget.onSignOut != null && GuestScope.of(context)) ...[
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 20),
@@ -1100,6 +1108,65 @@ class _FieldLabel extends StatelessWidget {
     return Text(
       text,
       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.gw.sub),
+    );
+  }
+}
+
+/// 설정 > 마감 알림 켬·끔 한 줄 (report-reminder-spec §5.2). 이 기기 안에서만 예약하며 서버로 보내지 않는다.
+class _ReminderRow extends StatelessWidget {
+  const _ReminderRow({required this.service});
+
+  final ReminderService service;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gw;
+    final denied = service.enabled && service.permissionDenied;
+    return Semantics(
+      container: true,
+      toggled: service.enabled,
+      label: '마감 알림',
+      onTap: () => service.setEnabled(!service.enabled),
+      excludeSemantics: true,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => service.setEnabled(!service.enabled),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 52),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('마감 알림', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c.ink)),
+                    const SizedBox(height: 2),
+                    Text(
+                      keepAll(
+                        denied
+                            ? '기기 설정에서 귀띔 알림을 허용해야 알림이 옵니다.'
+                            : '저장한 공고의 신청 시작·마감 전에 이 기기에서 알립니다. 서버로 보내지 않습니다.',
+                      ),
+                      style: TextStyle(fontSize: 13, height: 1.5, color: denied ? c.urgent : c.muted),
+                    ),
+                  ],
+                ),
+              ),
+              ExcludeSemantics(
+                child: Switch(
+                  value: service.enabled,
+                  onChanged: service.setEnabled,
+                  activeTrackColor: c.cta,
+                  activeThumbColor: c.onCta,
+                  inactiveTrackColor: c.line,
+                  inactiveThumbColor: c.card,
+                  trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
