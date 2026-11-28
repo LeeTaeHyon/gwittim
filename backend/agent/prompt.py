@@ -335,8 +335,43 @@ def ground_fit_links(report: dict, notice: dict, payload: dict) -> tuple[dict, i
     return out, dropped
 
 
+# '맞음:'인데 단정하지 않고 끝나는 줄. 예: "~이어지는지 확인할 수 있습니다", "~일 수 있습니다"
+_FIT_HEDGE = re.compile(r"지\s*(?:확인|살펴|알아)|확인할\s*수\s*있|알\s*수\s*없|확인이\s*필요")
+# '~일 수 있습니다'는 어절 단위로 본다. '경험일'(이다)은 추측이지만 '줄일'·'높일'(동사 '-이다')은 단정이다.
+# 어절 전체가 목록과 같아야 동사로 본다('홍보일'은 '보일'이 아님)
+_IL_WORD = re.compile(r"(\S*일)\s*수\s*있")
+_VERB_IL = frozenset(("줄일", "늘일", "높일", "보일", "쓰일", "모일", "쌓일", "붙일", "들일", "기울일", "움직일", "녹일"))
+
+
+def _is_hedged(line: str) -> bool:
+    """결론(마지막 쉼표 뒤 절)이 추측으로 끝나는지. 앞 절의 '확인이 필요하지만,' 같은 단서는 보지 않는다."""
+    tail = re.split(r"[,，]", line)[-1]
+    return bool(_FIT_HEDGE.search(tail)) or any(w not in _VERB_IL for w in _IL_WORD.findall(tail))
+
+
+FIT_MET, FIT_CHECK = "맞음:", "확인 필요:"
+
+
+def relabel_hedged_fit(report: dict) -> tuple[dict, int]:
+    """'fit'에서 '맞음:'으로 시작하지만 단정하지 않는 줄을 '확인 필요:'로 바꾼다. (리포트, 바꾼 줄 수)."""
+    text = report.get("fit")
+    if not isinstance(text, str):
+        return report, 0
+    lines, n = [], 0
+    for line in text.split(BR):
+        s = line.lstrip()
+        if s.startswith(FIT_MET) and _is_hedged(s):
+            line, n = FIT_CHECK + s[len(FIT_MET):], n + 1
+        lines.append(line)
+    if not n:
+        return report, 0
+    return {**report, "fit": BR.join(lines)}, n
+
+
 def ground_report(report: dict, notice: dict, status: str, today: date, payload: dict | None = None) -> tuple[dict, dict]:
-    """받은 리포트의 역량·할 일을 공고 자료에 맞춘다. (리포트, 바꾼 내용 {'skills_dropped': n, 'todo': 사유, 'fit_link_dropped': n}).
+    """받은 리포트의 역량·할 일을 공고 자료에 맞춘다. (리포트, 바꾼 내용 {'skills_dropped': n, 'todo': 사유, 'fit_link_dropped': n, 'fit_hedge_relabeled': n}).
+
+    - 단정 확인: '맞음:'인데 '~인지 확인할 수 있습니다'처럼 끝나는 줄은 '확인 필요:'로 바꾼다(relabel_hedged_fit).
 
     - 경험 잇기: payload(학생이 고른 칩)를 주면 'fit'의 따옴표 인용 줄을 ground_fit_links로 거른다.
 
@@ -345,6 +380,9 @@ def ground_report(report: dict, notice: dict, status: str, today: date, payload:
     - 할 일: 마감이 지났으면 고정 문장. 미충족이면 지원서·근거 없는 일정 줄을 빼고, 남는 줄이 없으면 고정 문장.
     """
     out, changes = dict(report), {}
+    out, hedged = relabel_hedged_fit(out)
+    if hedged:
+        changes["fit_hedge_relabeled"] = hedged
     if payload is not None:
         out, fit_dropped = ground_fit_links(out, notice, payload)
         if fit_dropped:
