@@ -296,6 +296,16 @@ def test_il_su_itda_checked_by_word():
     assert out["fit"] == line and ch == {}
     out, ch = ground_report(_fit("맞음: 공고가 찾는 것이 파이썬 경험일 수 있습니다."), _PREF_NOTICE, "met", _TODAY)
     assert out["fit"].startswith("확인 필요:") and ch == {"fit_hedge_relabeled": 1}
+    # 어절 전체로 대조한다. '홍보일'은 동사 '보일'이 아니다
+    out, ch = ground_report(_fit("맞음: 주요 활동은 홍보일 수 있습니다."), _PREF_NOTICE, "met", _TODAY)
+    assert out["fit"].startswith("확인 필요:") and ch == {"fit_hedge_relabeled": 1}
+
+
+def test_hedge_checked_in_conclusion_clause_only():
+    """앞 절의 '확인이 필요하지만,'은 결론이 아니다. 마지막 절이 단정이면 '맞음'을 둔다."""
+    line = "맞음: 세부 일정은 확인이 필요하지만, 공고의 앱 시제품 제작에 앱 개발 경험을 활용할 수 있습니다."
+    out, ch = ground_report(_fit(line), _PREF_NOTICE, "met", _TODAY)
+    assert out["fit"] == line and ch == {}
 
 
 def test_definite_met_line_kept():

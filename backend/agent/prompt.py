@@ -337,13 +337,18 @@ def ground_fit_links(report: dict, notice: dict, payload: dict) -> tuple[dict, i
 
 # '맞음:'인데 단정하지 않고 끝나는 줄. 예: "~이어지는지 확인할 수 있습니다", "~일 수 있습니다"
 _FIT_HEDGE = re.compile(r"지\s*(?:확인|살펴|알아)|확인할\s*수\s*있|알\s*수\s*없|확인이\s*필요")
-# '~일 수 있습니다'는 어절 단위로 본다. '경험일'(이다)은 추측이지만 '줄일'·'높일'(동사 '-이다')은 단정이다
+# '~일 수 있습니다'는 어절 단위로 본다. '경험일'(이다)은 추측이지만 '줄일'·'높일'(동사 '-이다')은 단정이다.
+# 어절 전체가 목록과 같아야 동사로 본다('홍보일'은 '보일'이 아님)
 _IL_WORD = re.compile(r"(\S*일)\s*수\s*있")
-_VERB_IL = ("줄일", "늘일", "높일", "보일", "쓰일", "모일", "쌓일", "붙일", "들일", "기울일", "움직일", "녹일")
+_VERB_IL = frozenset(("줄일", "늘일", "높일", "보일", "쓰일", "모일", "쌓일", "붙일", "들일", "기울일", "움직일", "녹일"))
 
 
 def _is_hedged(line: str) -> bool:
-    return bool(_FIT_HEDGE.search(line)) or any(not w.endswith(_VERB_IL) for w in _IL_WORD.findall(line))
+    """결론(마지막 쉼표 뒤 절)이 추측으로 끝나는지. 앞 절의 '확인이 필요하지만,' 같은 단서는 보지 않는다."""
+    tail = re.split(r"[,，]", line)[-1]
+    return bool(_FIT_HEDGE.search(tail)) or any(w not in _VERB_IL for w in _IL_WORD.findall(tail))
+
+
 FIT_MET, FIT_CHECK = "맞음:", "확인 필요:"
 
 
