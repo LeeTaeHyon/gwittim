@@ -289,6 +289,15 @@ def test_hedged_met_line_relabeled_to_check():
     assert out["fit"].startswith("확인 필요:") and ch == {"fit_hedge_relabeled": 1}
 
 
+def test_il_su_itda_checked_by_word():
+    """'경험일 수 있습니다'(추측)는 바꾸고, '줄일 수 있습니다'(동사)는 그대로 둔다."""
+    line = "맞음: 파이썬 자동화 경험으로 작업 시간을 줄일 수 있습니다."
+    out, ch = ground_report(_fit(line), _PREF_NOTICE, "met", _TODAY)
+    assert out["fit"] == line and ch == {}
+    out, ch = ground_report(_fit("맞음: 공고가 찾는 것이 파이썬 경험일 수 있습니다."), _PREF_NOTICE, "met", _TODAY)
+    assert out["fit"].startswith("확인 필요:") and ch == {"fit_hedge_relabeled": 1}
+
+
 def test_definite_met_line_kept():
     line = "맞음: 이번 공모전은 앱 시제품을 제출하므로 앱 개발 경험을 활용할 수 있습니다."
     out, ch = ground_report(_fit(line), _PREF_NOTICE, "met", _TODAY, _PAY)
